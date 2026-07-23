@@ -2,10 +2,10 @@
 
 ## Progress overview
 
-**Overall completion: 51%**
+**Overall completion: 52%**
 
 ```text
-[████████████████░░░░░░░░░░░░░░░░]  51%
+[████████████████░░░░░░░░░░░░░░░░]  52%
 ```
 
 | Metric | Value |
@@ -15,7 +15,7 @@
 | Partial | 6 (Phases 2, 3, 4, 6, 7, 10) |
 | In progress | 0 |
 | Not started | 5 |
-| Weighted score | (3×1.0) + (0.7 + 0.75 + 0.5 + 0.5 + 0.85 + 0.75) = 7.05 / 14 ≈ **51%** |
+| Weighted score | (3×1.0) + (0.7 + 0.75 + 0.5 + 0.5 + 0.85 + 0.85) = 7.15 / 14 ≈ **52%** |
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
@@ -36,7 +36,7 @@
 | 7 | Appointment booking | Partial | `█████████░` 85% |
 | 8 | Staff web application (MudBlazor) | Not started | `░░░░░░░░░░` 0% |
 | 9 | Medical notes | Not started | `░░░░░░░░░░` 0% |
-| 10 | Hangfire and notifications | Partial | `████████░░` 75% |
+| 10 | Hangfire and notifications | Partial | `█████████░` 85% |
 | 11 | Patient mobile application | Not started | `░░░░░░░░░░` 0% |
 | 12 | Audit and security hardening | Not started | `░░░░░░░░░░` 0% |
 | 13 | Docker and deployment | Not started | `░░░░░░░░░░` 0% |
@@ -528,15 +528,64 @@ Authoritative design docs:
 
 ## Phase 10 — Hangfire and notifications
 
-**Status:** Partial (~75% — reminders + daily clinic summary)  
+**Status:** Partial (~85% — reminders + clinic summary + configurable worker hosting)  
 **Updated:** 2026-07-23
 
-### Hangfire configuration
+### Hangfire configuration (worker hosting)
+
 - Packages: `Hangfire.AspNetCore` + `Hangfire.PostgreSql`
-- Storage: existing `DefaultConnection` PostgreSQL, schema `hangfire`
-- Hangfire **server** and **dashboard** (`/hangfire`) enabled **only in Development**
-- Dashboard authorization: authenticated `PLATFORM_ADMIN` only (`HangfireDashboardAuthFilter`)
-- No credentials/secrets added to new config files
+- Storage: existing `DefaultConnection` PostgreSQL, schema `hangfire` (always registered)
+- Options: `HangfireOptions` / `HangfireDashboardOptions` with `ValidateOnStart`
+- **Worker enablement model:** local Hangfire Server runs only when `Hangfire:Enabled=true` (never inferred from environment name alone)
+- **Defaults:** Development enables workers, recurring registration, and dashboard; base + Production keep all three **disabled** unless explicitly enabled
+- **Queues:** `default`, `reminders`, `summaries` (normalized lowercase; duplicates removed; empty/invalid rejected when enabled)
+- **WorkerCount:** 1–64 (safe range); invalid values fail startup when enabled
+- **ServerName / ShutdownTimeoutSeconds:** validated when enabled
+- Enabling workers does **not** enable the dashboard
+
+**Configuration keys**
+
+| Key | Purpose |
+|-----|---------|
+| `Hangfire:Enabled` | Register `AddHangfireServer` (local workers) |
+| `Hangfire:WorkerCount` | Worker threads |
+| `Hangfire:Queues` / `Hangfire__Queues__N` | Queue names |
+| `Hangfire:ServerName` | Hangfire server name |
+| `Hangfire:ScheduleRecurringJobs` | Register recurring jobs (requires `Enabled`) |
+| `Hangfire:ShutdownTimeoutSeconds` | Graceful shutdown |
+| `Hangfire:Dashboard:Enabled` | Map dashboard (independent) |
+| `Hangfire:Dashboard:Path` | Dashboard path (default `/hangfire`) |
+
+**Recurring-job registration**
+- `HangfireRecurringJobRegistrar` (idempotent `AddOrUpdate`)
+- Runs only when **both** `Enabled` and `ScheduleRecurringJobs` are true
+- Skipped for EF design-time / tooling hosts
+- Jobs: reminder recovery `*/5`; summary dispatch + recovery `*/15`
+- Logged job IDs on registration; no duplicate IDs after restart
+
+**Dashboard security**
+- Disabled by default outside Development
+- `HangfireDashboardAuthFilter`: authenticated `PLATFORM_ADMIN` only (unchanged)
+- Never publicly accessible; workers-on does not imply dashboard-on
+- Unsafe path (`/`, missing leading `/`) rejected when dashboard enabled
+- Prefer HTTPS / reverse-proxy TLS in non-Development
+
+**Health checks**
+- `/health` — all checks (database + Hangfire probes)
+- `/health/ready` — checks tagged `ready` (database + Hangfire storage when workers/scheduling need it)
+- `hangfire_worker` reports enabled/disabled and **does not fail** when intentionally disabled
+- When workers and scheduling are both off, Hangfire storage is not required for readiness
+- When Hangfire is enabled, storage failure → readiness Unhealthy
+
+**External worker compatibility**
+- Storage + `IBackgroundJobClient` always registered; API may enqueue with local workers off
+- Job classes live in Infrastructure; Application abstractions have no Hangfire package dependency
+- Recurring registrar is reusable from a future dedicated worker host
+- Non-Development notification senders are no-op (Development uses logging senders)
+- No separate worker project in this increment
+
+**Migration result**
+- None required for worker hosting (no schema change)
 
 ### Reminder types
 - `Confirmation` — after appointment create (and confirm; idempotent)
@@ -609,7 +658,7 @@ Authoritative design docs:
 - Staff retry endpoint for Failed/Pending
 
 **Sender**
-- `IClinicAppointmentSummarySender` → Development logging sender (counts only)
+- `IClinicAppointmentSummarySender` → Development logging sender; no-op outside Development
 
 **Tenant authorization (staff endpoints)**
 - Clinic staff: trusted clinic (client ClinicId ignored)
@@ -617,26 +666,29 @@ Authoritative design docs:
 - PATIENT: 403
 - PLATFORM_ADMIN: explicit bypass + clinicId (controller still requires StaffUser policy)
 
-### Migration result
-- `AddAppointmentReminders` applied to `healthcare_db` (`AppointmentReminders` table)
-- `AddClinicAppointmentSummaryRuns` applied to `healthcare_db` (`ClinicAppointmentSummaryRuns` table)
+### Prior migrations (unchanged)
+- `AddAppointmentReminders` / `AddClinicAppointmentSummaryRuns` already on `healthcare_db`
 
-### Verification
+### Verification (configurable worker hosting)
 - Build: succeeded
-- Unit tests: 177 passed (18 summary-focused)
-- Architecture tests: 15 passed
-- Integration tests: Docker unavailable; suite retained (`ClinicAppointmentSummaryEndpointTests`)
-- Manual: health **200**; Hangfire server started (PostgreSQL hangfire schema); staff summary scoped to trusted clinic; PATIENT **403**; Clinic B staff cannot see Clinic A via clinicId query; seeded day summary counts Requested=1; dispatcher created runs; process Completed; reprocess no duplicate attempts; sender failure → Failed with sanitized `delivery_failed`
+- Unit tests: **193 passed** (16 Hangfire hosting-focused)
+- Architecture tests: **15 passed**
+- Integration tests: Docker unavailable (`npipe://./pipe/docker_engine`); suite retained (`HangfireHostingEndpointTests`)
+- Manual:
+  - Production + `Hangfire:Enabled=false`: API up; `/health` **200**; `/health/ready` **200**; `/hangfire` **404**; startup log `Enabled=False` (no secrets)
+  - Production + enabled workers (`WorkerCount=3`, queues default/reminders/summaries): startup log shows config; recurring jobs registered once; restart re-registered same IDs via `AddOrUpdate`; dashboard stayed **404**
+  - Invalid `WorkerCount=0` with Enabled: **OptionsValidationException** fail-fast
+  - Development dashboard: anonymous **401**; PLATFORM_ADMIN **200**; non-admin staff **403**
+  - Dashboard mapped via `MapHangfireDashboard` (endpoint routing)
 
 ### Known limitations
-- Development logging sender only (no real SMS/email)
-- Hangfire worker/dashboard Development-only
-- No production Hangfire worker hosting yet
+- Development logging / no-op senders only (no real SMS/email)
+- No dedicated worker host project yet (API can host workers when enabled)
 - PLATFORM_ADMIN without staff membership cannot call StaffUser-protected summary endpoints
 
 ### Remaining Hangfire / notification work
 - Real email/SMS provider adapters
-- Production Hangfire worker hosting
+- Optional dedicated Hangfire worker host process
 - Expired refresh-token cleanup job (architecture backlog)
 
 ---
@@ -697,6 +749,7 @@ Authoritative design docs:
 | 2026-07-23 | 10 | Appointment reminders + Hangfire (PostgreSQL, Dev dashboard); overall ~48% |
 | 2026-07-23 | 7 | Appointment reschedule workflow + history + Upcoming replacement; overall ~49% |
 | 2026-07-23 | 10 | Daily clinic appointment summary Hangfire dispatcher + runs; overall ~51% |
+| 2026-07-23 | 10 | Configurable Hangfire worker hosting (non-Dev enablement); overall ~52% |
 
 ---
 

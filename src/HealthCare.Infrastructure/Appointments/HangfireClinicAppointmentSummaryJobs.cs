@@ -47,15 +47,18 @@ public sealed class ClinicAppointmentSummaryHangfireJobs
         _recovery = recovery;
     }
 
+    [Queue("summaries")]
     [DisableConcurrentExecution(timeoutInSeconds: 120)]
     [AutomaticRetry(Attempts = 1)]
     public Task DispatchDueSummariesAsync(CancellationToken cancellationToken) =>
         _dispatcher.DispatchDueAsync(cancellationToken);
 
+    [Queue("summaries")]
     [AutomaticRetry(Attempts = 3, DelaysInSeconds = [30, 120, 300])]
     public Task ProcessSummaryRunAsync(Guid runId, CancellationToken cancellationToken) =>
         _processor.ProcessRunAsync(runId, cancellationToken);
 
+    [Queue("default")]
     [DisableConcurrentExecution(timeoutInSeconds: 60)]
     [AutomaticRetry(Attempts = 1)]
     public Task RecoverFailedSummariesAsync(CancellationToken cancellationToken) =>

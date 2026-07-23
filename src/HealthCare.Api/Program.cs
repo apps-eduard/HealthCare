@@ -37,7 +37,7 @@ try
     builder.Services.AddOpenApi();
 
     builder.Services.AddHealthChecks()
-        .AddDbContextCheck<HealthCareDbContext>("database");
+        .AddDbContextCheck<HealthCareDbContext>("database", tags: ["ready", "live"]);
 
     builder.Services.Configure<ApiBehaviorOptions>(options =>
     {
@@ -102,6 +102,10 @@ try
     app.UseAppointmentReminderHangfire(app.Environment);
     app.MapControllers();
     app.MapHealthChecks("/health");
+    app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+    {
+        Predicate = check => check.Tags.Contains("ready"),
+    });
 
     app.Run();
 }

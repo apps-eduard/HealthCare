@@ -63,6 +63,8 @@ dotnet run --project src/HealthCare.Api --launch-profile http
 - API: http://localhost:5080
 - Swagger (Development): http://localhost:5080/swagger
 - Health: http://localhost:5080/health
+- Readiness: http://localhost:5080/health/ready
+- Hangfire dashboard (Development, PLATFORM_ADMIN): http://localhost:5080/hangfire
 
 ### 5. Build and test
 
@@ -114,6 +116,31 @@ Next: Phase 2 — Identity and authentication.
 |---------|--------|
 | `ConnectionStrings:DefaultConnection` | `appsettings*.json`, env, or user secrets |
 | Serilog | `appsettings*.json` |
+| Hangfire worker hosting | `Hangfire:*` in `appsettings*.json` / env |
+
+### Hangfire
+
+| Key | Development default | Production / base default |
+|-----|---------------------|---------------------------|
+| `Hangfire:Enabled` | `true` (local workers) | `false` |
+| `Hangfire:WorkerCount` | `2` | `2`–`4` (only used when enabled) |
+| `Hangfire:Queues` | `default`, `reminders`, `summaries` | same |
+| `Hangfire:ScheduleRecurringJobs` | `true` | `false` |
+| `Hangfire:Dashboard:Enabled` | `true` | `false` (independent of workers) |
+
+Environment overrides:
+
+```text
+Hangfire__Enabled=true
+Hangfire__WorkerCount=4
+Hangfire__Queues__0=default
+Hangfire__Queues__1=reminders
+Hangfire__Queues__2=summaries
+Hangfire__ScheduleRecurringJobs=true
+Hangfire__Dashboard__Enabled=false
+```
+
+The API always registers Hangfire PostgreSQL storage/client so jobs can be enqueued even when local workers are disabled (external worker compatible). Enabling workers does **not** enable the dashboard. Recurring jobs are registered only when **both** `Hangfire:Enabled` and `Hangfire:ScheduleRecurringJobs` are true (run that on the process that hosts workers). Outside Development, workers and dashboard stay disabled unless explicitly enabled.
 
 User secrets example:
 

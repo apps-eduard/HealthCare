@@ -57,10 +57,12 @@ public sealed class AppointmentReminderHangfireJobs
         _recovery = recovery;
     }
 
+    [Queue("reminders")]
     [AutomaticRetry(Attempts = 3, DelaysInSeconds = [30, 120, 300])]
     public Task ProcessReminderAsync(Guid appointmentId, Guid reminderId, CancellationToken cancellationToken) =>
         _processor.ProcessReminderAsync(appointmentId, reminderId, cancellationToken);
 
+    [Queue("default")]
     [DisableConcurrentExecution(timeoutInSeconds: 60)]
     [AutomaticRetry(Attempts = 1)]
     public Task RecoverOverdueRemindersAsync(CancellationToken cancellationToken) =>

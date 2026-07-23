@@ -1,7 +1,8 @@
 using HealthCare.Application.Appointments;
-using HealthCare.Application.Authorization;
 using HealthCare.Domain.Identity;
 using HealthCare.Infrastructure.Appointments;
+using HealthCare.Infrastructure.Configuration;
+using HealthCare.Infrastructure.Health;
 using Hangfire;
 using Hangfire.Dashboard;
 using Hangfire.PostgreSql;
@@ -9,25 +10,58 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace HealthCare.Infrastructure.DependencyInjection;
 
 public static class HangfireServiceCollectionExtensions
 {
-    public const string DashboardPath = "/hangfire";
-
     public static IServiceCollection AddAppointmentReminders(
         this IServiceCollection services,
         IConfiguration configuration,
         IHostEnvironment environment)
     {
-        services.AddScoped<IAppointmentReminderSender, DevelopmentAppointmentReminderSender>();
+        services.AddSingleton<IValidateOptions<HangfireOptions>, HangfireOptionsValidator>();
+        services.AddOptions<HangfireOptions>()
+            .Bind(configuration.GetSection(HangfireOptions.SectionName))
+            .ValidateOnStart();
+
+        services.PostConfigure<HangfireOptions>(options =>
+        {
+            var queues = HangfireOptionsValidator.NormalizeQueues(options.Queues, out _);
+            if (queues.Count > 0)
+            {
+                options.Queues = queues.ToArray();
+            }
+
+            if (!string.IsNullOrWhiteSpace(options.ServerName))
+            {
+                options.ServerName = options.ServerName.Trim();
+            }
+
+            if (!string.IsNullOrWhiteSpace(options.Dashboard.Path))
+            {
+                options.Dashboard.Path = options.Dashboard.Path.Trim();
+            }
+        });
+
+        if (environment.IsDevelopment())
+        {
+            services.AddScoped<IAppointmentReminderSender, DevelopmentAppointmentReminderSender>();
+            services.AddScoped<IClinicAppointmentSummarySender, DevelopmentClinicAppointmentSummarySender>();
+        }
+        else
+        {
+            services.AddScoped<IAppointmentReminderSender, NoOpAppointmentReminderSender>();
+            services.AddScoped<IClinicAppointmentSummarySender, NoOpClinicAppointmentSummarySender>();
+        }
+
         services.AddScoped<IAppointmentReminderScheduler, AppointmentReminderScheduler>();
         services.AddScoped<IAppointmentReminderProcessor, AppointmentReminderProcessor>();
         services.AddScoped<IAppointmentReminderRecoveryService, AppointmentReminderRecoveryService>();
         services.AddScoped<IAppointmentReminderService, AppointmentReminderService>();
 
-        services.AddScoped<IClinicAppointmentSummarySender, DevelopmentClinicAppointmentSummarySender>();
         services.AddScoped<IClinicAppointmentSummaryBuilder, ClinicAppointmentSummaryBuilder>();
         services.AddScoped<IClinicAppointmentSummaryDispatcher, ClinicAppointmentSummaryDispatcher>();
         services.AddScoped<IClinicAppointmentSummaryProcessor, ClinicAppointmentSummaryProcessor>();
@@ -39,6 +73,7 @@ public static class HangfireServiceCollectionExtensions
             ?? throw new InvalidOperationException(
                 $"Connection string '{InfrastructureServiceCollectionExtensions.DefaultConnectionName}' is required for Hangfire.");
 
+        // Storage + client always registered so the API can enqueue jobs for a local or external worker.
         services.AddHangfire(config => config
             .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
             .UseSimpleAssemblyNameTypeSerializer()
@@ -52,55 +87,110 @@ public static class HangfireServiceCollectionExtensions
 
         services.AddScoped<IReminderBackgroundJobs, HangfireReminderBackgroundJobs>();
 
-        if (environment.IsDevelopment())
+        var hangfire = configuration.GetSection(HangfireOptions.SectionName).Get<HangfireOptions>() ?? new HangfireOptions();
+        HangfireOptionsValidator.NormalizeQueues(hangfire.Queues, out _);
+
+        if (hangfire.Enabled)
         {
+            var queues = HangfireOptionsValidator.NormalizeQueues(hangfire.Queues, out var queueErrors);
+            if (queueErrors.Count > 0 || queues.Count == 0)
+            {
+                throw new OptionsValidationException(
+                    HangfireOptions.SectionName,
+                    typeof(HangfireOptions),
+                    queueErrors.Count > 0 ? queueErrors : ["Hangfire:Queues must contain at least one queue when Hangfire is enabled."]);
+            }
+
             services.AddHangfireServer(options =>
             {
-                options.WorkerCount = Math.Max(1, Environment.ProcessorCount / 2);
-                options.Queues = ["default"];
+                options.WorkerCount = hangfire.WorkerCount;
+                options.Queues = queues.ToArray();
+                options.ServerName = string.IsNullOrWhiteSpace(hangfire.ServerName)
+                    ? "healthcare-api"
+                    : hangfire.ServerName.Trim();
+                options.ShutdownTimeout = TimeSpan.FromSeconds(hangfire.ShutdownTimeoutSeconds);
             });
         }
+
+        services.AddHealthChecks()
+            .AddCheck<HangfireStorageHealthCheck>("hangfire_storage", tags: ["ready", "hangfire"])
+            .AddCheck<HangfireWorkerStateHealthCheck>("hangfire_worker", tags: ["hangfire"]);
 
         return services;
     }
 
-    public static IApplicationBuilder UseAppointmentReminderHangfire(
-        this IApplicationBuilder app,
+    public static WebApplication UseAppointmentReminderHangfire(
+        this WebApplication app,
         IHostEnvironment environment)
     {
-        if (!environment.IsDevelopment())
+        var options = app.Services.GetRequiredService<IOptions<HangfireOptions>>().Value;
+        var logger = app.Services
+            .GetRequiredService<ILoggerFactory>()
+            .CreateLogger("HealthCare.Hangfire");
+
+        logger.LogInformation(
+            "Hangfire startup. Enabled={Enabled} WorkerCount={WorkerCount} Queues={Queues} ServerName={ServerName} ScheduleRecurringJobs={ScheduleRecurringJobs} DashboardEnabled={DashboardEnabled} DashboardPath={DashboardPath}",
+            options.Enabled,
+            options.WorkerCount,
+            string.Join(',', options.Queues),
+            options.ServerName,
+            options.ScheduleRecurringJobs,
+            options.Dashboard.Enabled,
+            options.Dashboard.Path);
+
+        if (!options.Enabled)
         {
+            logger.LogInformation(
+                "Hangfire workers intentionally disabled. Job enqueueing remains available for an external worker process.");
+        }
+
+        if (HangfireRecurringJobRegistrar.IsDesignTime(environment))
+        {
+            logger.LogInformation("Skipping Hangfire recurring-job registration (design-time host).");
             return app;
         }
 
-        var recurring = app.ApplicationServices.GetRequiredService<IRecurringJobManager>();
-        recurring.AddOrUpdate<AppointmentReminderHangfireJobs>(
-            "appointment-reminder-recovery",
-            j => j.RecoverOverdueRemindersAsync(CancellationToken.None),
-            "*/5 * * * *");
-
-        recurring.AddOrUpdate<ClinicAppointmentSummaryHangfireJobs>(
-            "clinic-appointment-summary-dispatch",
-            j => j.DispatchDueSummariesAsync(CancellationToken.None),
-            "*/15 * * * *");
-
-        recurring.AddOrUpdate<ClinicAppointmentSummaryHangfireJobs>(
-            "clinic-appointment-summary-recovery",
-            j => j.RecoverFailedSummariesAsync(CancellationToken.None),
-            "*/15 * * * *");
-
-        app.UseHangfireDashboard(DashboardPath, new DashboardOptions
+        if (options.Enabled && options.ScheduleRecurringJobs)
         {
-            Authorization = [new HangfireDashboardAuthFilter()],
-            DashboardTitle = "HealthCare Jobs (Development)",
-        });
+            var recurring = app.Services.GetRequiredService<IRecurringJobManager>();
+            HangfireRecurringJobRegistrar.Register(recurring, logger);
+        }
+        else if (options.ScheduleRecurringJobs && !options.Enabled)
+        {
+            logger.LogWarning(
+                "Hangfire ScheduleRecurringJobs=true ignored because Hangfire.Enabled=false. Register recurring jobs on a host with workers enabled (API or dedicated worker).");
+        }
+        else
+        {
+            logger.LogInformation("Hangfire recurring-job registration skipped (ScheduleRecurringJobs=false or workers disabled).");
+        }
+
+        if (options.Dashboard.Enabled)
+        {
+            app.MapHangfireDashboard(options.Dashboard.Path, new DashboardOptions
+            {
+                Authorization = [new HangfireDashboardAuthFilter()],
+                DashboardTitle = environment.IsDevelopment()
+                    ? "HealthCare Jobs (Development)"
+                    : "HealthCare Jobs",
+                IgnoreAntiforgeryToken = false,
+            });
+
+            logger.LogInformation(
+                "Hangfire dashboard enabled at {DashboardPath} (PLATFORM_ADMIN only).",
+                options.Dashboard.Path);
+        }
+        else
+        {
+            logger.LogInformation("Hangfire dashboard disabled.");
+        }
 
         return app;
     }
 }
 
 /// <summary>
-/// Hangfire dashboard requires an authenticated PLATFORM_ADMIN in Development.
+/// Hangfire dashboard requires an authenticated PLATFORM_ADMIN.
 /// </summary>
 public sealed class HangfireDashboardAuthFilter : IDashboardAuthorizationFilter
 {

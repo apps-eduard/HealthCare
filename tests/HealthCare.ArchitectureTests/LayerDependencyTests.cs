@@ -215,6 +215,11 @@ public sealed class LayerDependencyTests
         typeof(IClinicAppointmentSummaryJobs).Namespace.Should().StartWith("HealthCare.Application.Appointments");
         typeof(IClinicAppointmentSummarySender).Namespace.Should().StartWith("HealthCare.Application.Appointments");
 
+        typeof(HealthCare.Infrastructure.Configuration.HangfireOptions).Namespace
+            .Should().StartWith("HealthCare.Infrastructure");
+        typeof(HealthCare.Infrastructure.DependencyInjection.HangfireRecurringJobRegistrar).Namespace
+            .Should().StartWith("HealthCare.Infrastructure");
+
         typeof(Contracts.Appointments.ClinicAppointmentSummaryResponse)
             .Should().NotBeAssignableTo(typeof(Domain.Appointments.Appointment));
         typeof(Contracts.Appointments.ClinicAppointmentSummaryResponse)
@@ -235,6 +240,11 @@ public sealed class LayerDependencyTests
             .Where(t => t.Name.EndsWith("Controller", StringComparison.Ordinal))
             .Should()
             .NotContain(t => t.GetMethods().Any(m => m.Name.Contains("DbContext", StringComparison.Ordinal)));
+
+        typeof(Program).Assembly.GetTypes()
+            .Where(t => t.Name.EndsWith("Controller", StringComparison.Ordinal))
+            .Should()
+            .NotContain(t => t.GetMethods().Any(m => m.Name.Contains("AddHangfire", StringComparison.Ordinal)));
 
         var domainResult = Types.InAssembly(typeof(DomainAssemblyMarker).Assembly)
             .That()
