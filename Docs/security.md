@@ -204,6 +204,7 @@ Not allowed:
 - Revoke tokens on logout.
 - Revoke tokens when an account is disabled.
 - Revoke **all** refresh tokens for a user (and update the Identity security stamp) after staff deactivation, role assignment, or role removal via `ISecuritySessionInvalidationService`. Never log token values or hashes.
+- Staff web MVP stores access/refresh tokens in ASP.NET Core `ProtectedSessionStorage` (plus circuit memory). Prefer an HttpOnly BFF cookie pattern before production.
 - Record creation, expiration, revocation, IP address, and user agent where appropriate.
 
 ### 5.5 Mobile token storage

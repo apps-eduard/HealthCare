@@ -150,6 +150,18 @@ PATIENT is never offered for staff membership.
 
 Doctor directory and available-slots require authentication + `availability.read` (not anonymous). Staff-management routes are never public.
 
+## Staff web application (HealthCare.Web)
+
+MudBlazor Interactive Server app consumes the API. UI permissions (`staff.read` / `staff.manage` / `roles.read` / `roles.assign`) only control presentation; the API enforces authorization.
+
+Pages:
+
+- `/login` — staff sign-in
+- `/dashboard` — authenticated shell home
+- `/staff` — staff list/management (`staff.read` required)
+
+MVP token storage: circuit memory + `ProtectedSessionStorage` (documented limitation; prefer BFF HttpOnly cookies later).
+
 ## Securing new endpoints
 
 1. Add/choose a permission constant.

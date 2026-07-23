@@ -1,0 +1,155 @@
+@page "/login"
+@layout EmptyLayout
+@attribute [AllowAnonymous]
+@inject IAuthApiClient AuthApi
+@inject StaffAuthenticationStateProvider AuthState
+@inject IPermissionState Permissions
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Staff sign in</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
+    <MudPaper Class="pa-6" Elevation="2">
+        <MudText Typo="Typo.h4" GutterBottom="true">HealthCare Staff</MudText>
+        <MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">Sign in with your staff account</MudText>
+
+        <EditForm Model="_model" OnValidSubmit="OnSubmitAsync">
+            <DataAnnotationsValidator />
+            <MudTextField @bind-Value="_model.Email"
+                          Label="Email"
+                          InputType="InputType.Email"
+                          Required="true"
+                          RequiredError="Email is required"
+                          Disabled="_busy"
+                          Class="mb-3" />
+            <MudTextField @bind-Value="_model.Password"
+                          Label="Password"
+                          InputType="InputType.Password"
+                          Required="true"
+                          RequiredError="Password is required"
+                          Disabled="_busy"
+                          Class="mb-3" />
+
+            @if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <MudAlert Severity="Severity.Error" Class="mb-3" Dense="true">@_error</MudAlert>
+            }
+
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       FullWidth="true"
+                       Disabled="_busy">
+                @if (_busy)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                Sign in
+            </MudButton>
+        </EditForm>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private readonly LoginFormModel _model = new();
+    private bool _busy;
+    private string? _error;
+
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        if (state.User.Identity?.IsAuthenticated == true && Permissions.IsStaffUser && !Permissions.IsPatientOnly)
+        {
+            Navigation.NavigateTo(GetSafeReturnUrl(), forceLoad: false);
+        }
+    }
+
+    private async Task OnSubmitAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var tokens = await AuthApi.LoginAsync(new LoginRequest
+            {
+                Email = _model.Email.Trim(),
+                Password = _model.Password,
+            });
+
+            await AuthState.SignInAsync(tokens);
+            _model.Password = string.Empty;
+
+            if (Permissions.IsPatientOnly || !Permissions.IsStaffUser)
+            {
+                await AuthState.MarkLoggedOutAsync(callRemoteLogout: true);
+                _error = "This application is for staff accounts only.";
+                return;
+            }
+
+            Navigation.NavigateTo(GetSafeReturnUrl(), forceLoad: false);
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = MapLoginError(ex);
+            _model.Password = string.Empty;
+        }
+        catch (HttpRequestException)
+        {
+            _error = "Unable to reach the API. Check that the API is running and Api:BaseUrl is configured.";
+            _model.Password = string.Empty;
+        }
+        catch (TaskCanceledException)
+        {
+            _error = "The sign-in request timed out. Please try again.";
+            _model.Password = string.Empty;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private string GetSafeReturnUrl()
+    {
+        if (string.IsNullOrWhiteSpace(ReturnUrl))
+        {
+            return "/dashboard";
+        }
+
+        var decoded = Uri.UnescapeDataString(ReturnUrl);
+        if (!decoded.StartsWith('/') || decoded.StartsWith("//", StringComparison.Ordinal) || decoded.Contains("://", StringComparison.Ordinal))
+        {
+            return "/dashboard";
+        }
+
+        if (decoded.StartsWith("/login", StringComparison.OrdinalIgnoreCase))
+        {
+            return "/dashboard";
+        }
+
+        return decoded;
+    }
+
+    private static string MapLoginError(ApiProblemException ex) =>
+        ex.ErrorCode switch
+        {
+            HealthCare.Contracts.Identity.AuthErrorCodes.InvalidCredentials => "Invalid email or password.",
+            HealthCare.Contracts.Identity.AuthErrorCodes.AccountDisabled => "This account is disabled.",
+            HealthCare.Contracts.Identity.AuthErrorCodes.AccountLocked => "This account is temporarily locked.",
+            HealthCare.Contracts.Identity.AuthErrorCodes.EmailNotConfirmed => "Email confirmation is required before signing in.",
+            HealthCare.Contracts.Identity.AuthErrorCodes.OrganizationInactive => "The organization for this account is inactive.",
+            HealthCare.Contracts.Identity.AuthErrorCodes.ClinicInactive => "The clinic for this account is inactive.",
+            _ => "Unable to sign in. Please try again.",
+        };
+
+    private sealed class LoginFormModel
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
+}

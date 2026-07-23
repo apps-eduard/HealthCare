@@ -1,0 +1,68 @@
+@inject IStaffManagementApiClient StaffApi
+@inject IPermissionState Permissions
+
+<MudDialog>
+    <DialogContent>
+        @if (_loading)
+        {
+            <MudProgressCircular Indeterminate="true" />
+        }
+        else if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error">@_error</MudAlert>
+        }
+        else if (_detail is not null)
+        {
+            <MudStack Spacing="1">
+                <MudText><b>Name:</b> @($"{_detail.FirstName} {_detail.LastName}")</MudText>
+                <MudText><b>Display name:</b> @(_detail.DisplayName ?? "—")</MudText>
+                <MudText><b>Email:</b> @_detail.Email</MudText>
+                <MudText><b>Job title:</b> @(_detail.JobTitle ?? "—")</MudText>
+                <MudText><b>Phone:</b> @(_detail.PhoneNumber ?? "—")</MudText>
+                <MudText><b>Organization:</b> @_detail.OrganizationId</MudText>
+                <MudText><b>Clinic:</b> @_detail.ClinicId</MudText>
+                <MudText><b>Role:</b> @_detail.Role</MudText>
+                <MudText><b>Membership:</b> @(_detail.MembershipIsActive ? "Active" : "Inactive")</MudText>
+                <MudText><b>Account enabled:</b> @(_detail.AccountIsActive ? "Yes" : "No")</MudText>
+                <MudText><b>Email confirmed:</b> @(_detail.EmailConfirmed ? "Yes" : "No")</MudText>
+                <MudText><b>Created:</b> @_detail.CreatedAtUtc.ToString("u")</MudText>
+                <MudText><b>Updated:</b> @_detail.UpdatedAtUtc.ToString("u")</MudText>
+                <MudText Typo="Typo.caption">Version @_detail.Version</MudText>
+            </MudStack>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public Guid StaffMemberId { get; set; }
+
+    private StaffDetailResponse? _detail;
+    private bool _loading = true;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var bypass = Permissions.CurrentUser?.Roles.Contains(WebRoles.PlatformAdmin, StringComparer.Ordinal) == true;
+            _detail = await StaffApi.GetByIdAsync(StaffMemberId, platformAdminBypass: bypass);
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = ex.ToUserMessage();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void Close() => MudDialog.Close();
+}

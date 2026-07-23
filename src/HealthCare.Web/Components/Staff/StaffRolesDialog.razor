@@ -1,0 +1,129 @@
+@inject IStaffManagementApiClient StaffApi
+@inject IPermissionState Permissions
+
+<MudDialog>
+    <DialogContent>
+        <MudText Class="mb-2">Update role for <b>@DisplayName</b></MudText>
+        <MudText Typo="Typo.caption" Class="mb-3">Current role: @CurrentRole</MudText>
+
+        @if (_loading)
+        {
+            <MudProgressCircular Indeterminate="true" />
+        }
+        else
+        {
+            <MudSelect T="string" @bind-Value="_selectedRole" Label="Assignable role" Disabled="_busy">
+                @foreach (var role in _roles.Where(r => r.AssignableByCurrentUser))
+                {
+                    <MudSelectItem Value="@role.Name">@role.DisplayLabel</MudSelectItem>
+                }
+            </MudSelect>
+
+            @if (_roles.Any(r => !r.AssignableByCurrentUser))
+            {
+                <MudText Typo="Typo.caption" Class="mt-2 mud-text-secondary">
+                    Not assignable: @string.Join(", ", _roles.Where(r => !r.AssignableByCurrentUser).Select(r => r.DisplayLabel))
+                </MudText>
+            }
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-3" Dense="true">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="_busy">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync" Disabled="_busy || string.IsNullOrWhiteSpace(_selectedRole)">
+            Assign role
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public Guid StaffMemberId { get; set; }
+
+    [Parameter]
+    public Guid TargetUserId { get; set; }
+
+    [Parameter]
+    public string CurrentRole { get; set; } = string.Empty;
+
+    [Parameter]
+    public string DisplayName { get; set; } = string.Empty;
+
+    private List<StaffRoleInfoResponse> _roles = [];
+    private string? _selectedRole;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Permissions.Has(WebPermissions.RolesRead))
+        {
+            _error = "roles.read is required to load assignable roles.";
+            _loading = false;
+            return;
+        }
+
+        try
+        {
+            _roles = (await StaffApi.ListRolesAsync()).ToList();
+            _selectedRole = _roles.FirstOrDefault(r => r.AssignableByCurrentUser && r.Name != CurrentRole)?.Name
+                            ?? _roles.FirstOrDefault(r => r.AssignableByCurrentUser)?.Name;
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = ex.ToUserMessage();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task SubmitAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_selectedRole) || !Permissions.Has(WebPermissions.RolesAssign))
+        {
+            _error = "Role assignment is not available.";
+            return;
+        }
+
+        if (string.Equals(_selectedRole, CurrentRole, StringComparison.Ordinal))
+        {
+            MudDialog.Close(DialogResult.Ok(true));
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var bypass = Permissions.CurrentUser?.Roles.Contains(WebRoles.PlatformAdmin, StringComparer.Ordinal) == true;
+            await StaffApi.AssignRoleAsync(StaffMemberId, _selectedRole, bypass);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = ex.ErrorCode switch
+            {
+                StaffErrorCodes.SelfElevationDenied => "You cannot elevate your own role.",
+                StaffErrorCodes.LastAdminProtected => "The last administrator in scope is protected.",
+                StaffErrorCodes.RoleAssignmentDenied => "That role assignment is not permitted.",
+                _ => ex.ToUserMessage(),
+            };
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

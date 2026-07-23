@@ -1,0 +1,55 @@
+@page "/"
+@page "/dashboard"
+@attribute [Authorize]
+@inject IPermissionState Permissions
+@inject NavigationManager Navigation
+
+<PageTitle>Dashboard</PageTitle>
+
+@if (Permissions.IsPatientOnly)
+{
+    <MudAlert Severity="Severity.Error">Patient accounts cannot use the staff application.</MudAlert>
+}
+else if (!Permissions.IsStaffUser)
+{
+    <MudAlert Severity="Severity.Warning">An active staff membership is required.</MudAlert>
+}
+else
+{
+    <MudText Typo="Typo.h4" GutterBottom="true">Dashboard</MudText>
+    <MudText Typo="Typo.body1" Class="mb-4">
+        Welcome@(string.IsNullOrWhiteSpace(Permissions.CurrentUser?.Email) ? "" : $", {Permissions.CurrentUser!.Email}").
+    </MudText>
+
+    <MudPaper Class="pa-4 mb-4" Outlined="true">
+        <MudText Typo="Typo.subtitle1" GutterBottom="true">Session context</MudText>
+        <MudText Typo="Typo.body2">Organization: @(Permissions.CurrentUser?.OrganizationId?.ToString("D") ?? "—")</MudText>
+        <MudText Typo="Typo.body2">Clinic: @(Permissions.CurrentUser?.ClinicId?.ToString("D") ?? "—")</MudText>
+        <MudText Typo="Typo.body2">Roles: @string.Join(", ", Permissions.CurrentUser?.Roles ?? [])</MudText>
+        <MudText Typo="Typo.body2">Staff membership: @(Permissions.CurrentUser?.HasActiveStaffMembership == true ? "Active" : "None")</MudText>
+    </MudPaper>
+
+    <MudStack Row="true" Spacing="2">
+        @if (Permissions.Has(WebPermissions.StaffRead))
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/staff" StartIcon="@Icons.Material.Filled.Groups">
+                Manage staff
+            </MudButton>
+        }
+    </MudStack>
+}
+
+@code {
+    protected override void OnInitialized()
+    {
+        if (Permissions.IsPatientOnly)
+        {
+            return;
+        }
+
+        if (!Permissions.IsStaffUser)
+        {
+            Navigation.NavigateTo("/forbidden");
+        }
+    }
+}

@@ -2,24 +2,24 @@
 
 ## Progress overview
 
-**Overall completion: 55%**
+**Overall completion: 58%**
 
 ```text
-[█████████████████░░░░░░░░░░░░░░░]  55%
+[██████████████████░░░░░░░░░░░░░░]  58%
 ```
 
 | Metric | Value |
 |--------|-------|
 | Official phases (0–13) | 14 |
 | Complete | 3 (Phases 0, 1, 5) |
-| Partial | 6 (Phases 2, 3, 4, 6, 7, 10) |
+| Partial | 7 (Phases 2, 3, 4, 6, 7, 8, 10) |
 | In progress | 0 |
-| Not started | 5 |
-| Weighted score | (3×1.0) + (0.7 + 0.95 + 0.5 + 0.75 + 0.85 + 0.85) = 7.6 / 14 ≈ **55%** |
+| Not started | 4 |
+| Weighted score | (3×1.0) + (0.7 + 0.95 + 0.5 + 0.75 + 0.85 + 0.4 + 0.85) = 8.0 / 14 ≈ **58%** |
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Staff UI (MudBlazor), Google auth, or medical notes
+**Current focus:** Appointment/patient staff UI, Google auth, or medical notes
 
 ### All phases at a glance
 
@@ -34,7 +34,7 @@
 | 5 | Patients and clinic-patient registration | Complete | `██████████` 100% |
 | 6 | Staff and doctors | Partial | `████████░░` 75% |
 | 7 | Appointment booking | Partial | `█████████░` 85% |
-| 8 | Staff web application (MudBlazor) | Not started | `░░░░░░░░░░` 0% |
+| 8 | Staff web application (MudBlazor) | Partial | `████░░░░░░` 40% |
 | 9 | Medical notes | Not started | `░░░░░░░░░░` 0% |
 | 10 | Hangfire and notifications | Partial | `█████████░` 85% |
 | 11 | Patient mobile application | Not started | `░░░░░░░░░░` 0% |
@@ -91,7 +91,7 @@ Authoritative design docs:
 | 5 | Patients and clinic-patient registration | Complete (staff search + clinic admin) | 2026-07-23 |
 | 6 | Staff and doctors | Partial (staff-management APIs; UI deferred) | 2026-07-23 |
 | 7 | Appointment booking | Partial (foundation + availability + reschedule) | 2026-07-23 |
-| 8 | Staff web application (MudBlazor) | Not started | — |
+| 8 | Staff web application (MudBlazor) | Partial (login + staff management foundation) | 2026-07-23 |
 | 9 | Medical notes | Not started | — |
 | 10 | Hangfire and notifications | Partial (reminders + daily clinic summary) | 2026-07-23 |
 | 11 | Patient mobile application | Not started | — |
@@ -539,12 +539,41 @@ Authoritative design docs:
 
 ## Phase 8 — Staff web application
 
-**Status:** Not started
+**Status:** Partial (~40% — auth shell + staff management UI foundation)  
+**Updated:** 2026-07-23
 
-### Planned
+### Already done
 
-- MudBlazor staff UI: login, dashboard, appointments, patients, notes, staff, settings, audit viewer
-- API remains the security boundary
+- MudBlazor 9 on `HealthCare.Web` (Interactive Server)
+- Staff login (`/login`) against `POST /api/v1/auth/login`
+- Token handling via `IApiTokenStore` (circuit memory + `ProtectedSessionStorage`) and refresh via `AuthDelegatingHandler`
+- Custom `StaffAuthenticationStateProvider` + `IPermissionState` from `/api/v1/auth/me`
+- Authenticated MudBlazor shell (app bar, drawer, logout)
+- Dashboard (`/` / `/dashboard`) with session context and permission-aware links
+- Staff management page (`/staff`): server-side search/filter/pagination, detail, create, activate/deactivate, role assign
+- Typed clients: `IAuthApiClient`, `IStaffManagementApiClient`
+- Problem Details mapping to safe UI messages
+- PATIENT accounts blocked from staff UI
+- Config: `Api:BaseUrl`
+
+### Remaining
+
+- Appointments, patients, notes, settings, audit viewer screens
+- HttpOnly BFF cookie auth (replace ProtectedSessionStorage MVP)
+- Clinic picker API (org admins currently enter ClinicId)
+- Broader automated UI tests
+
+### Known limitations
+
+- Refresh tokens stored in ProtectedSessionStorage (encrypted browser session storage), not HttpOnly cookies
+- No invitation email UI (temporary-password create only)
+- API remains the authorization authority
+
+### Verification
+
+- Build: succeeded (`HealthCare.Web` + solution)
+- Unit tests: **224 passed**
+- Architecture tests: **17 passed**
 
 ---
 

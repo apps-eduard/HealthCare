@@ -1,0 +1,181 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using HealthCare.Contracts.Identity;
+using Microsoft.Extensions.Logging;
+
+namespace HealthCare.Web.Auth;
+
+/// <summary>
+/// Adds bearer access token and performs a single coordinated refresh on 401.
+/// Never logs Authorization headers or token values.
+/// </summary>
+public sealed class AuthDelegatingHandler : DelegatingHandler
+{
+    private readonly IApiTokenStore _tokenStore;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IServiceProvider _services;
+    private readonly ILogger<AuthDelegatingHandler> _logger;
+    private readonly SemaphoreSlim _refreshLock = new(1, 1);
+
+    public AuthDelegatingHandler(
+        IApiTokenStore tokenStore,
+        IHttpClientFactory httpClientFactory,
+        IServiceProvider services,
+        ILogger<AuthDelegatingHandler> logger)
+    {
+        _tokenStore = tokenStore;
+        _httpClientFactory = httpClientFactory;
+        _services = services;
+        _logger = logger;
+    }
+
+    protected override async Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        if (request.Options.TryGetValue(SkipAuthOption, out var skip) && skip)
+        {
+            return await base.SendAsync(request, cancellationToken);
+        }
+
+        await AttachAccessTokenAsync(request, cancellationToken);
+        var response = await base.SendAsync(request, cancellationToken);
+
+        if (response.StatusCode != HttpStatusCode.Unauthorized)
+        {
+            return response;
+        }
+
+        response.Dispose();
+        var refreshed = await TryRefreshAsync(cancellationToken);
+        if (!refreshed)
+        {
+            await ForceLocalLogoutAsync();
+            return new HttpResponseMessage(HttpStatusCode.Unauthorized)
+            {
+                RequestMessage = request,
+            };
+        }
+
+        var retry = await CloneRequestAsync(request, cancellationToken);
+        await AttachAccessTokenAsync(retry, cancellationToken);
+        return await base.SendAsync(retry, cancellationToken);
+    }
+
+    public static readonly HttpRequestOptionsKey<bool> SkipAuthOption = new("HealthCare.SkipAuth");
+
+    private async Task AttachAccessTokenAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        var tokens = await _tokenStore.GetAsync(cancellationToken);
+        if (tokens is null || string.IsNullOrWhiteSpace(tokens.AccessToken))
+        {
+            return;
+        }
+
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokens.AccessToken);
+    }
+
+    private async Task<bool> TryRefreshAsync(CancellationToken cancellationToken)
+    {
+        await _refreshLock.WaitAsync(cancellationToken);
+        try
+        {
+            var tokens = await _tokenStore.GetAsync(cancellationToken);
+            if (tokens is null || string.IsNullOrWhiteSpace(tokens.RefreshToken))
+            {
+                return false;
+            }
+
+            var client = _httpClientFactory.CreateClient("HealthCareApi.Anonymous");
+            using var refreshRequest = new HttpRequestMessage(HttpMethod.Post, "api/v1/auth/refresh")
+            {
+                Content = JsonContent.Create(new RefreshTokenRequest { RefreshToken = tokens.RefreshToken }),
+            };
+            refreshRequest.Options.Set(SkipAuthOption, true);
+
+            using var refreshResponse = await client.SendAsync(refreshRequest, cancellationToken);
+            if (!refreshResponse.IsSuccessStatusCode)
+            {
+                _logger.LogInformation("Access token refresh failed with status {StatusCode}.", (int)refreshResponse.StatusCode);
+                return false;
+            }
+
+            var body = await refreshResponse.Content.ReadFromJsonAsync<AuthTokenResponse>(cancellationToken);
+            if (body is null || string.IsNullOrWhiteSpace(body.AccessToken))
+            {
+                return false;
+            }
+
+            await _tokenStore.SetAsync(
+                new StoredAuthTokens
+                {
+                    AccessToken = body.AccessToken,
+                    RefreshToken = body.RefreshToken,
+                    AccessTokenExpiresAtUtc = body.AccessTokenExpiresAtUtc,
+                    RefreshTokenExpiresAtUtc = body.RefreshTokenExpiresAtUtc,
+                },
+                cancellationToken);
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Access token refresh failed.");
+            return false;
+        }
+        finally
+        {
+            _refreshLock.Release();
+        }
+    }
+
+    private async Task ForceLocalLogoutAsync()
+    {
+        try
+        {
+            var authState = _services.GetService<StaffAuthenticationStateProvider>();
+            if (authState is not null)
+            {
+                await authState.MarkLoggedOutAsync(callRemoteLogout: false);
+            }
+            else
+            {
+                await _tokenStore.ClearAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Local logout after refresh failure encountered an error.");
+            await _tokenStore.ClearAsync();
+        }
+    }
+
+    private static async Task<HttpRequestMessage> CloneRequestAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        var clone = new HttpRequestMessage(request.Method, request.RequestUri)
+        {
+            Version = request.Version,
+            VersionPolicy = request.VersionPolicy,
+        };
+
+        foreach (var header in request.Headers)
+        {
+            clone.Headers.TryAddWithoutValidation(header.Key, header.Value);
+        }
+
+        if (request.Content is not null)
+        {
+            var bytes = await request.Content.ReadAsByteArrayAsync(cancellationToken);
+            clone.Content = new ByteArrayContent(bytes);
+            foreach (var header in request.Content.Headers)
+            {
+                clone.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+        }
+
+        return clone;
+    }
+}

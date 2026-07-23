@@ -71,7 +71,19 @@ Authorization uses a code-defined permission catalog (`Docs/authorization-matrix
 
 Staff administration (admins only): `/api/v1/staff-management/staff` and `/roles`. Development seed includes `clinicadmin@healthcare.local` (see `DevelopmentSeed:Patient:ClinicAdmin*` in `appsettings.Development.json`).
 
-### 5. Build and test
+### 5. Run the staff web app
+
+```powershell
+dotnet run --project src/HealthCare.Web --launch-profile http
+```
+
+- Staff UI: http://localhost:5018
+- Configure API base URL via `Api:BaseUrl` in `src/HealthCare.Web/appsettings*.json` (default `http://localhost:5080/`)
+- Sign in with a staff account (for example `clinicadmin@healthcare.local`)
+
+MVP token storage uses circuit memory plus ASP.NET Core `ProtectedSessionStorage` (not HttpOnly cookies). Prefer a BFF cookie pattern before production hardening.
+
+### 6. Build and test
 
 ```powershell
 dotnet build HealthCare.sln
@@ -86,7 +98,7 @@ Integration tests start PostgreSQL via Testcontainers and require Docker.
 HealthCare/
 ├── src/
 │   ├── HealthCare.Api/              # ASP.NET Core Web API host
-│   ├── HealthCare.Web/              # Staff Blazor Web App (MudBlazor later)
+│   ├── HealthCare.Web/              # Staff Blazor + MudBlazor web app
 │   ├── HealthCare.Mobile/           # Patient MAUI placeholder (Phase 11)
 │   ├── HealthCare.Domain/           # Domain entities by module
 │   ├── HealthCare.Application/      # Use cases, validators, DI

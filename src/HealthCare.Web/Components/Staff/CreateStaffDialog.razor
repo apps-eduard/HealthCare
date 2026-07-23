@@ -1,0 +1,152 @@
+@inject IStaffManagementApiClient StaffApi
+@inject IPermissionState Permissions
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Create staff</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudTextField @bind-Value="_email" Label="Email" Required="true" Disabled="_busy" />
+            <MudTextField @bind-Value="_firstName" Label="First name" Required="true" Disabled="_busy" />
+            <MudTextField @bind-Value="_lastName" Label="Last name" Required="true" Disabled="_busy" />
+            <MudTextField @bind-Value="_displayName" Label="Display name" Disabled="_busy" />
+            <MudTextField @bind-Value="_jobTitle" Label="Job title" Disabled="_busy" />
+            <MudTextField @bind-Value="_phone" Label="Phone" Disabled="_busy" />
+            @if (Permissions.CanFilterByClinic)
+            {
+                <MudTextField @bind-Value="_clinicIdText" Label="Clinic ID" Required="true" Disabled="_busy" HelperText="Required for organization or platform administrators." />
+            }
+            <MudSelect T="string" @bind-Value="_role" Label="Initial role" Required="true" Disabled="_busy || _rolesLoading">
+                @foreach (var role in _roles.Where(r => r.AssignableByCurrentUser))
+                {
+                    <MudSelectItem Value="@role.Name">@role.DisplayLabel</MudSelectItem>
+                }
+            </MudSelect>
+            <MudTextField @bind-Value="_temporaryPassword" Label="Temporary password" InputType="InputType.Password" Required="true" Disabled="_busy" />
+            <MudTextField @bind-Value="_confirmPassword" Label="Confirm temporary password" InputType="InputType.Password" Required="true" Disabled="_busy" />
+            @if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="_busy">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync" Disabled="_busy">Create</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private List<StaffRoleInfoResponse> _roles = [];
+    private bool _rolesLoading = true;
+    private bool _busy;
+    private string? _error;
+
+    private string _email = string.Empty;
+    private string _firstName = string.Empty;
+    private string _lastName = string.Empty;
+    private string? _displayName;
+    private string? _jobTitle;
+    private string? _phone;
+    private string? _clinicIdText;
+    private string? _role;
+    private string _temporaryPassword = string.Empty;
+    private string _confirmPassword = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Permissions.Has(WebPermissions.RolesRead))
+        {
+            _error = "Assignable roles could not be loaded (roles.read required).";
+            _rolesLoading = false;
+            return;
+        }
+
+        try
+        {
+            _roles = (await StaffApi.ListRolesAsync()).ToList();
+            _role = _roles.FirstOrDefault(r => r.AssignableByCurrentUser)?.Name;
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = ex.ToUserMessage();
+        }
+        finally
+        {
+            _rolesLoading = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task SubmitAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_email)
+            || string.IsNullOrWhiteSpace(_firstName)
+            || string.IsNullOrWhiteSpace(_lastName)
+            || string.IsNullOrWhiteSpace(_role)
+            || string.IsNullOrWhiteSpace(_temporaryPassword))
+        {
+            _error = "Email, names, role, and temporary password are required.";
+            return;
+        }
+
+        if (!string.Equals(_temporaryPassword, _confirmPassword, StringComparison.Ordinal))
+        {
+            _error = "Temporary password confirmation does not match.";
+            return;
+        }
+
+        Guid? clinicId = null;
+        if (Permissions.CanFilterByClinic)
+        {
+            if (!Guid.TryParse(_clinicIdText, out var parsed) || parsed == Guid.Empty)
+            {
+                _error = "A valid clinic ID is required.";
+                return;
+            }
+
+            clinicId = parsed;
+        }
+
+        _busy = true;
+        try
+        {
+            var bypass = Permissions.CurrentUser?.Roles.Contains(WebRoles.PlatformAdmin, StringComparer.Ordinal) == true
+                         && clinicId is not null;
+
+            await StaffApi.CreateAsync(new CreateStaffRequest
+            {
+                Email = _email.Trim(),
+                FirstName = _firstName.Trim(),
+                LastName = _lastName.Trim(),
+                DisplayName = string.IsNullOrWhiteSpace(_displayName) ? null : _displayName.Trim(),
+                JobTitle = string.IsNullOrWhiteSpace(_jobTitle) ? null : _jobTitle.Trim(),
+                PhoneNumber = string.IsNullOrWhiteSpace(_phone) ? null : _phone.Trim(),
+                ClinicId = clinicId,
+                Role = _role!,
+                TemporaryPassword = _temporaryPassword,
+            }, platformAdminBypass: bypass);
+
+            _temporaryPassword = string.Empty;
+            _confirmPassword = string.Empty;
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = ex.ToUserMessage();
+            _temporaryPassword = string.Empty;
+            _confirmPassword = string.Empty;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
