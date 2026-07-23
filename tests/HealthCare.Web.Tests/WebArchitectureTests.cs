@@ -3,6 +3,7 @@ using FluentAssertions;
 using HealthCare.Contracts.Identity;
 using HealthCare.Web.Appointments;
 using HealthCare.Web.Auth;
+using HealthCare.Web.Availability;
 using HealthCare.Web.Patients;
 using HealthCare.Web.Services;
 
@@ -46,6 +47,14 @@ public sealed class WebArchitectureTests
     }
 
     [Fact]
+    public void Availability_Presentation_Is_Centralized()
+    {
+        typeof(AvailabilityPresentation).Namespace.Should().Be("HealthCare.Web.Availability");
+        typeof(AvailabilityPermissionRules).Namespace.Should().Be("HealthCare.Web.Availability");
+        typeof(AvailabilityProblemMessages).Namespace.Should().Be("HealthCare.Web.Availability");
+    }
+
+    [Fact]
     public void Appointment_Actions_Use_Typed_Clients()
     {
         typeof(IAppointmentApiClient).GetMethod(nameof(IAppointmentApiClient.ConfirmAsync)).Should().NotBeNull();
@@ -58,6 +67,10 @@ public sealed class WebArchitectureTests
         typeof(IStaffPatientApiClient).GetMethod(nameof(IStaffPatientApiClient.SearchAsync)).Should().NotBeNull();
         typeof(IStaffPatientApiClient).GetMethod(nameof(IStaffPatientApiClient.GetByIdAsync)).Should().NotBeNull();
         typeof(IStaffPatientApiClient).GetMethod(nameof(IStaffPatientApiClient.UpdateClinicProfileAsync)).Should().NotBeNull();
+        typeof(IDoctorAvailabilityApiClient).GetMethod(nameof(IDoctorAvailabilityApiClient.ListAvailabilityAsync))
+            .Should().NotBeNull();
+        typeof(IDoctorAvailabilityApiClient).GetMethod(nameof(IDoctorAvailabilityApiClient.GetAvailableSlotsAsync))
+            .Should().NotBeNull();
     }
 
     [Fact]
@@ -74,6 +87,7 @@ public sealed class WebArchitectureTests
         typeof(IPermissionState).IsInterface.Should().BeTrue();
         typeof(PermissionState).Should().BeAssignableTo<IPermissionState>();
         typeof(WebPermissions).GetField(nameof(WebPermissions.AppointmentsRead)).Should().NotBeNull();
+        typeof(WebPermissions).GetField(nameof(WebPermissions.AvailabilityManageSelf)).Should().NotBeNull();
     }
 
     [Fact]
@@ -131,5 +145,10 @@ public sealed class WebArchitectureTests
             .Should()
             .NotContain(n => n.Contains("Generate", StringComparison.OrdinalIgnoreCase)
                              || n.Contains("Availability", StringComparison.OrdinalIgnoreCase));
+
+        typeof(AvailabilityPresentation).GetMethods()
+            .Select(m => m.Name)
+            .Should()
+            .NotContain(n => n.Contains("Generate", StringComparison.OrdinalIgnoreCase));
     }
 }

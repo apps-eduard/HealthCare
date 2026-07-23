@@ -2,10 +2,10 @@
 
 ## Progress overview
 
-**Overall completion: 62%**
+**Overall completion: 63%**
 
 ```text
-[███████████████████░░░░░░░░░░░░░]  62%
+[████████████████████░░░░░░░░░░░░]  63%
 ```
 
 | Metric | Value |
@@ -15,11 +15,11 @@
 | Partial | 7 (Phases 2, 3, 4, 6, 7, 8, 10) |
 | In progress | 0 |
 | Not started | 4 |
-| Weighted score | (3×1.0) + (0.7 + 0.95 + 0.5 + 0.75 + 0.85 + 0.6 + 0.85) = 8.2 / 14 ≈ **62%** |
+| Weighted score | (3×1.0) + (0.7 + 0.95 + 0.5 + 0.75 + 0.85 + 0.7 + 0.85) = 8.3 / 14 ≈ **63%** |
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Patient directory UI, Google auth, medical notes, or BFF cookie auth
+**Current focus:** Staff availability UI follow-ups, Google auth, medical notes, or BFF cookie auth
 
 ### All phases at a glance
 
@@ -34,7 +34,7 @@
 | 5 | Patients and clinic-patient registration | Complete | `██████████` 100% |
 | 6 | Staff and doctors | Partial | `████████░░` 75% |
 | 7 | Appointment booking | Partial | `█████████░` 85% |
-| 8 | Staff web application (MudBlazor) | Partial | `██████░░░░` 60% |
+| 8 | Staff web application (MudBlazor) | Partial | `███████░░░` 70% |
 | 9 | Medical notes | Not started | `░░░░░░░░░░` 0% |
 | 10 | Hangfire and notifications | Partial | `█████████░` 85% |
 | 11 | Patient mobile application | Not started | `░░░░░░░░░░` 0% |
@@ -463,7 +463,7 @@ Authoritative design docs:
 
 **Staff availability administration**
 - `GET/POST/PATCH/DELETE /api/v1/staff/doctors/{staffMemberId}/availability`
-- `POST/DELETE .../availability-exceptions`
+- `GET/POST/DELETE .../availability-exceptions` (list added for staff UI; no exception PATCH)
 - ClinicAdmin: same clinic; OrgAdmin: same organization; Doctor: own availability; PATIENT: forbidden; PLATFORM_ADMIN: explicit bypass
 
 **Migration result**
@@ -539,7 +539,7 @@ Authoritative design docs:
 
 ## Phase 8 — Staff web application
 
-**Status:** Partial (~55% — auth shell + staff management + appointment queue/calendar)  
+**Status:** Partial (~70% — auth shell + staff + appointments + patients + availability)  
 **Updated:** 2026-07-23
 
 ### Already done
@@ -550,14 +550,15 @@ Authoritative design docs:
 - Custom `StaffAuthenticationStateProvider` + `IPermissionState` from `/api/v1/auth/me`
 - **Anonymous protected-route fix:** Cookie authentication scheme (`HealthCare.Staff.Auth`) registers `IAuthenticationService` with default authenticate/challenge/forbid schemes; `UseAuthentication`/`UseAuthorization` ordered correctly. Anonymous GET to `/appointments` etc. challenges to `/login?returnUrl=...` (no HTTP 500). Cookie is HttpOnly, SameSite=Lax, Secure outside Development, holds minimal claims only (never access/refresh tokens). API bearer tokens remain in ProtectedSessionStorage. `SafeReturnUrl` rejects absolute/protocol-relative/open redirects. `RedirectToLogin` waits for confirmed anonymous state. PATIENT may authenticate but sees forbidden UI (not login loop). Logout/refresh-failure clear tokens, permissions, and cookie.
 - **Staff patient directory:** `/patients` (+ optional `/patients/{patientId}`). Nav when `patients.search`. Server-side search/pagination/filters; detail dialog via `patients.read`; ClinicPatient status update via `patients.update_clinic_status` with `ExpectedVersion`. Reuses `PatientPicker` display helpers. Typed `IStaffPatientApiClient` (search/detail/clinic-profile).
+- **Staff availability management:** `/availability`. Nav when any of `availability.manage_self` / `availability.manage_clinic` / `availability.manage_organization` (not `availability.read` alone). Clinic/doctor selection: doctor self fixed; clinic admin fixed clinic + doctor picker; org admin `ClinicPicker` then doctors; PLATFORM_ADMIN requires org + clinic bypass. Weekly windows (Mon–Sun), create/edit/delete with `ExpectedVersion`, date exceptions create/delete (no exception edit), clinic timezone label, optional available-slots preview. Typed `IDoctorAvailabilityApiClient`. Helpers in `HealthCare.Web.Availability`. Smallest API add: `GET .../availability-exceptions`.
 - Authenticated MudBlazor shell (app bar, drawer, logout)
 - Dashboard (`/` / `/dashboard`) with session context and permission-aware links
 - Staff management page (`/staff`): server-side search/filter/pagination, detail, create, activate/deactivate, role assign
 - **Clinic directory API + picker:** `GET /api/v1/staff-management/clinics` with tenant scope; MudBlazor `ClinicPicker` replaces free-text ClinicId
 - **Staff appointments workspace:**
   - Routes: `/appointments` (queue), `/appointments/calendar` (day/week)
-  - Nav: Appointments (when `appointments.read`), Staff Management, Dashboard
-  - Typed clients: `IAppointmentApiClient`, `IStaffPatientApiClient`
+  - Nav: Appointments (when `appointments.read`), Patients, Availability, Staff Management, Dashboard
+  - Typed clients: `IAppointmentApiClient`, `IStaffPatientApiClient`, `IDoctorAvailabilityApiClient`
   - Queue: server-side date/status/doctor/clinic/page/sort filters; permission-aware actions
   - Calendar: lightweight Mud day/week views; clinic timezone display (not browser-local)
   - Detail / create / cancel / reschedule dialogs with `ExpectedVersion` concurrency
@@ -565,7 +566,7 @@ Authoritative design docs:
   - Centralized status chips (`AppointmentStatusPresentation`) and action visibility (`AppointmentActionRules`)
   - Problem Details mapping for appointment error codes (slot unavailable, concurrency, etc.)
   - Optional ~45s queue polling (paused while dialogs open)
-- Typed clients: `IAuthApiClient`, `IStaffManagementApiClient`, `IClinicDirectoryApiClient`, appointment/patient clients above
+- Typed clients: `IAuthApiClient`, `IStaffManagementApiClient`, `IClinicDirectoryApiClient`, appointment/patient/availability clients above
 - Problem Details mapping to safe UI messages
 - PATIENT accounts blocked from staff UI
 - Config: `Api:BaseUrl`
@@ -573,33 +574,36 @@ Authoritative design docs:
 ### API contract enrichment (smallest safe change)
 
 `AppointmentResponse` now includes staff-safe display fields: `PatientDisplayName`, `LocalPatientNumber`, `DoctorDisplayName`, `ClinicName`, `ClinicSlug`, `ClinicTimeZoneId`.  
-`CreateStaffAppointmentRequest.ClinicId` optional for ORGANIZATION_ADMIN / PLATFORM_ADMIN create scope (clinic-scoped staff still use membership clinic).
+`CreateStaffAppointmentRequest.ClinicId` optional for ORGANIZATION_ADMIN / PLATFORM_ADMIN create scope (clinic-scoped staff still use membership clinic).  
+Availability: added staff `GET .../availability-exceptions` (no schema change). Exception edit remains unsupported.
 
 ### Remaining
 
 - Notes, settings, audit viewer screens
 - Full BFF pattern (HttpOnly cookie session that replaces browser token storage)
 - Drag-and-drop calendar reschedule / SignalR realtime (explicitly out of this slice)
+- Exception edit UI (blocked until API supports PATCH)
 - Broader bUnit component coverage (prefer support/view-model tests while bUnit restore is flaky)
 
 ### Known limitations
 
 - API access/refresh tokens still stored in ProtectedSessionStorage (encrypted browser session storage). The new staff Web cookie authenticates the Blazor host only and does **not** replace API bearer auth.
-- PLATFORM_ADMIN clinic picker still needs an OrganizationId scope field (no org directory UI yet); calendar requires explicit clinic selection
+- PLATFORM_ADMIN clinic picker still needs an OrganizationId scope field (no org directory UI yet); calendar/availability require explicit clinic selection
 - Patient directory list masks mobile numbers; detail shows full mobile when returned by API. Address/emergency contact shown in detail only when present on the safe contract.
 - List API has no free-text search parameter (queue filters by date/status/doctor/clinic only)
 - Reason for visit / patient notes are not shown in staff appointment UI
+- Availability DayOfWeek cannot be changed on edit (PATCH contract has no DayOfWeek)
 - No invitation email UI (temporary-password create only)
 - API remains the authorization authority
 
 ### Verification
 
 - Build: see latest commit verification
-- Unit / architecture / web support tests: appointment helpers + Web architecture checks
-- Integration: existing appointment suites retained (Docker/Testcontainers)
+- Unit / architecture / web support tests: availability helpers + Web architecture checks
+- Integration: existing appointment/availability suites retained (Docker/Testcontainers)
+- Manual: see latest commit notes for `/availability` flows
 
 ---
-
 ## Phase 9 — Medical notes
 
 **Status:** Not started
@@ -838,6 +842,7 @@ Authoritative design docs:
 | 2026-07-23 | 10 | Daily clinic appointment summary Hangfire dispatcher + runs; overall ~51% |
 | 2026-07-23 | 10 | Configurable Hangfire worker hosting (non-Dev enablement); overall ~52% |
 | 2026-07-23 | 3 | Fine-grained permission catalog + authorization matrix; overall ~53% |
+| 2026-07-23 | 8 | Staff availability management UI + list-exceptions GET; overall ~63% |
 
 ---
 

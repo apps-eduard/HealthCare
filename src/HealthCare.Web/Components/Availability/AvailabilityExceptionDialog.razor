@@ -1,0 +1,125 @@
+@namespace HealthCare.Web.Components.Availability
+@using HealthCare.Contracts.Appointments
+@using HealthCare.Web.Availability
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudSelect T="string" Value="_type" ValueChanged="OnTypeChanged" Label="Exception type" Required="true" Disabled="_busy" Variant="Variant.Outlined">
+                @foreach (var type in AvailabilityPresentation.ExceptionTypes)
+                {
+                    <MudSelectItem Value="@type">@AvailabilityPresentation.ExceptionTypeLabel(type)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudDatePicker Date="_date" DateChanged="d => _date = d" Label="Date (clinic local)" Editable="true" Required="true" Disabled="_busy" Variant="Variant.Outlined" />
+            @if (AvailabilityPresentation.ExceptionRequiresTimes(_type))
+            {
+                <MudTextField @bind-Value="_start" Label="Start (HH:mm)" Required="true" Disabled="_busy" Variant="Variant.Outlined" />
+                <MudTextField @bind-Value="_end" Label="End (HH:mm)" Required="true" Disabled="_busy" Variant="Variant.Outlined" />
+            }
+            <MudTextField @bind-Value="_reason" Label="Reason (optional)" Disabled="_busy" Variant="Variant.Outlined" />
+            @if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <MudAlert Severity="Severity.Error">@_error</MudAlert>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="_busy">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync" Disabled="_busy || !ClientValid">
+            @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
+            Create
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public Guid DoctorStaffMemberId { get; set; }
+    [Parameter] public bool PlatformAdminBypass { get; set; }
+    [Inject] private IDoctorAvailabilityApiClient Api { get; set; } = default!;
+    [Inject] private ISnackbar Snackbar { get; set; } = default!;
+
+    private string _type = "UnavailableFullDay";
+    private DateTime? _date = DateTime.Today;
+    private string? _start = "09:00";
+    private string? _end = "12:00";
+    private string? _reason;
+    private bool _busy;
+    private string? _error;
+
+    private bool ClientValid
+    {
+        get
+        {
+            if (_date is null || string.IsNullOrWhiteSpace(_type))
+            {
+                return false;
+            }
+
+            if (!AvailabilityPresentation.ExceptionRequiresTimes(_type))
+            {
+                return true;
+            }
+
+            return AvailabilityPresentation.IsValidWindow(_start, _end);
+        }
+    }
+
+    private Task OnTypeChanged(string value)
+    {
+        _type = value;
+        if (!AvailabilityPresentation.ExceptionRequiresTimes(value))
+        {
+            _start = null;
+            _end = null;
+        }
+        else
+        {
+            _start ??= "09:00";
+            _end ??= "12:00";
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task SubmitAsync()
+    {
+        if (!ClientValid || _busy || _date is null)
+        {
+            _error = "Check exception type, date, and time fields.";
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var requiresTimes = AvailabilityPresentation.ExceptionRequiresTimes(_type);
+            var created = await Api.CreateExceptionAsync(
+                DoctorStaffMemberId,
+                new CreateDoctorAvailabilityExceptionRequest
+                {
+                    Date = DateOnly.FromDateTime(_date.Value),
+                    ExceptionType = _type,
+                    StartLocalTime = requiresTimes ? _start?.Trim() : null,
+                    EndLocalTime = requiresTimes ? _end?.Trim() : null,
+                    Reason = string.IsNullOrWhiteSpace(_reason) ? null : _reason.Trim(),
+                },
+                PlatformAdminBypass);
+            Snackbar.Add("Exception created.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(created));
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = AvailabilityProblemMessages.ToUserMessage(ex);
+            Snackbar.Add(_error, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

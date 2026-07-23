@@ -198,6 +198,34 @@ public sealed class AppointmentAvailabilityEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task List_Exceptions_Returns_Created_Exception()
+    {
+        await AuthenticateAsync(StaffAEmail, StaffAPassword);
+        var doctorId = await GetClinicADoctorStaffIdAsync();
+        var date = DateOnly.FromDateTime(DateTime.UtcNow.Date).AddDays(8);
+        var createEx = await _client!.PostAsJsonAsync(
+            $"/api/v1/staff/doctors/{doctorId}/availability-exceptions",
+            new CreateDoctorAvailabilityExceptionRequest
+            {
+                Date = date,
+                ExceptionType = "UnavailableRange",
+                StartLocalTime = "10:00",
+                EndLocalTime = "11:00",
+                Reason = "Meeting",
+            });
+        createEx.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var list = await _client!.GetAsync($"/api/v1/staff/doctors/{doctorId}/availability-exceptions");
+        list.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await list.Content.ReadFromJsonAsync<List<DoctorAvailabilityExceptionResponse>>();
+        body.Should().Contain(e =>
+            e.Date == date
+            && e.ExceptionType == "UnavailableRange"
+            && e.StartLocalTime == "10:00"
+            && e.EndLocalTime == "11:00");
+    }
+
+    [Fact]
     public async Task Existing_Appointment_Removes_Occupied_Slot_And_Cancel_Frees()
     {
         await AuthenticateAsync(PatientEmail, PatientPassword);

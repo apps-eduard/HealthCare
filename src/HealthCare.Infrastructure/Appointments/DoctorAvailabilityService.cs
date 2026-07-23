@@ -45,6 +45,22 @@ public sealed class DoctorAvailabilityService : IDoctorAvailabilityService
         return rows.Select(MapAvailability).ToList();
     }
 
+    public async Task<IReadOnlyList<DoctorAvailabilityExceptionResponse>> ListExceptionsAsync(
+        Guid staffMemberId,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default)
+    {
+        var doctor = await LoadManagedDoctorAsync(staffMemberId, bypass, cancellationToken);
+        var rows = await _dbContext.DoctorAvailabilityExceptions
+            .AsNoTracking()
+            .Where(e => e.DoctorStaffMemberId == doctor.Id)
+            .OrderBy(e => e.Date)
+            .ThenBy(e => e.StartLocalTime)
+            .ToListAsync(cancellationToken);
+
+        return rows.Select(MapException).ToList();
+    }
+
     public async Task<DoctorAvailabilityResponse> CreateAvailabilityAsync(
         Guid staffMemberId,
         CreateDoctorAvailabilityRequest request,

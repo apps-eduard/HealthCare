@@ -30,6 +30,11 @@ public interface IDoctorAvailabilityService
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<DoctorAvailabilityExceptionResponse>> ListExceptionsAsync(
+        Guid staffMemberId,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default);
+
     Task<DoctorAvailabilityResponse> CreateAvailabilityAsync(
         Guid staffMemberId,
         CreateDoctorAvailabilityRequest request,

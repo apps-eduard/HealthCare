@@ -432,6 +432,26 @@ public sealed class AppointmentAvailabilityTests
     }
 
     [Fact]
+    public async Task List_Exceptions_Returns_Doctor_Exceptions()
+    {
+        await using var h = await AppointmentHarness.CreateAsync();
+        var data = await h.SeedAsync();
+        var sut = h.CreateAvailabilityService(
+            data.DoctorAUserId, data.Org1Id, data.ClinicAId, data.DoctorAStaffId, AppRoles.Doctor);
+
+        var date = new DateOnly(2026, 8, 15);
+        await sut.CreateExceptionAsync(data.DoctorAStaffId, new CreateDoctorAvailabilityExceptionRequest
+        {
+            Date = date,
+            ExceptionType = "UnavailableFullDay",
+            Reason = "Conference",
+        });
+
+        var list = await sut.ListExceptionsAsync(data.DoctorAStaffId);
+        list.Should().Contain(e => e.Date == date && e.ExceptionType == "UnavailableFullDay");
+    }
+
+    [Fact]
     public async Task Stale_Availability_Version_Returns_Conflict()
     {
         await using var h = await AppointmentHarness.CreateAsync();

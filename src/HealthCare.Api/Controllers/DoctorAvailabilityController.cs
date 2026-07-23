@@ -80,6 +80,23 @@ public sealed class DoctorAvailabilityController : ControllerBase
         Permissions.Availability.ManageSelf,
         Permissions.Availability.ManageClinic,
         Permissions.Availability.ManageOrganization)]
+    [HttpGet("staff/doctors/{staffMemberId:guid}/availability-exceptions")]
+    [ProducesResponseType(typeof(IReadOnlyList<DoctorAvailabilityExceptionResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<DoctorAvailabilityExceptionResponse>>> ListExceptions(
+        Guid staffMemberId,
+        [FromQuery] bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default)
+    {
+        var bypass = platformAdminBypass ? PlatformAdminBypass.Explicit : PlatformAdminBypass.None;
+        var result = await _availability.ListExceptionsAsync(staffMemberId, bypass, cancellationToken);
+        return Ok(result);
+    }
+
+    [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    [AuthorizeAnyPermission(
+        Permissions.Availability.ManageSelf,
+        Permissions.Availability.ManageClinic,
+        Permissions.Availability.ManageOrganization)]
     [HttpPost("staff/doctors/{staffMemberId:guid}/availability")]
     [ProducesResponseType(typeof(DoctorAvailabilityResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]

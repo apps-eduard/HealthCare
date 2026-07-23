@@ -1,0 +1,156 @@
+@namespace HealthCare.Web.Components.Availability
+@using HealthCare.Contracts.Appointments
+@using HealthCare.Web.Availability
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudSelect T="string" @bind-Value="_day" Label="Day of week" Required="true" Disabled="_busy || IsEdit" Variant="Variant.Outlined">
+                @foreach (var day in AvailabilityPresentation.DaysOfWeekOrdered)
+                {
+                    <MudSelectItem Value="@day">@day</MudSelectItem>
+                }
+            </MudSelect>
+            <MudTextField @bind-Value="_start" Label="Start (clinic local HH:mm)" Required="true" Disabled="_busy" Variant="Variant.Outlined" />
+            <MudTextField @bind-Value="_end" Label="End (clinic local HH:mm)" Required="true" Disabled="_busy" Variant="Variant.Outlined" />
+            <MudNumericField T="int" @bind-Value="_duration" Label="Slot duration (minutes)" Min="10" Max="240" Disabled="_busy" Variant="Variant.Outlined" />
+            <MudDatePicker Date="_effectiveFrom" DateChanged="d => _effectiveFrom = d" Label="Effective from" Editable="true" Disabled="_busy" Variant="Variant.Outlined" />
+            <MudDatePicker Date="_effectiveTo" DateChanged="d => _effectiveTo = d" Label="Effective to (optional)" Editable="true" Clearable="true" Disabled="_busy" Variant="Variant.Outlined" />
+            @if (IsEdit)
+            {
+                <MudSwitch @bind-Value="_isActive" Label="Active" Color="Color.Primary" Disabled="_busy" />
+            }
+            @if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <MudAlert Severity="Severity.Error">@_error</MudAlert>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="_busy">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync" Disabled="_busy || !ClientValid">
+            @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
+            @(IsEdit ? "Save" : "Create")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public Guid DoctorStaffMemberId { get; set; }
+    [Parameter] public bool PlatformAdminBypass { get; set; }
+    [Parameter] public DoctorAvailabilityResponse? Existing { get; set; }
+    [Inject] private IDoctorAvailabilityApiClient Api { get; set; } = default!;
+    [Inject] private ISnackbar Snackbar { get; set; } = default!;
+    [Inject] private IDialogService DialogService { get; set; } = default!;
+
+    private bool IsEdit => Existing is not null;
+    private string _day = "Monday";
+    private string _start = "09:00";
+    private string _end = "12:00";
+    private int _duration = 30;
+    private DateTime? _effectiveFrom = DateTime.Today;
+    private DateTime? _effectiveTo;
+    private bool _isActive = true;
+    private bool _busy;
+    private string? _error;
+
+    private bool ClientValid =>
+        !string.IsNullOrWhiteSpace(_day)
+        && AvailabilityPresentation.IsValidWindow(_start, _end)
+        && AvailabilityPresentation.IsValidDuration(_duration)
+        && _effectiveFrom is not null
+        && (_effectiveTo is null || DateOnly.FromDateTime(_effectiveTo.Value) >= DateOnly.FromDateTime(_effectiveFrom.Value));
+
+    protected override void OnInitialized()
+    {
+        if (Existing is null)
+        {
+            return;
+        }
+
+        _day = Existing.DayOfWeek;
+        _start = Existing.StartLocalTime;
+        _end = Existing.EndLocalTime;
+        _duration = Existing.SlotDurationMinutes;
+        _effectiveFrom = Existing.EffectiveFrom.ToDateTime(TimeOnly.MinValue);
+        _effectiveTo = Existing.EffectiveTo?.ToDateTime(TimeOnly.MinValue);
+        _isActive = Existing.IsActive;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task SubmitAsync()
+    {
+        if (!ClientValid || _busy || _effectiveFrom is null)
+        {
+            _error = "Check day, times, duration (10–240), and effective dates.";
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            if (IsEdit && Existing is not null)
+            {
+                var updated = await Api.UpdateAvailabilityAsync(
+                    DoctorStaffMemberId,
+                    Existing.Id,
+                    new UpdateDoctorAvailabilityRequest
+                    {
+                        ExpectedVersion = Existing.Version,
+                        StartLocalTime = _start.Trim(),
+                        EndLocalTime = _end.Trim(),
+                        SlotDurationMinutes = _duration,
+                        EffectiveFrom = DateOnly.FromDateTime(_effectiveFrom.Value),
+                        EffectiveTo = _effectiveTo is DateTime to ? DateOnly.FromDateTime(to) : null,
+                        ClearEffectiveTo = _effectiveTo is null,
+                        IsActive = _isActive,
+                    },
+                    PlatformAdminBypass);
+                Snackbar.Add("Availability updated.", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(updated));
+            }
+            else
+            {
+                var created = await Api.CreateAvailabilityAsync(
+                    DoctorStaffMemberId,
+                    new CreateDoctorAvailabilityRequest
+                    {
+                        DayOfWeek = _day,
+                        StartLocalTime = _start.Trim(),
+                        EndLocalTime = _end.Trim(),
+                        SlotDurationMinutes = _duration,
+                        EffectiveFrom = DateOnly.FromDateTime(_effectiveFrom.Value),
+                        EffectiveTo = _effectiveTo is DateTime to ? DateOnly.FromDateTime(to) : null,
+                    },
+                    PlatformAdminBypass);
+                Snackbar.Add("Availability created.", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(created));
+            }
+        }
+        catch (ApiProblemException ex) when (AvailabilityProblemMessages.IsConcurrencyConflict(ex))
+        {
+            var reload = await DialogService.ShowMessageBoxAsync(
+                "Record changed",
+                "This availability was updated elsewhere. Close and reload?",
+                yesText: "OK",
+                cancelText: "Stay");
+            _error = AvailabilityProblemMessages.ToUserMessage(ex);
+            if (reload == true)
+            {
+                MudDialog.Close(DialogResult.Ok(false));
+            }
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = AvailabilityProblemMessages.ToUserMessage(ex);
+            Snackbar.Add(_error, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

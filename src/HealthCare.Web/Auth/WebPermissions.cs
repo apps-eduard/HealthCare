@@ -21,6 +21,9 @@ public static class WebPermissions
     public const string AppointmentsReschedule = "appointments.reschedule";
 
     public const string AvailabilityRead = "availability.read";
+    public const string AvailabilityManageSelf = "availability.manage_self";
+    public const string AvailabilityManageClinic = "availability.manage_clinic";
+    public const string AvailabilityManageOrganization = "availability.manage_organization";
     public const string PatientsSearch = "patients.search";
     public const string PatientsRead = "patients.read";
     public const string PatientsUpdateClinicStatus = "patients.update_clinic_status";

@@ -30,6 +30,10 @@
             {
                 <MudNavLink Href="/patients" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.People">Patients</MudNavLink>
             }
+            @if (AvailabilityPermissionRules.CanManage(Permissions))
+            {
+                <MudNavLink Href="/availability" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Schedule">Availability</MudNavLink>
+            }
             @if (Permissions.Has(WebPermissions.StaffRead))
             {
                 <MudNavLink Href="/staff" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Groups">Staff Management</MudNavLink>

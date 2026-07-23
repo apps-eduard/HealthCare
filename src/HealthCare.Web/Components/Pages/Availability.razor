@@ -1,0 +1,578 @@
+@page "/availability"
+@attribute [Authorize]
+@using HealthCare.Contracts.Appointments
+@using HealthCare.Web.Availability
+@using HealthCare.Web.Components.Availability
+@using HealthCare.Web.Components.Clinics
+@inject IDoctorAvailabilityApiClient AvailabilityApi
+@inject IPermissionState Permissions
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject IClinicDirectoryApiClient ClinicsApi
+@inject IClinicDirectoryCache ClinicCache
+
+<PageTitle>Availability</PageTitle>
+
+@if (Permissions.IsPatientOnly)
+{
+    <MudAlert Severity="Severity.Error">Patient accounts cannot manage staff availability.</MudAlert>
+}
+else if (!AvailabilityPermissionRules.CanManage(Permissions))
+{
+    <MudAlert Severity="Severity.Error">You do not have permission to manage doctor availability.</MudAlert>
+}
+else
+{
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+        <div>
+            <MudText Typo="Typo.h4">Availability</MudText>
+            @if (!string.IsNullOrWhiteSpace(_timeZoneId))
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Clinic timezone: @_timeZoneId</MudText>
+            }
+        </div>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="RefreshAllAsync" Disabled="_loading">Refresh</MudButton>
+    </MudStack>
+
+    <MudPaper Class="pa-4 mb-4" Outlined="true">
+        <MudGrid>
+            @if (Permissions.CanFilterByClinic)
+            {
+                @if (Permissions.IsPlatformAdmin)
+                {
+                    <MudItem xs="12" md="3">
+                        <MudTextField @bind-Value="_platformOrgIdText"
+                                      Label="Organization ID (platform bypass)"
+                                      HelperText="Required before clinic selection"
+                                      Variant="Variant.Outlined"
+                                      Immediate="true"
+                                      TextChanged="OnPlatformOrgTextChanged" />
+                    </MudItem>
+                }
+                <MudItem xs="12" md="4">
+                    <ClinicPicker Value="_clinicId"
+                                  ValueChanged="OnClinicChanged"
+                                  Label="Clinic"
+                                  Required="true"
+                                  AllowClear="false"
+                                  ActiveOnly="true"
+                                  PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
+                                  PlatformOrganizationId="_platformOrganizationId" />
+                </MudItem>
+            }
+            else if (Permissions.Has(WebPermissions.ClinicsRead))
+            {
+                <MudItem xs="12" md="4">
+                    <ClinicPicker Label="Clinic" AllowClear="false" Required="false" Disabled="true" />
+                    <MudText Typo="Typo.caption">@_clinicName</MudText>
+                </MudItem>
+            }
+
+            <MudItem xs="12" md="4">
+                @if (_selfOnly)
+                {
+                    <MudTextField Value="@_selfDoctorLabel" Label="Doctor" Disabled="true" Variant="Variant.Outlined" />
+                }
+                else
+                {
+                    <MudSelect T="Guid?" Value="_doctorId" ValueChanged="OnDoctorChanged" Label="Doctor" Required="true" Disabled="_doctorsLoading || string.IsNullOrWhiteSpace(_clinicSlug)" Variant="Variant.Outlined">
+                        @foreach (var doctor in _doctors)
+                        {
+                            <MudSelectItem T="Guid?" Value="@doctor.StaffMemberId">
+                                @doctor.DisplayName@(string.IsNullOrWhiteSpace(doctor.Specialty) ? "" : $" · {doctor.Specialty}")
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
+    }
+
+    @if (_doctorId is null)
+    {
+        <MudAlert Severity="Severity.Info">Select a clinic and doctor to manage availability.</MudAlert>
+    }
+    else
+    {
+        <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true">
+            <MudTabPanel Text="Weekly windows" Class="pa-4">
+                <MudStack Row="true" Justify="Justify.FlexEnd" Class="mb-3">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateWindowAsync" Disabled="_loading">Add window</MudButton>
+                </MudStack>
+                @if (_loading)
+                {
+                    <MudProgressLinear Indeterminate="true" />
+                }
+                else if (_windows.Count == 0)
+                {
+                    <MudText>No weekly availability windows.</MudText>
+                }
+                else
+                {
+                    @foreach (var (day, list) in AvailabilityPresentation.GroupByDay(_windows))
+                    {
+                        <MudText Typo="Typo.subtitle1" Class="mt-3 mb-2">@day</MudText>
+                        <MudTable Items="list" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" T="DoctorAvailabilityResponse">
+                            <HeaderContent>
+                                <MudTh>Time</MudTh>
+                                <MudTh>Slot</MudTh>
+                                <MudTh>Effective</MudTh>
+                                <MudTh>Status</MudTh>
+                                <MudTh>Version</MudTh>
+                                <MudTh Style="text-align:right">Actions</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd>@AvailabilityPresentation.FormatLocalWindow(context.StartLocalTime, context.EndLocalTime)</MudTd>
+                                <MudTd>@context.SlotDurationMinutes min</MudTd>
+                                <MudTd>@AvailabilityPresentation.FormatEffectiveRange(context.EffectiveFrom, context.EffectiveTo)</MudTd>
+                                <MudTd>
+                                    <MudChip T="string" Size="Size.Small" Color="@AvailabilityPresentation.ActiveColor(context.IsActive)">
+                                        @AvailabilityPresentation.ActiveLabel(context.IsActive)
+                                    </MudChip>
+                                </MudTd>
+                                <MudTd>@context.Version</MudTd>
+                                <MudTd Style="text-align:right">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Edit" aria-label="Edit" OnClick="@(() => OpenEditWindowAsync(context))" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" aria-label="Delete" OnClick="@(() => DeleteWindowAsync(context))" />
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                }
+            </MudTabPanel>
+
+            <MudTabPanel Text="Exceptions" Class="pa-4">
+                <MudStack Row="true" Justify="Justify.FlexEnd" Class="mb-3">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateExceptionAsync" Disabled="_loading">Add exception</MudButton>
+                </MudStack>
+                @if (_loading)
+                {
+                    <MudProgressLinear Indeterminate="true" />
+                }
+                else if (_exceptions.Count == 0)
+                {
+                    <MudText>No date-specific exceptions.</MudText>
+                }
+                else
+                {
+                    <MudTable Items="_exceptions" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" T="DoctorAvailabilityExceptionResponse">
+                        <HeaderContent>
+                            <MudTh>Date</MudTh>
+                            <MudTh>Type</MudTh>
+                            <MudTh>Time</MudTh>
+                            <MudTh>Reason</MudTh>
+                            <MudTh>Version</MudTh>
+                            <MudTh Style="text-align:right">Actions</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>@context.Date.ToString("yyyy-MM-dd")</MudTd>
+                            <MudTd>@AvailabilityPresentation.ExceptionTypeLabel(context.ExceptionType)</MudTd>
+                            <MudTd>
+                                @(string.IsNullOrWhiteSpace(context.StartLocalTime)
+                                    ? "Full day"
+                                    : AvailabilityPresentation.FormatLocalWindow(context.StartLocalTime!, context.EndLocalTime ?? ""))
+                            </MudTd>
+                            <MudTd>@(context.Reason ?? "—")</MudTd>
+                            <MudTd>@context.Version</MudTd>
+                            <MudTd Style="text-align:right">
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" aria-label="Delete exception" OnClick="@(() => DeleteExceptionAsync(context))" />
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+            </MudTabPanel>
+
+            <MudTabPanel Text="Slot preview" Class="pa-4">
+                <MudGrid>
+                    <MudItem xs="12" md="3">
+                        <MudDatePicker Date="_previewDate" DateChanged="OnPreviewDateChanged" Label="Date" Editable="true" Variant="Variant.Outlined" />
+                    </MudItem>
+                    <MudItem xs="12" md="3">
+                        <MudNumericField T="int" Value="_previewDuration" ValueChanged="OnPreviewDurationChanged" Label="Duration (minutes)" Min="10" Max="240" Variant="Variant.Outlined" />
+                    </MudItem>
+                    <MudItem xs="12" md="2" Class="d-flex align-end">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadSlotsAsync" Disabled="_slotsLoading || string.IsNullOrWhiteSpace(_clinicSlug)">Preview</MudButton>
+                    </MudItem>
+                </MudGrid>
+                @if (_slotsLoading)
+                {
+                    <MudProgressLinear Indeterminate="true" Class="mt-3" />
+                }
+                else if (_slots.Count == 0)
+                {
+                    <MudText Class="mt-3">No available slots for this date.</MudText>
+                }
+                else
+                {
+                    <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mt-3">
+                        @foreach (var slot in _slots)
+                        {
+                            <MudChip T="string" Size="Size.Small">@slot.StartLocal – @slot.EndLocal</MudChip>
+                        }
+                    </MudStack>
+                }
+            </MudTabPanel>
+        </MudTabs>
+    }
+}
+
+@code {
+    private readonly List<ClinicDoctorResponse> _doctors = [];
+    private readonly List<DoctorAvailabilityResponse> _windows = [];
+    private readonly List<DoctorAvailabilityExceptionResponse> _exceptions = [];
+    private readonly List<AvailableSlotResponse> _slots = [];
+
+    private bool _selfOnly;
+    private bool _loading;
+    private bool _doctorsLoading;
+    private bool _slotsLoading;
+    private string? _error;
+    private Guid? _clinicId;
+    private string? _clinicSlug;
+    private string? _clinicName;
+    private string? _timeZoneId;
+    private Guid? _doctorId;
+    private string? _selfDoctorLabel;
+    private string? _platformOrgIdText;
+    private Guid? _platformOrganizationId;
+    private DateTime? _previewDate = DateTime.Today;
+    private int _previewDuration = 30;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Permissions.IsPatientOnly || !AvailabilityPermissionRules.CanManage(Permissions))
+        {
+            return;
+        }
+
+        _selfOnly = AvailabilityPermissionRules.IsSelfOnly(Permissions);
+
+        if (!Permissions.CanFilterByClinic && Permissions.CurrentUser?.ClinicId is Guid clinicId)
+        {
+            _clinicId = clinicId;
+            await ResolveClinicMetaAsync(clinicId);
+        }
+
+        if (_selfOnly)
+        {
+            if (Permissions.CurrentUser?.StaffMemberId is Guid selfId)
+            {
+                _doctorId = selfId;
+                _selfDoctorLabel = "You (self)";
+                await LoadDoctorsAsync();
+                await RefreshAllAsync();
+            }
+            else
+            {
+                _error = "Your staff membership does not include a doctor id.";
+            }
+        }
+        else if (_clinicId is not null)
+        {
+            await LoadDoctorsAsync();
+        }
+    }
+
+    private void OnPlatformOrgTextChanged(string? value)
+    {
+        _platformOrgIdText = value;
+        _platformOrganizationId = Guid.TryParse(value, out var orgId) ? orgId : null;
+    }
+
+    private async Task OnClinicChanged(Guid? clinicId)
+    {
+        _clinicId = clinicId;
+        if (!_selfOnly)
+        {
+            _doctorId = null;
+        }
+
+        _windows.Clear();
+        _exceptions.Clear();
+        _slots.Clear();
+        _doctors.Clear();
+        _clinicSlug = null;
+        _clinicName = null;
+        _timeZoneId = null;
+
+        if (clinicId is Guid id)
+        {
+            await ResolveClinicMetaAsync(id);
+            await LoadDoctorsAsync();
+        }
+    }
+
+    private async Task OnDoctorChanged(Guid? doctorId)
+    {
+        _doctorId = doctorId;
+        _windows.Clear();
+        _exceptions.Clear();
+        _slots.Clear();
+        if (doctorId is not null)
+        {
+            await RefreshAllAsync();
+        }
+    }
+
+    private async Task ResolveClinicMetaAsync(Guid clinicId)
+    {
+        try
+        {
+            if (ClinicCache.TryGet(clinicId, out var cached) && cached is not null)
+            {
+                _clinicSlug = cached.Slug;
+                _clinicName = cached.Name;
+                _timeZoneId = cached.TimeZoneId;
+                return;
+            }
+
+            var detail = await ClinicsApi.GetByIdAsync(clinicId, Permissions.IsPlatformAdmin);
+            ClinicCache.Set(detail);
+            _clinicSlug = detail.Slug;
+            _clinicName = detail.Name;
+            _timeZoneId = detail.TimeZoneId;
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = AvailabilityProblemMessages.ToUserMessage(ex);
+        }
+    }
+
+    private async Task LoadDoctorsAsync()
+    {
+        _doctors.Clear();
+        if (string.IsNullOrWhiteSpace(_clinicSlug))
+        {
+            return;
+        }
+
+        _doctorsLoading = true;
+        try
+        {
+            var doctors = await AvailabilityApi.ListClinicDoctorsAsync(_clinicSlug);
+            _doctors.AddRange(doctors.Where(d => d.AcceptsBookings));
+            if (_selfOnly && _doctorId is Guid selfId)
+            {
+                var me = _doctors.FirstOrDefault(d => d.StaffMemberId == selfId);
+                _selfDoctorLabel = me is null
+                    ? "You (self)"
+                    : $"{me.DisplayName}{(string.IsNullOrWhiteSpace(me.Specialty) ? "" : $" · {me.Specialty}")}";
+            }
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = AvailabilityProblemMessages.ToUserMessage(ex);
+        }
+        finally
+        {
+            _doctorsLoading = false;
+        }
+    }
+
+    private async Task RefreshAllAsync()
+    {
+        if (_doctorId is not Guid doctorId)
+        {
+            return;
+        }
+
+        _loading = true;
+        _error = null;
+        try
+        {
+            var windows = await AvailabilityApi.ListAvailabilityAsync(doctorId, Permissions.IsPlatformAdmin);
+            var exceptions = await AvailabilityApi.ListExceptionsAsync(doctorId, Permissions.IsPlatformAdmin);
+            _windows.Clear();
+            _windows.AddRange(windows);
+            _exceptions.Clear();
+            _exceptions.AddRange(exceptions.OrderBy(e => e.Date).ThenBy(e => e.StartLocalTime));
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = AvailabilityProblemMessages.ToUserMessage(ex);
+            _windows.Clear();
+            _exceptions.Clear();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenCreateWindowAsync()
+    {
+        if (_doctorId is not Guid doctorId)
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters<AvailabilityWindowDialog>
+        {
+            { x => x.DoctorStaffMemberId, doctorId },
+            { x => x.PlatformAdminBypass, Permissions.IsPlatformAdmin },
+        };
+        var dialog = await DialogService.ShowAsync<AvailabilityWindowDialog>("Add availability", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            await RefreshAllAsync();
+        }
+    }
+
+    private async Task OpenEditWindowAsync(DoctorAvailabilityResponse window)
+    {
+        if (_doctorId is not Guid doctorId)
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters<AvailabilityWindowDialog>
+        {
+            { x => x.DoctorStaffMemberId, doctorId },
+            { x => x.PlatformAdminBypass, Permissions.IsPlatformAdmin },
+            { x => x.Existing, window },
+        };
+        var dialog = await DialogService.ShowAsync<AvailabilityWindowDialog>("Edit availability", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            await RefreshAllAsync();
+        }
+    }
+
+    private async Task DeleteWindowAsync(DoctorAvailabilityResponse window)
+    {
+        if (_doctorId is not Guid doctorId)
+        {
+            return;
+        }
+
+        var confirm = await DialogService.ShowMessageBoxAsync(
+            "Delete availability",
+            $"Delete {window.DayOfWeek} {window.StartLocalTime}–{window.EndLocalTime}?",
+            yesText: "Delete",
+            cancelText: "Cancel");
+        if (confirm != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await AvailabilityApi.DeleteAvailabilityAsync(doctorId, window.Id, window.Version, Permissions.IsPlatformAdmin);
+            Snackbar.Add("Availability deleted.", Severity.Success);
+            await RefreshAllAsync();
+        }
+        catch (ApiProblemException ex) when (AvailabilityProblemMessages.IsConcurrencyConflict(ex))
+        {
+            Snackbar.Add(AvailabilityProblemMessages.ToUserMessage(ex), Severity.Warning);
+            await RefreshAllAsync();
+        }
+        catch (ApiProblemException ex)
+        {
+            Snackbar.Add(AvailabilityProblemMessages.ToUserMessage(ex), Severity.Error);
+        }
+    }
+
+    private async Task OpenCreateExceptionAsync()
+    {
+        if (_doctorId is not Guid doctorId)
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters<AvailabilityExceptionDialog>
+        {
+            { x => x.DoctorStaffMemberId, doctorId },
+            { x => x.PlatformAdminBypass, Permissions.IsPlatformAdmin },
+        };
+        var dialog = await DialogService.ShowAsync<AvailabilityExceptionDialog>("Add exception", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            await RefreshAllAsync();
+        }
+    }
+
+    private async Task DeleteExceptionAsync(DoctorAvailabilityExceptionResponse exception)
+    {
+        if (_doctorId is not Guid doctorId)
+        {
+            return;
+        }
+
+        var confirm = await DialogService.ShowMessageBoxAsync(
+            "Delete exception",
+            $"Delete exception on {exception.Date:yyyy-MM-dd}?",
+            yesText: "Delete",
+            cancelText: "Cancel");
+        if (confirm != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await AvailabilityApi.DeleteExceptionAsync(doctorId, exception.Id, exception.Version, Permissions.IsPlatformAdmin);
+            Snackbar.Add("Exception deleted.", Severity.Success);
+            await RefreshAllAsync();
+        }
+        catch (ApiProblemException ex) when (AvailabilityProblemMessages.IsConcurrencyConflict(ex))
+        {
+            Snackbar.Add(AvailabilityProblemMessages.ToUserMessage(ex), Severity.Warning);
+            await RefreshAllAsync();
+        }
+        catch (ApiProblemException ex)
+        {
+            Snackbar.Add(AvailabilityProblemMessages.ToUserMessage(ex), Severity.Error);
+        }
+    }
+
+    private async Task OnPreviewDateChanged(DateTime? date)
+    {
+        _previewDate = date;
+        await LoadSlotsAsync();
+    }
+
+    private async Task OnPreviewDurationChanged(int duration)
+    {
+        _previewDuration = duration;
+        await LoadSlotsAsync();
+    }
+
+    private async Task LoadSlotsAsync()
+    {
+        _slots.Clear();
+        if (_doctorId is not Guid doctorId
+            || string.IsNullOrWhiteSpace(_clinicSlug)
+            || _previewDate is not DateTime date
+            || !Permissions.Has(WebPermissions.AvailabilityRead))
+        {
+            return;
+        }
+
+        _slotsLoading = true;
+        try
+        {
+            var slots = await AvailabilityApi.GetAvailableSlotsAsync(
+                _clinicSlug,
+                doctorId,
+                DateOnly.FromDateTime(date),
+                _previewDuration);
+            _slots.AddRange(slots);
+        }
+        catch (ApiProblemException ex)
+        {
+            Snackbar.Add(AvailabilityProblemMessages.ToUserMessage(ex), Severity.Error);
+        }
+        finally
+        {
+            _slotsLoading = false;
+        }
+    }
+}

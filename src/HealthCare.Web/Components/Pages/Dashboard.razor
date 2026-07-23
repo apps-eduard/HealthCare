@@ -42,6 +42,12 @@ else
                 Patients
             </MudButton>
         }
+        @if (AvailabilityPermissionRules.CanManage(Permissions))
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/availability" StartIcon="@Icons.Material.Filled.Schedule">
+                Availability
+            </MudButton>
+        }
         @if (Permissions.Has(WebPermissions.StaffRead))
         {
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/staff" StartIcon="@Icons.Material.Filled.Groups">

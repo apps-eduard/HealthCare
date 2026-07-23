@@ -85,6 +85,7 @@ dotnet run --project src/HealthCare.Web --launch-profile http
 - Auth: anonymous requests to protected pages challenge to `/login?returnUrl=...` (no 500). Staff Web uses an HttpOnly session cookie for host authentication (minimal claims; no API tokens). API access/refresh tokens remain in `ProtectedSessionStorage` (MVP). Prefer a full BFF cookie session before production hardening.
 - Return URLs are validated as local paths only (`SafeReturnUrl`); external/`//` URLs fall back to `/dashboard`.
 - Patients: `/patients` directory (requires `patients.search`). Detail and ClinicPatient status update require `patients.read` / `patients.update_clinic_status`. Uses typed `IStaffPatientApiClient`.
+- Availability: `/availability` (requires `availability.manage_self`, `availability.manage_clinic`, or `availability.manage_organization`). Doctors manage self only (fixed clinic/doctor). Clinic admins pick a clinic doctor. Org admins use `ClinicPicker` then doctors. Weekly windows + date exceptions; times shown in clinic `TimeZoneId` (not browser-local). Mutations send `ExpectedVersion`. Optional slot preview via available-slots API. Typed `IDoctorAvailabilityApiClient`. `availability.read` alone does not open the management page.
 
 ### 6. Build and test
 
