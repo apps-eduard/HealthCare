@@ -44,6 +44,8 @@ public sealed class HealthCareDbContext : IdentityDbContext<ApplicationUser, Ide
 
     public DbSet<AppointmentReminder> AppointmentReminders => Set<AppointmentReminder>();
 
+    public DbSet<AppointmentRescheduleHistory> AppointmentRescheduleHistories => Set<AppointmentRescheduleHistory>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -158,6 +160,13 @@ public sealed class HealthCareDbContext : IdentityDbContext<ApplicationUser, Ide
                     }
 
                     reminder.UpdatedAtUtc = utcNow;
+                    break;
+                case AppointmentRescheduleHistory history when entry.State == EntityState.Added:
+                    if (history.RescheduledAtUtc == default)
+                    {
+                        history.RescheduledAtUtc = utcNow;
+                    }
+
                     break;
             }
         }

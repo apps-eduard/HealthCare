@@ -2,10 +2,10 @@
 
 ## Progress overview
 
-**Overall completion: 48%**
+**Overall completion: 49%**
 
 ```text
-[███████████████░░░░░░░░░░░░░░░░░]  48%
+[███████████████░░░░░░░░░░░░░░░░░]  49%
 ```
 
 | Metric | Value |
@@ -15,7 +15,7 @@
 | Partial | 6 (Phases 2, 3, 4, 6, 7, 10) |
 | In progress | 0 |
 | Not started | 5 |
-| Weighted score | (3×1.0) + (0.7 + 0.75 + 0.5 + 0.5 + 0.75 + 0.5) = 6.7 / 14 ≈ **48%** |
+| Weighted score | (3×1.0) + (0.7 + 0.75 + 0.5 + 0.5 + 0.85 + 0.5) = 6.8 / 14 ≈ **49%** |
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
@@ -33,7 +33,7 @@
 | 4 | Organizations and clinics | Partial | `█████░░░░░` 50% |
 | 5 | Patients and clinic-patient registration | Complete | `██████████` 100% |
 | 6 | Staff and doctors | Partial | `█████░░░░░` 50% |
-| 7 | Appointment booking | Partial | `████████░░` 75% |
+| 7 | Appointment booking | Partial | `█████████░` 85% |
 | 8 | Staff web application (MudBlazor) | Not started | `░░░░░░░░░░` 0% |
 | 9 | Medical notes | Not started | `░░░░░░░░░░` 0% |
 | 10 | Hangfire and notifications | Partial | `█████░░░░░` 50% |
@@ -90,7 +90,7 @@ Authoritative design docs:
 | 4 | Organizations and clinics | Partial (entities + schema only) | 2026-07-23 |
 | 5 | Patients and clinic-patient registration | Complete (staff search + clinic admin) | 2026-07-23 |
 | 6 | Staff and doctors | Partial (StaffMember entity + schema only) | 2026-07-23 |
-| 7 | Appointment booking | Partial (foundation + availability) | 2026-07-23 |
+| 7 | Appointment booking | Partial (foundation + availability + reschedule) | 2026-07-23 |
 | 8 | Staff web application (MudBlazor) | Not started | — |
 | 9 | Medical notes | Not started | — |
 | 10 | Hangfire and notifications | Partial (appointment reminders) | 2026-07-23 |
@@ -355,7 +355,7 @@ Authoritative design docs:
 
 ## Phase 7 — Appointment booking
 
-**Status:** Partial (~75% — foundation + availability)  
+**Status:** Partial (~85% — foundation + availability + reschedule)  
 **Updated:** 2026-07-23
 
 ### Already done (foundation)
@@ -377,6 +377,7 @@ Authoritative design docs:
 - `POST/GET /api/v1/staff/appointments`
 - `GET /api/v1/appointments/{id}`
 - `POST .../confirm|check-in|complete|no-show` (staff); `POST /api/v1/appointments/{id}/cancel` (patient or staff)
+- `POST /api/v1/appointments/{id}/reschedule` (patient or staff; authenticated)
 
 **Tenant isolation**
 - Patient: self only via ICurrentPatient
@@ -447,8 +448,58 @@ Authoritative design docs:
 - Daily clinic appointment summary Hangfire job
 - Staff UI appointment queue / calendar
 - Advanced recurring schedules
-- Appointment reschedule API (reminders currently assume create/confirm/cancel only)
 - Broader assignable roles if needed beyond DOCTOR
+
+### Reschedule workflow (this increment)
+
+**Endpoint**
+- `POST /api/v1/appointments/{appointmentId}/reschedule`
+- Request: optional `DoctorStaffMemberId`, `AppointmentDateUtc`, `DurationMinutes`, `ExpectedVersion`, optional `Reason` (max 250)
+- Does **not** accept PatientId, OrganizationId, ClinicId, Status, CreatedByUserId, reminder/audit fields
+- Response: existing safe `AppointmentResponse` (identity preserved; version increments)
+
+**Allowed source statuses**
+- Allowed: `Requested`, `Confirmed`
+- Rejected (409 `appointment.reschedule_not_allowed`): CheckedIn, InProgress, Completed, NoShow, CancelledByPatient, CancelledByClinic
+- Same doctor/start/duration → 409 `appointment.reschedule_same_slot`
+
+**Authorization**
+- PATIENT: own appointment only; same clinic; optional doctor change only to active DOCTOR in that clinic
+- Clinic staff: trusted clinic membership; cannot move clinic/org
+- ORGANIZATION_ADMIN: organization only; clinic remains server-validated (appointment clinic unchanged)
+- PLATFORM_ADMIN: existing explicit bypass
+- Client tenant identifiers never override trusted scope
+
+**Availability and conflict validation**
+- Future start; doctor availability + clinic timezone; slot boundaries/duration; exceptions; overlap
+- Excludes current appointment from overlap; cancelled appointments do not block
+- Serializable transaction on relational DB
+- 409 for slot unavailable / outside availability / exception / invalid duration / concurrency
+
+**Reminder replacement**
+- After successful commit: replace Upcoming for new schedule (same idempotency key `{appointmentId:N}:Upcoming`)
+- Pending/Processing/Failed/Sent Upcoming row is reset to Pending with new `ScheduledAtUtc` (24h before, or immediately if closer)
+- Sent Confirmation is left alone (not duplicated / not resent)
+- Hangfire jobs still receive AppointmentId + ReminderId only
+
+**Concurrency**
+- Requires `ExpectedVersion`; mismatch → 409 `appointment.concurrency_conflict`
+- EF concurrency token on `Appointment.Version`
+
+**Audit-history strategy**
+- Persistent `AppointmentRescheduleHistory` (safe administrative fields only; no medical/patient profile payload)
+- Fields: previous/new doctor, start, duration, rescheduledBy, at, reason, previousVersion
+
+**Migration result**
+- `AddAppointmentRescheduleWorkflow` applied to `healthcare_db` (`AppointmentRescheduleHistories`)
+
+### Verification (reschedule)
+
+- Build: succeeded
+- Unit tests: **159 passed** (22 reschedule-focused)
+- Architecture tests: **15 passed**
+- Integration tests: Docker unavailable (`npipe://./pipe/docker_engine`); suite retained (`AppointmentRescheduleEndpointTests`)
+- Manual: health **200**; create Requested; reschedule succeeded (ID unchanged, version++); Upcoming same row retargeted; Confirmation count unchanged; overlap **409**; terminal reschedule **409**; Clinic B staff **404**
 
 ---
 
@@ -497,7 +548,7 @@ Authoritative design docs:
 - Reminder rows persisted after appointment commit
 - Hangfire jobs receive **AppointmentId + ReminderId only**
 - Processor reloads DB state; skips Sent/Cancelled; cancels for Completed/NoShow; Cancellation allowed only when cancelled
-- Reschedule API is **not supported** yet — document limitation
+- Reschedule replaces Upcoming via `ScheduleAfterAppointmentRescheduledAsync` (Confirmation Sent left alone)
 
 ### Idempotency strategy
 - Unique `IdempotencyKey` = `{appointmentId:N}:{ReminderType}`
@@ -528,7 +579,6 @@ Authoritative design docs:
 - Development logging sender only (no real SMS/email)
 - Hangfire worker/dashboard Development-only
 - No daily clinic summary job yet
-- No appointment reschedule path to reschedule Upcoming reminders
 
 ### Remaining Hangfire / notification work
 - Real email/SMS provider adapters
@@ -592,6 +642,7 @@ Authoritative design docs:
 | 2026-07-23 | 7 | Appointment foundation (entity, booking, transitions, conflicts); overall ~43% |
 | 2026-07-23 | 7 | Availability windows, exceptions, doctor list, slots, booking rules; overall ~44% |
 | 2026-07-23 | 10 | Appointment reminders + Hangfire (PostgreSQL, Dev dashboard); overall ~48% |
+| 2026-07-23 | 7 | Appointment reschedule workflow + history + Upcoming replacement; overall ~49% |
 
 ---
 

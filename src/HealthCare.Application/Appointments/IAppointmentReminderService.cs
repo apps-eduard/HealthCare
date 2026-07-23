@@ -45,6 +45,11 @@ public interface IAppointmentReminderScheduler
     Task ScheduleAfterAppointmentConfirmedAsync(Guid appointmentId, CancellationToken cancellationToken = default);
 
     Task ScheduleAfterAppointmentCancelledAsync(Guid appointmentId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Cancels/replaces pending Upcoming for the new schedule. Does not recreate Sent Confirmation.
+    /// </summary>
+    Task ScheduleAfterAppointmentRescheduledAsync(Guid appointmentId, CancellationToken cancellationToken = default);
 }
 
 public interface IAppointmentReminderProcessor

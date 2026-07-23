@@ -58,6 +58,12 @@ public interface IAppointmentService
         AppointmentActionRequest request,
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default);
+
+    Task<AppointmentResponse> RescheduleAsync(
+        Guid appointmentId,
+        RescheduleAppointmentRequest request,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class AppointmentException : Exception
@@ -102,4 +108,13 @@ public sealed class AppointmentException : Exception
 
     public static AppointmentException InvalidTime() =>
         new(AppointmentErrorCodes.InvalidTime, "The appointment time is invalid.", 400);
+
+    public static AppointmentException RescheduleNotAllowed() =>
+        new(AppointmentErrorCodes.RescheduleNotAllowed, "The appointment cannot be rescheduled in its current status.", 409);
+
+    public static AppointmentException RescheduleSameSlot() =>
+        new(AppointmentErrorCodes.RescheduleSameSlot, "The appointment is already scheduled for the requested slot.", 409);
+
+    public static AppointmentException RescheduleFailed() =>
+        new(AppointmentErrorCodes.RescheduleFailed, "The appointment could not be rescheduled.", 409);
 }

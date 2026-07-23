@@ -306,6 +306,207 @@ public sealed class AppointmentService : IAppointmentService
         CancellationToken cancellationToken = default) =>
         TransitionStaffAsync(appointmentId, request, AppointmentStatus.NoShow, "appointment_no_show", bypass, cancellationToken);
 
+    public async Task<AppointmentResponse> RescheduleAsync(
+        Guid appointmentId,
+        RescheduleAppointmentRequest request,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_currentUser.IsAuthenticated)
+        {
+            throw AuthorizationException.NotAuthenticated();
+        }
+
+        var appointment = await LoadAccessibleAsync(appointmentId, asNoTracking: false, bypass, cancellationToken);
+        EnsureExpectedVersion(appointment, request.ExpectedVersion);
+
+        if (!AppointmentStatusTransitions.CanReschedule(appointment.Status))
+        {
+            _logger.LogInformation(
+                "Appointment reschedule denied. UserId={UserId} AppointmentId={AppointmentId} Status={Status} Operation={Operation}",
+                _currentUser.UserId,
+                appointment.Id,
+                appointment.Status,
+                "appointment_reschedule_denied");
+            throw AppointmentException.RescheduleNotAllowed();
+        }
+
+        var isPatientActor = _currentUser.IsInRole(AppRoles.Patient) && !_currentStaff.HasActiveMembership;
+        if (isPatientActor)
+        {
+            if (_currentPatient.PatientId != appointment.PatientId)
+            {
+                LogDenied("appointment_reschedule_patient_denied", appointment.Id);
+                throw AppointmentException.NotFoundOrDenied();
+            }
+        }
+        else
+        {
+            EnsureStaffCanMutate(appointment, bypass);
+        }
+
+        var newDoctorId = request.DoctorStaffMemberId is { } doctorId && doctorId != Guid.Empty
+            ? doctorId
+            : appointment.DoctorStaffMemberId;
+
+        // MVP: remain in the same clinic; client cannot override tenant scope.
+        await EnsureAssignableDoctorAsync(newDoctorId, appointment.ClinicId, cancellationToken);
+        EnsureFutureStart(request.AppointmentDateUtc);
+
+        if (newDoctorId == appointment.DoctorStaffMemberId
+            && request.AppointmentDateUtc == appointment.AppointmentDateUtc
+            && request.DurationMinutes == appointment.DurationMinutes)
+        {
+            _logger.LogInformation(
+                "Appointment reschedule same slot. UserId={UserId} AppointmentId={AppointmentId} Operation={Operation}",
+                _currentUser.UserId,
+                appointment.Id,
+                "appointment_reschedule_same_slot");
+            throw AppointmentException.RescheduleSameSlot();
+        }
+
+        var previousDoctorId = appointment.DoctorStaffMemberId;
+        var previousStart = appointment.AppointmentDateUtc;
+        var previousDuration = appointment.DurationMinutes;
+        var previousVersion = appointment.Version;
+
+        var useTransaction = _dbContext.Database.IsRelational();
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? transaction = null;
+        if (useTransaction)
+        {
+            transaction = await _dbContext.Database.BeginTransactionAsync(
+                System.Data.IsolationLevel.Serializable,
+                cancellationToken);
+        }
+
+        try
+        {
+            await _slots.EnsureSlotIsBookableAsync(
+                appointment.ClinicId,
+                newDoctorId,
+                request.AppointmentDateUtc,
+                request.DurationMinutes,
+                excludeAppointmentId: appointment.Id,
+                cancellationToken);
+
+            if (await HasSlotConflictAsync(
+                    appointment.ClinicId,
+                    newDoctorId,
+                    request.AppointmentDateUtc,
+                    request.DurationMinutes,
+                    excludeAppointmentId: appointment.Id,
+                    cancellationToken))
+            {
+                _logger.LogInformation(
+                    "Appointment reschedule slot conflict. UserId={UserId} AppointmentId={AppointmentId} ClinicId={ClinicId} DoctorStaffMemberId={DoctorStaffMemberId} Operation={Operation}",
+                    _currentUser.UserId,
+                    appointment.Id,
+                    appointment.ClinicId,
+                    newDoctorId,
+                    "appointment_reschedule_slot_conflict");
+                throw AppointmentException.SlotConflict();
+            }
+
+            appointment.DoctorStaffMemberId = newDoctorId;
+            appointment.AppointmentDateUtc = request.AppointmentDateUtc;
+            appointment.DurationMinutes = request.DurationMinutes;
+            appointment.Version++;
+
+            _dbContext.AppointmentRescheduleHistories.Add(new AppointmentRescheduleHistory
+            {
+                Id = Guid.NewGuid(),
+                AppointmentId = appointment.Id,
+                PreviousDoctorStaffMemberId = previousDoctorId,
+                NewDoctorStaffMemberId = newDoctorId,
+                PreviousStartUtc = previousStart,
+                NewStartUtc = request.AppointmentDateUtc,
+                PreviousDurationMinutes = previousDuration,
+                NewDurationMinutes = request.DurationMinutes,
+                RescheduledByUserId = _currentUser.UserId!.Value,
+                RescheduledAtUtc = _timeProvider.GetUtcNow(),
+                Reason = NormalizeOptional(request.Reason),
+                PreviousVersion = previousVersion,
+            });
+
+            try
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                _logger.LogInformation(
+                    "Appointment reschedule concurrency conflict. UserId={UserId} AppointmentId={AppointmentId} Operation={Operation}",
+                    _currentUser.UserId,
+                    appointment.Id,
+                    "appointment_reschedule_concurrency_conflict");
+                throw AppointmentException.ConcurrencyConflict();
+            }
+
+            if (transaction is not null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+            }
+        }
+        catch (AppointmentException)
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
+
+            throw;
+        }
+        catch (AvailabilityException)
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
+
+            throw;
+        }
+        catch (AuthorizationException)
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
+
+            throw;
+        }
+        catch (Exception)
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
+
+            _logger.LogInformation(
+                "Appointment reschedule failed. UserId={UserId} AppointmentId={AppointmentId} Operation={Operation}",
+                _currentUser.UserId,
+                appointmentId,
+                "appointment_reschedule_failed");
+            throw AppointmentException.RescheduleFailed();
+        }
+        finally
+        {
+            if (transaction is not null)
+            {
+                await transaction.DisposeAsync();
+            }
+        }
+
+        _logger.LogInformation(
+            "Appointment rescheduled. UserId={UserId} AppointmentId={AppointmentId} Version={Version} Operation={Operation}",
+            _currentUser.UserId,
+            appointment.Id,
+            appointment.Version,
+            "appointment_rescheduled");
+
+        await _reminders.ScheduleAfterAppointmentRescheduledAsync(appointment.Id, cancellationToken);
+        return Map(appointment);
+    }
+
     private async Task<AppointmentResponse> TransitionStaffAsync(
         Guid appointmentId,
         AppointmentActionRequest request,

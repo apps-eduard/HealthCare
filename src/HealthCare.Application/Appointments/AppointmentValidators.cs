@@ -113,3 +113,40 @@ public sealed class AppointmentActionRequestValidator : AbstractValidator<Appoin
             .When(x => x.CancellationReason is not null);
     }
 }
+
+public sealed class RescheduleAppointmentRequestValidator : AbstractValidator<RescheduleAppointmentRequest>
+{
+    public const int MaxRescheduleReasonLength = 250;
+
+    public RescheduleAppointmentRequestValidator()
+    {
+        RuleFor(x => x)
+            .NotNull()
+            .WithErrorCode(AppointmentErrorCodes.InvalidRequest)
+            .WithMessage("Reschedule request is required.");
+
+        RuleFor(x => x.ExpectedVersion)
+            .GreaterThanOrEqualTo(0)
+            .WithErrorCode(AppointmentErrorCodes.ConcurrencyConflict);
+
+        RuleFor(x => x.AppointmentDateUtc)
+            .Must(d => d > DateTimeOffset.UtcNow)
+            .WithErrorCode(AppointmentErrorCodes.InvalidTime)
+            .WithMessage("Appointment must be in the future.");
+
+        RuleFor(x => x.DurationMinutes)
+            .InclusiveBetween(
+                CreatePatientAppointmentRequestValidator.MinDurationMinutes,
+                CreatePatientAppointmentRequestValidator.MaxDurationMinutes)
+            .WithErrorCode(AppointmentErrorCodes.InvalidRequest);
+
+        RuleFor(x => x.DoctorStaffMemberId)
+            .Must(id => !id.HasValue || id.Value != Guid.Empty)
+            .WithErrorCode(AppointmentErrorCodes.InvalidAssignedStaff)
+            .WithMessage("Doctor staff member ID is invalid.");
+
+        RuleFor(x => x.Reason)
+            .MaximumLength(MaxRescheduleReasonLength)
+            .When(x => x.Reason is not null);
+    }
+}

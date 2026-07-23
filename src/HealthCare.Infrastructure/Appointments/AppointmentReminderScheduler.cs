@@ -71,6 +71,69 @@ public sealed class AppointmentReminderScheduler : IAppointmentReminderScheduler
         await EnsureReminderAsync(appointment, AppointmentReminderType.Cancellation, _timeProvider.GetUtcNow(), cancellationToken);
     }
 
+    public async Task ScheduleAfterAppointmentRescheduledAsync(
+        Guid appointmentId,
+        CancellationToken cancellationToken = default)
+    {
+        var appointment = await LoadAppointmentAsync(appointmentId, cancellationToken);
+        if (appointment is null || AppointmentStatusTransitions.IsCancelled(appointment.Status))
+        {
+            return;
+        }
+
+        // Confirmation: leave existing row alone (never resend Sent Confirmation).
+        await ReplaceUpcomingForNewScheduleAsync(appointment, cancellationToken);
+    }
+
+    private async Task ReplaceUpcomingForNewScheduleAsync(
+        Appointment appointment,
+        CancellationToken cancellationToken)
+    {
+        var when = appointment.AppointmentDateUtc - UpcomingLeadTime;
+        var now = _timeProvider.GetUtcNow();
+        if (when < now)
+        {
+            when = now;
+        }
+
+        var key = AppointmentReminder.BuildIdempotencyKey(appointment.Id, AppointmentReminderType.Upcoming);
+        var existing = await _dbContext.AppointmentReminders
+            .SingleOrDefaultAsync(r => r.IdempotencyKey == key, cancellationToken);
+
+        if (existing is null)
+        {
+            await EnsureReminderAsync(appointment, AppointmentReminderType.Upcoming, when, cancellationToken);
+            _logger.LogInformation(
+                "Upcoming reminder created after reschedule. AppointmentId={AppointmentId}",
+                appointment.Id);
+            return;
+        }
+
+        _jobs.TryDelete(existing.BackgroundJobId);
+
+        existing.ScheduledAtUtc = when;
+        existing.Status = AppointmentReminderStatus.Pending;
+        existing.SentAtUtc = null;
+        existing.AttemptCount = 0;
+        existing.LastError = null;
+        existing.BackgroundJobId = null;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        var jobId = when <= _timeProvider.GetUtcNow()
+            ? _jobs.EnqueueProcess(appointment.Id, existing.Id)
+            : _jobs.ScheduleProcess(appointment.Id, existing.Id, when);
+
+        existing.BackgroundJobId = jobId;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Upcoming reminder replaced after reschedule. AppointmentId={AppointmentId} ReminderId={ReminderId} ScheduledAtUtc={ScheduledAtUtc}",
+            appointment.Id,
+            existing.Id,
+            when);
+    }
+
     private async Task EnsureUpcomingAsync(Appointment appointment, CancellationToken cancellationToken)
     {
         var when = appointment.AppointmentDateUtc - UpcomingLeadTime;

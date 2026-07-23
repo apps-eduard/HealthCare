@@ -94,6 +94,12 @@ public static class AppointmentStatusTransitions
     public static bool IsCancelled(AppointmentStatus status) =>
         status is AppointmentStatus.CancelledByPatient or AppointmentStatus.CancelledByClinic;
 
+    /// <summary>
+    /// Reschedule is allowed only while the appointment is still Requested or Confirmed.
+    /// </summary>
+    public static bool CanReschedule(AppointmentStatus status) =>
+        status is AppointmentStatus.Requested or AppointmentStatus.Confirmed;
+
     public static bool CanTransition(AppointmentStatus from, AppointmentStatus to) =>
         Allowed.Contains((from, to));
 

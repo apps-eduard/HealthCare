@@ -112,6 +112,24 @@ public sealed class AppointmentsController : ControllerBase
         return Ok(await _appointments.CancelAsync(appointmentId, request, bypass, cancellationToken));
     }
 
+    [Authorize(Policy = AuthorizationPolicies.Authenticated)]
+    [HttpPost("appointments/{appointmentId:guid}/reschedule")]
+    [ProducesResponseType(typeof(AppointmentResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<AppointmentResponse>> Reschedule(
+        Guid appointmentId,
+        [FromBody] RescheduleAppointmentRequest request,
+        [FromQuery] bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default)
+    {
+        var bypass = platformAdminBypass ? PlatformAdminBypass.Explicit : PlatformAdminBypass.None;
+        return Ok(await _appointments.RescheduleAsync(appointmentId, request, bypass, cancellationToken));
+    }
+
     [Authorize(Policy = AuthorizationPolicies.StaffUser)]
     [HttpPost("staff/appointments/{appointmentId:guid}/check-in")]
     public async Task<ActionResult<AppointmentResponse>> CheckIn(

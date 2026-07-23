@@ -12,6 +12,25 @@ public static class AppointmentErrorCodes
     public const string ConcurrencyConflict = "appointment.concurrency_conflict";
     public const string InvalidTime = "appointment.invalid_time";
     public const string InvalidRequest = "appointment.invalid_request";
+    public const string RescheduleNotAllowed = "appointment.reschedule_not_allowed";
+    public const string RescheduleSameSlot = "appointment.reschedule_same_slot";
+    public const string RescheduleFailed = "appointment.reschedule_failed";
+}
+
+public sealed class RescheduleAppointmentRequest
+{
+    /// <summary>
+    /// Optional. When omitted or empty, the current doctor is preserved.
+    /// </summary>
+    public Guid? DoctorStaffMemberId { get; init; }
+
+    public DateTimeOffset AppointmentDateUtc { get; init; }
+
+    public int DurationMinutes { get; init; }
+
+    public int ExpectedVersion { get; init; }
+
+    public string? Reason { get; init; }
 }
 
 public sealed class CreatePatientAppointmentRequest
