@@ -36,6 +36,11 @@ public sealed class Patient
 
     public bool IsActive { get; set; } = true;
 
+    /// <summary>
+    /// Optimistic concurrency token. Incremented on each successful profile update.
+    /// </summary>
+    public int Version { get; set; }
+
     public DateTimeOffset CreatedAtUtc { get; set; }
 
     public DateTimeOffset UpdatedAtUtc { get; set; }

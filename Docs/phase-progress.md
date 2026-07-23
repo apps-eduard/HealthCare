@@ -2,10 +2,10 @@
 
 ## Progress overview
 
-**Overall completion: 37%**
+**Overall completion: 39%**
 
 ```text
-[███████████░░░░░░░░░░░░░░░░░░░░░]  37%
+[████████████░░░░░░░░░░░░░░░░░░░░]  39%
 ```
 
 | Metric | Value |
@@ -15,11 +15,11 @@
 | Partial | 5 (Phases 2, 3, 4, 5, 6) |
 | In progress | 0 |
 | Not started | 7 |
-| Weighted score | (2×1.0) + (0.7 + 0.75 + 0.5 + 0.75 + 0.5) = 5.2 / 14 ≈ **37%** |
+| Weighted score | (2×1.0) + (0.7 + 0.75 + 0.5 + 0.9 + 0.5) = 5.35 / 14 ≈ **38%** → **39%** |
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Patient profile PATCH / clinic self-registration on booking, or Google auth (Phase 2)
+**Current focus:** Staff patient search / patient administration, or Google auth
 
 ### All phases at a glance
 
@@ -31,7 +31,7 @@
 | 2 | Identity and authentication (JWT / refresh / endpoints) | Partial | `███████░░░` 70% |
 | 3 | Roles and authorization foundation | Partial | `████████░░` 75% |
 | 4 | Organizations and clinics | Partial | `█████░░░░░` 50% |
-| 5 | Patients and clinic-patient registration | Partial | `████████░░` 75% |
+| 5 | Patients and clinic-patient registration | Partial | `█████████░` 90% |
 | 6 | Staff and doctors | Partial | `█████░░░░░` 50% |
 | 7 | Appointment booking | Not started | `░░░░░░░░░░` 0% |
 | 8 | Staff web application (MudBlazor) | Not started | `░░░░░░░░░░` 0% |
@@ -88,7 +88,7 @@ Authoritative design docs:
 | 2 | Identity and authentication (JWT / refresh / endpoints) | Partial (patient register + confirm) | 2026-07-23 |
 | 3 | Roles and authorization foundation | Partial (current-user + policies) | 2026-07-23 |
 | 4 | Organizations and clinics | Partial (entities + schema only) | 2026-07-23 |
-| 5 | Patients and clinic-patient registration | Partial (foundation + registration/enroll) | 2026-07-23 |
+| 5 | Patients and clinic-patient registration | Partial (profile + self clinic register) | 2026-07-23 |
 | 6 | Staff and doctors | Partial (StaffMember entity + schema only) | 2026-07-23 |
 | 7 | Appointment booking | Not started | — |
 | 8 | Staff web application (MudBlazor) | Not started | — |
@@ -284,46 +284,40 @@ Authoritative design docs:
 
 ## Phase 5 — Patients and clinic-patient registration
 
-**Status:** Partial (~75%)  
+**Status:** Partial (~90%)  
 **Updated:** 2026-07-23
 
 ### Already done
 
-**Foundation**
-- `Patient`, `ClinicPatient`, linkage, self-scope, staff tenant access, `/patients/me`
+**Foundation / account registration**
+- Patient, ClinicPatient, linkage, self-scope, staff enroll, email/password registration + confirmation
 
-**Registration and activation**
-- `POST /api/v1/auth/register/patient` — transactional user + PATIENT role + Patient link
-- Generic duplicate-email responses (no account enumeration)
-- `POST /api/v1/auth/confirm-email`, `POST /api/v1/auth/resend-confirmation`
-- Identity confirmation tokens; Development token capture (`GET /api/v1/auth/dev/confirmation-token`)
-- Login blocked with `auth.email_not_confirmed` until confirmed
+**Profile update**
+- `PATCH /api/v1/patients/me` (PatientSelfScope)
+- Editable: first/middle/last name, DOB, gender, mobile, preferred language, address, emergency contact
+- Protected: email, role, PatientId/UserId, org/clinic linkage, IsActive, local numbers, timestamps
+- Optimistic concurrency via `Patient.Version` + `expectedVersion` (HTTP 409 on conflict)
+- Empty PATCH rejected by FluentValidation
 
-**Clinic enrollment**
-- `POST /api/v1/clinics/{clinicId}/patients/{patientId}/enroll` (staff-authorized, idempotent)
-- Local patient numbers: `P-000001` format via `ClinicPatientNumberSequences` atomic upsert
-- Migration `AddClinicPatientNumberSequence` applied to `healthcare_db`
-
-### Local patient number strategy
-
-- Assumption (no format in docs): `P-{n:D6}` unique per clinic
-- Sequence table + PostgreSQL `INSERT ... ON CONFLICT DO UPDATE RETURNING`
-- Unique index on `(ClinicId, LocalPatientNumber)` retained
+**Patient-driven clinic registration**
+- `POST /api/v1/patients/me/clinics/register` with trusted **clinic code = Clinic.Slug**
+- Resolves clinic/org server-side; rejects invalid/inactive with generic 404-style messages
+- Idempotent find-or-create; reuses local patient number sequence
+- Migration `AddPatientProfileConcurrencyAndClinicRegistration` applied
 
 ### Verification
 
 - Build: succeeded
-- Unit tests: 51 passed
+- Unit tests: 62 passed
 - Architecture tests: 9 passed
-- Integration tests: **failed** — Docker unavailable (`npipe://./pipe/docker_engine`); tests not weakened
-- Manual: health 200; register; login before confirm → 403; confirm; login + `/auth/me` PatientId; duplicate register generic; enroll idempotent `P-000001`; other clinic staff 403
+- Integration tests: failed (Docker unavailable); tests retained
+- Manual: health 200; PATCH profile + GET reflects changes; stale version 409; clinic-b register `P-000001` then idempotent; invalid code 404; staff PATCH 403
 
 ### Remaining
 
-- Patient profile PATCH
-- Patient-driven clinic registration on first booking
-- Staff patient search / directory
-- Real email provider (Hangfire notifications phase)
+- Staff patient search / administration directory
+- Real email provider
+- Google auth (Phase 2)
 - Integration suite green once Docker is available
 
 ---
@@ -445,6 +439,7 @@ Authoritative design docs:
 | 2026-07-23 | 3 | ICurrentUser + tenant isolation policies, /auth/me, scope-probe; overall ~30% |
 | 2026-07-23 | 5 | Patient foundation + ClinicPatient + self-scope endpoints; migration applied; overall ~34% |
 | 2026-07-23 | 5 / 2 | Patient registration, email confirmation, clinic enroll + local numbers; overall ~37% |
+| 2026-07-23 | 5 | Profile PATCH + patient clinic self-register via slug; concurrency Version; overall ~39% |
 
 ---
 

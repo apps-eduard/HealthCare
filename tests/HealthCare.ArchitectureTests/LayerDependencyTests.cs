@@ -115,6 +115,10 @@ public sealed class LayerDependencyTests
         typeof(IAccountEmailSender).Namespace.Should().StartWith("HealthCare.Application");
         typeof(IClinicEnrollmentService).Namespace.Should().StartWith("HealthCare.Application");
         typeof(ILocalPatientNumberGenerator).Namespace.Should().StartWith("HealthCare.Application");
+        typeof(IPatientClinicRegistrationService).Namespace.Should().StartWith("HealthCare.Application");
+        typeof(IClinicPublicLookup).Namespace.Should().StartWith("HealthCare.Application");
+        typeof(IPatientService).GetMethod(nameof(IPatientService.UpdateCurrentPatientProfileAsync))
+            .Should().NotBeNull();
     }
 
     [Fact]

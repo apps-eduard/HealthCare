@@ -10,4 +10,9 @@ public static class PatientErrorCodes
     public const string PatientAlreadyLinked = "patient.already_linked";
     public const string UserInactive = "patient.user_inactive";
     public const string NotFoundOrDenied = "patient.not_found_or_denied";
+    public const string ConcurrencyConflict = "patient.concurrency_conflict";
+    public const string EmptyProfileUpdate = "patient.empty_profile_update";
+    public const string ClinicCodeInvalid = "patient.clinic_code_invalid";
+    public const string ClinicInactive = "patient.clinic_inactive";
+    public const string OrganizationInactive = "patient.organization_inactive";
 }

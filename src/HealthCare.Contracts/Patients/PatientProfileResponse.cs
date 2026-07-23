@@ -25,4 +25,9 @@ public sealed class PatientProfileResponse
     public bool IsActive { get; init; }
 
     public Guid? LinkedUserId { get; init; }
+
+    /// <summary>
+    /// Optimistic concurrency version for subsequent PATCH requests.
+    /// </summary>
+    public int Version { get; init; }
 }

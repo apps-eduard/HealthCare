@@ -64,6 +64,30 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
                 cancellationToken);
         }
 
+        if (exception is PatientConcurrencyException concurrencyException)
+        {
+            return await WriteAuthProblemAsync(
+                httpContext,
+                concurrencyException.StatusCode,
+                concurrencyException.Title,
+                concurrencyException.ErrorCode,
+                correlationId,
+                "Patient concurrency conflict",
+                cancellationToken);
+        }
+
+        if (exception is PatientClinicRegistrationException clinicRegistrationException)
+        {
+            return await WriteAuthProblemAsync(
+                httpContext,
+                clinicRegistrationException.StatusCode,
+                clinicRegistrationException.Title,
+                clinicRegistrationException.ErrorCode,
+                correlationId,
+                "Clinic registration denied",
+                cancellationToken);
+        }
+
         _logger.LogError(
             exception,
             "Unhandled exception. CorrelationId={CorrelationId} Path={Path}",

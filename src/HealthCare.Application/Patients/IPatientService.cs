@@ -7,6 +7,10 @@ public interface IPatientService
 {
     Task<PatientProfileResponse> GetCurrentPatientProfileAsync(CancellationToken cancellationToken = default);
 
+    Task<PatientProfileResponse> UpdateCurrentPatientProfileAsync(
+        UpdatePatientProfileRequest request,
+        CancellationToken cancellationToken = default);
+
     Task<PatientProfileResponse> GetPatientByIdAsync(
         Guid patientId,
         PlatformAdminBypass bypass = PlatformAdminBypass.None,

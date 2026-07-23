@@ -36,26 +36,92 @@ public sealed class PatientService : IPatientService
 
     public async Task<PatientProfileResponse> GetCurrentPatientProfileAsync(CancellationToken cancellationToken = default)
     {
-        if (!_currentUser.IsAuthenticated || !_currentUser.IsInRole(AppRoles.Patient))
+        var patient = await LoadLinkedActivePatientForUpdateAsync(asNoTracking: true, cancellationToken);
+        return Map(patient);
+    }
+
+    public async Task<PatientProfileResponse> UpdateCurrentPatientProfileAsync(
+        UpdatePatientProfileRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var patient = await LoadLinkedActivePatientForUpdateAsync(asNoTracking: false, cancellationToken);
+
+        if (patient.Version != request.ExpectedVersion)
         {
-            throw AuthorizationException.Forbidden();
+            _logger.LogInformation(
+                "Concurrency conflict. UserId={UserId} PatientId={PatientId} ExpectedVersion={ExpectedVersion} ActualVersion={ActualVersion}",
+                _currentUser.UserId,
+                patient.Id,
+                request.ExpectedVersion,
+                patient.Version);
+            throw new PatientConcurrencyException();
         }
 
-        if (!_currentPatient.HasLinkedPatient || _currentPatient.PatientId is null)
+        if (request.FirstNameSpecified)
         {
-            throw AuthorizationException.MissingPatientLinkage();
+            patient.FirstName = NormalizeRequired(request.FirstName!);
         }
 
-        // Always use server-resolved PatientId — ignore any client-supplied id.
-        var patientId = _currentPatient.PatientId.Value;
-        var patient = await _dbContext.Patients
-            .AsNoTracking()
-            .SingleOrDefaultAsync(p => p.Id == patientId && p.IsActive, cancellationToken);
-
-        if (patient is null)
+        if (request.MiddleNameSpecified)
         {
-            throw AuthorizationException.MissingPatientLinkage();
+            patient.MiddleName = NormalizeOptional(request.MiddleName);
         }
+
+        if (request.LastNameSpecified)
+        {
+            patient.LastName = NormalizeRequired(request.LastName!);
+        }
+
+        if (request.DateOfBirthSpecified)
+        {
+            patient.DateOfBirth = request.DateOfBirth;
+        }
+
+        if (request.GenderSpecified)
+        {
+            patient.Gender = NormalizeOptional(request.Gender);
+        }
+
+        if (request.MobileNumberSpecified)
+        {
+            patient.MobileNumber = NormalizeOptional(request.MobileNumber);
+        }
+
+        if (request.PreferredLanguageSpecified)
+        {
+            patient.PreferredLanguage = NormalizeOptional(request.PreferredLanguage);
+        }
+
+        if (request.AddressSpecified)
+        {
+            patient.Address = NormalizeOptional(request.Address);
+        }
+
+        if (request.EmergencyContactSpecified)
+        {
+            patient.EmergencyContact = NormalizeOptional(request.EmergencyContact);
+        }
+
+        patient.Version++;
+
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            _logger.LogInformation(
+                "Concurrency conflict. UserId={UserId} PatientId={PatientId}",
+                _currentUser.UserId,
+                patient.Id);
+            throw new PatientConcurrencyException();
+        }
+
+        _logger.LogInformation(
+            "Patient profile updated. UserId={UserId} PatientId={PatientId} Version={Version}",
+            _currentUser.UserId,
+            patient.Id,
+            patient.Version);
 
         return Map(patient);
     }
@@ -73,7 +139,6 @@ public sealed class PatientService : IPatientService
 
         if (patient is null)
         {
-            // Do not reveal whether the patient exists in another tenant.
             throw AuthorizationException.PatientSelfScopeDenied();
         }
 
@@ -147,6 +212,36 @@ public sealed class PatientService : IPatientService
         throw AuthorizationException.ClinicAccessDenied();
     }
 
+    private async Task<Patient> LoadLinkedActivePatientForUpdateAsync(
+        bool asNoTracking,
+        CancellationToken cancellationToken)
+    {
+        if (!_currentUser.IsAuthenticated || !_currentUser.IsInRole(AppRoles.Patient))
+        {
+            throw AuthorizationException.Forbidden();
+        }
+
+        if (!_currentPatient.HasLinkedPatient || _currentPatient.PatientId is null)
+        {
+            throw AuthorizationException.MissingPatientLinkage();
+        }
+
+        var patientId = _currentPatient.PatientId.Value;
+        IQueryable<Patient> query = _dbContext.Patients;
+        if (asNoTracking)
+        {
+            query = query.AsNoTracking();
+        }
+
+        var patient = await query.SingleOrDefaultAsync(p => p.Id == patientId && p.IsActive, cancellationToken);
+        if (patient is null)
+        {
+            throw AuthorizationException.MissingPatientLinkage();
+        }
+
+        return patient;
+    }
+
     private void LogDenial(string reasonCode, Guid patientId)
     {
         _logger.LogInformation(
@@ -154,6 +249,19 @@ public sealed class PatientService : IPatientService
             _currentUser.UserId,
             reasonCode,
             patientId);
+    }
+
+    private static string NormalizeRequired(string value) => value.Trim();
+
+    private static string? NormalizeOptional(string? value)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Length == 0 ? null : trimmed;
     }
 
     private static PatientProfileResponse Map(Patient patient) =>
@@ -171,5 +279,6 @@ public sealed class PatientService : IPatientService
             EmergencyContact = patient.EmergencyContact,
             IsActive = patient.IsActive,
             LinkedUserId = patient.UserId,
+            Version = patient.Version,
         };
 }

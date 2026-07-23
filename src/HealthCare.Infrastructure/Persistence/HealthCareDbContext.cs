@@ -40,7 +40,7 @@ public sealed class HealthCareDbContext : IdentityDbContext<ApplicationUser, Ide
         base.OnModelCreating(modelBuilder);
 
         modelBuilder.HasDefaultSchema("public");
-        modelBuilder.HasAnnotation("HealthCare:SchemaVersion", "5");
+        modelBuilder.HasAnnotation("HealthCare:SchemaVersion", "6");
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(HealthCareDbContext).Assembly);
     }

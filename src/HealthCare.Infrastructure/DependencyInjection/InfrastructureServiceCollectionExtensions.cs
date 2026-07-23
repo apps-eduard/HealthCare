@@ -3,6 +3,7 @@ using HealthCare.Application.Identity;
 using HealthCare.Application.Patients;
 using HealthCare.Domain.Identity;
 using HealthCare.Infrastructure.Authorization;
+using HealthCare.Infrastructure.Clinics;
 using HealthCare.Infrastructure.Identity;
 using HealthCare.Infrastructure.Patients;
 using HealthCare.Infrastructure.Persistence;
@@ -138,6 +139,8 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IPatientAccountLinker, PatientAccountLinker>();
         services.AddScoped<IPatientService, PatientService>();
         services.AddScoped<IClinicEnrollmentService, ClinicEnrollmentService>();
+        services.AddScoped<IPatientClinicRegistrationService, PatientClinicRegistrationService>();
+        services.AddScoped<IClinicPublicLookup, ClinicPublicLookup>();
         services.AddScoped<ILocalPatientNumberGenerator, LocalPatientNumberGenerator>();
         services.AddSingleton<IDevelopmentConfirmationTokenStore, DevelopmentConfirmationTokenStore>();
         services.AddScoped<IAccountEmailSender, DevelopmentAccountEmailSender>();
