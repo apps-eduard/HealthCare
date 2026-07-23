@@ -310,6 +310,7 @@ public sealed class AppointmentFoundationTests
             new FakeCurrentPatient(),
             new ClinicPublicLookup(h.Db),
             h.CreateSlots(),
+            h.CreateReminderScheduler(),
             h.Time,
             NullLogger<AppointmentService>.Instance);
 
@@ -591,7 +592,8 @@ internal sealed class AppointmentHarness : IAsyncDisposable
         };
         var patient = new FakeCurrentPatient { HasLinkedPatient = true, PatientId = patientId };
         return new AppointmentService(
-            Db, user, new FakeCurrentStaff(), patient, new ClinicPublicLookup(Db), CreateSlots(), Time,
+            Db, user, new FakeCurrentStaff(), patient, new ClinicPublicLookup(Db), CreateSlots(),
+            CreateReminderScheduler(), Time,
             NullLogger<AppointmentService>.Instance);
     }
 
@@ -617,7 +619,8 @@ internal sealed class AppointmentHarness : IAsyncDisposable
             Role = role,
         };
         return new AppointmentService(
-            Db, user, staff, new FakeCurrentPatient(), new ClinicPublicLookup(Db), CreateSlots(), Time,
+            Db, user, staff, new FakeCurrentPatient(), new ClinicPublicLookup(Db), CreateSlots(),
+            CreateReminderScheduler(), Time,
             NullLogger<AppointmentService>.Instance);
     }
 
@@ -628,6 +631,51 @@ internal sealed class AppointmentHarness : IAsyncDisposable
             new ClinicTimeZoneConverter(NullLogger<ClinicTimeZoneConverter>.Instance),
             Time,
             NullLogger<AppointmentSlotService>.Instance);
+
+    public ImmediateReminderBackgroundJobs Jobs { get; } = new();
+
+    public AppointmentReminderScheduler CreateReminderScheduler() =>
+        new(Db, Jobs, Time, NullLogger<AppointmentReminderScheduler>.Instance);
+
+    public AppointmentReminderProcessor CreateReminderProcessor(IAppointmentReminderSender? sender = null) =>
+        new(
+            Db,
+            sender ?? new DevelopmentAppointmentReminderSender(NullLogger<DevelopmentAppointmentReminderSender>.Instance),
+            new ClinicTimeZoneConverter(NullLogger<ClinicTimeZoneConverter>.Instance),
+            Time,
+            NullLogger<AppointmentReminderProcessor>.Instance);
+
+    public AppointmentReminderRecoveryService CreateRecovery() =>
+        new(Db, Jobs, Time, NullLogger<AppointmentReminderRecoveryService>.Instance);
+
+    public AppointmentReminderService CreateReminderService(
+        Guid userId,
+        Guid orgId,
+        Guid clinicId,
+        Guid staffMemberId,
+        string role,
+        bool isPatient = false)
+    {
+        var roles = isPatient ? new[] { AppRoles.Patient } : new[] { role };
+        var user = new FakeCurrentUser
+        {
+            IsAuthenticated = true,
+            UserId = userId,
+            Roles = roles,
+        };
+        var staff = isPatient
+            ? new FakeCurrentStaff()
+            : new FakeCurrentStaff
+            {
+                HasActiveMembership = true,
+                StaffMemberId = staffMemberId,
+                OrganizationId = orgId,
+                ClinicId = clinicId,
+                Role = role,
+            };
+        return new AppointmentReminderService(
+            Db, user, staff, Jobs, Time, NullLogger<AppointmentReminderService>.Instance);
+    }
 
     public DoctorAvailabilityService CreateAvailabilityService(
         Guid userId,

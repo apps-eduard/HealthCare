@@ -125,6 +125,18 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
                 cancellationToken);
         }
 
+        if (exception is AppointmentReminderException reminderException)
+        {
+            return await WriteAuthProblemAsync(
+                httpContext,
+                reminderException.StatusCode,
+                reminderException.Title,
+                reminderException.ErrorCode,
+                correlationId,
+                "Reminder operation denied",
+                cancellationToken);
+        }
+
         _logger.LogError(
             exception,
             "Unhandled exception. CorrelationId={CorrelationId} Path={Path}",

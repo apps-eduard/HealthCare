@@ -2,24 +2,24 @@
 
 ## Progress overview
 
-**Overall completion: 44%**
+**Overall completion: 48%**
 
 ```text
-[██████████████░░░░░░░░░░░░░░░░░░]  44%
+[███████████████░░░░░░░░░░░░░░░░░]  48%
 ```
 
 | Metric | Value |
 |--------|-------|
 | Official phases (0–13) | 14 |
 | Complete | 3 (Phases 0, 1, 5) |
-| Partial | 5 (Phases 2, 3, 4, 6, 7) |
+| Partial | 6 (Phases 2, 3, 4, 6, 7, 10) |
 | In progress | 0 |
-| Not started | 6 |
-| Weighted score | (3×1.0) + (0.7 + 0.75 + 0.5 + 0.5 + 0.75) = 6.2 / 14 ≈ **44%** |
+| Not started | 5 |
+| Weighted score | (3×1.0) + (0.7 + 0.75 + 0.5 + 0.5 + 0.75 + 0.5) = 6.7 / 14 ≈ **48%** |
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Appointment PR merge prep, or Google auth / staff UI
+**Current focus:** Staff UI, Google auth, or medical notes
 
 ### All phases at a glance
 
@@ -36,7 +36,7 @@
 | 7 | Appointment booking | Partial | `████████░░` 75% |
 | 8 | Staff web application (MudBlazor) | Not started | `░░░░░░░░░░` 0% |
 | 9 | Medical notes | Not started | `░░░░░░░░░░` 0% |
-| 10 | Hangfire and notifications | Not started | `░░░░░░░░░░` 0% |
+| 10 | Hangfire and notifications | Partial | `█████░░░░░` 50% |
 | 11 | Patient mobile application | Not started | `░░░░░░░░░░` 0% |
 | 12 | Audit and security hardening | Not started | `░░░░░░░░░░` 0% |
 | 13 | Docker and deployment | Not started | `░░░░░░░░░░` 0% |
@@ -93,7 +93,7 @@ Authoritative design docs:
 | 7 | Appointment booking | Partial (foundation + availability) | 2026-07-23 |
 | 8 | Staff web application (MudBlazor) | Not started | — |
 | 9 | Medical notes | Not started | — |
-| 10 | Hangfire and notifications | Not started | — |
+| 10 | Hangfire and notifications | Partial (appointment reminders) | 2026-07-23 |
 | 11 | Patient mobile application | Not started | — |
 | 12 | Audit and security hardening | Not started | — |
 | 13 | Docker and deployment | Not started | — |
@@ -443,10 +443,11 @@ Authoritative design docs:
 
 ### Remaining Appointment work
 
-- Reminder notifications (Hangfire)
+- Reminder SMS/email provider integration (real delivery)
+- Daily clinic appointment summary Hangfire job
 - Staff UI appointment queue / calendar
 - Advanced recurring schedules
-- Merge `feature/appointment-foundation` and `feature/appointment-availability` into `main` via focused PRs
+- Appointment reschedule API (reminders currently assume create/confirm/cancel only)
 - Broader assignable roles if needed beyond DOCTOR
 
 ---
@@ -477,14 +478,63 @@ Authoritative design docs:
 
 ## Phase 10 — Hangfire and notifications
 
-**Status:** Not started
+**Status:** Partial (~50% — appointment reminders MVP)  
+**Updated:** 2026-07-23
 
-### Planned
+### Hangfire configuration
+- Packages: `Hangfire.AspNetCore` + `Hangfire.PostgreSql`
+- Storage: existing `DefaultConnection` PostgreSQL, schema `hangfire`
+- Hangfire **server** and **dashboard** (`/hangfire`) enabled **only in Development**
+- Dashboard authorization: authenticated `PLATFORM_ADMIN` only (`HangfireDashboardAuthFilter`)
+- No credentials/secrets added to new config files
 
-- Hangfire with PostgreSQL-compatible storage
-- Protected dashboard
-- Confirmation / reminder / summary / retry jobs
-- Idempotent notification handling
+### Reminder types
+- `Confirmation` — after appointment create (and confirm; idempotent)
+- `Upcoming` — 24 hours before `AppointmentDateUtc` (or immediately if closer)
+- `Cancellation` — after cancel; pending Confirmation/Upcoming cancelled first
+
+### Scheduling rules
+- Reminder rows persisted after appointment commit
+- Hangfire jobs receive **AppointmentId + ReminderId only**
+- Processor reloads DB state; skips Sent/Cancelled; cancels for Completed/NoShow; Cancellation allowed only when cancelled
+- Reschedule API is **not supported** yet — document limitation
+
+### Idempotency strategy
+- Unique `IdempotencyKey` = `{appointmentId:N}:{ReminderType}`
+- Concurrent duplicate inserts ignored
+- Sent reminders never re-delivered
+
+### Retry and recovery
+- Hangfire `AutomaticRetry` (3) + entity `AttemptCount` (max 5)
+- Permanent failure → `Failed`
+- Staff `POST .../reminders/retry` for Failed/Pending
+- Recurring recovery every 5 minutes: requeue overdue Pending (DisableConcurrentExecution)
+
+### Endpoints
+- `GET /api/v1/staff/appointments/{appointmentId}/reminders`
+- `POST /api/v1/staff/appointments/{appointmentId}/reminders/retry`
+
+### Migration result
+- `AddAppointmentReminders` applied to `healthcare_db` (`AppointmentReminders` table)
+
+### Verification
+- Build: succeeded
+- Unit tests: 137 passed
+- Architecture tests: 15 passed
+- Integration tests: Docker unavailable; suite retained
+- Manual: health 200; Hangfire server starts in Development; appointment creates Confirmation+Upcoming; Development sender marks Sent; cancel cancels pending; cross-clinic list 404; anonymous dashboard not usable as admin UI
+
+### Known limitations
+- Development logging sender only (no real SMS/email)
+- Hangfire worker/dashboard Development-only
+- No daily clinic summary job yet
+- No appointment reschedule path to reschedule Upcoming reminders
+
+### Remaining Hangfire / notification work
+- Real email/SMS provider adapters
+- Daily clinic summary
+- Production Hangfire worker hosting
+- Expired refresh-token cleanup job (architecture backlog)
 
 ---
 
@@ -541,6 +591,7 @@ Authoritative design docs:
 | 2026-07-23 | 5 | Staff patient search + ClinicPatient admin; Phase 5 complete; overall ~40% |
 | 2026-07-23 | 7 | Appointment foundation (entity, booking, transitions, conflicts); overall ~43% |
 | 2026-07-23 | 7 | Availability windows, exceptions, doctor list, slots, booking rules; overall ~44% |
+| 2026-07-23 | 10 | Appointment reminders + Hangfire (PostgreSQL, Dev dashboard); overall ~48% |
 
 ---
 
