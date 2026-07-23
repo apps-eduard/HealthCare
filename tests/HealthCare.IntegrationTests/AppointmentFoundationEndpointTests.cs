@@ -128,7 +128,7 @@ public sealed class AppointmentFoundationEndpointTests : IAsyncLifetime
         {
             clinicCode = "dev-clinic-a",
             doctorStaffMemberId = doctorId,
-            appointmentDateUtc = DateTimeOffset.UtcNow.AddDays(2),
+            appointmentDateUtc = AlignedFutureSlotUtc(daysAhead: 2),
             durationMinutes = 30,
             reason = "Toothache",
         });
@@ -206,13 +206,13 @@ public sealed class AppointmentFoundationEndpointTests : IAsyncLifetime
     {
         await AuthenticateAsync(PatientEmail, PatientPassword);
         var doctorId = await GetClinicADoctorStaffIdAsync();
-        var start = DateTimeOffset.UtcNow.AddDays(15);
+        var start = AlignedFutureSlotUtc(daysAhead: 15);
         var first = await _client!.PostAsJsonAsync("/api/v1/patients/me/appointments", new
         {
             clinicCode = "dev-clinic-a",
             doctorStaffMemberId = doctorId,
             appointmentDateUtc = start,
-            durationMinutes = 60,
+            durationMinutes = 30,
         });
         first.StatusCode.Should().Be(HttpStatusCode.OK);
         var firstBody = await first.Content.ReadFromJsonAsync<AppointmentResponse>();
@@ -250,7 +250,7 @@ public sealed class AppointmentFoundationEndpointTests : IAsyncLifetime
         {
             clinicCode = "dev-clinic-a",
             doctorStaffMemberId = doctorId,
-            appointmentDateUtc = DateTimeOffset.UtcNow.AddDays(20),
+            appointmentDateUtc = AlignedFutureSlotUtc(daysAhead: 20),
             durationMinutes = 30,
         });
         var created = await create.Content.ReadFromJsonAsync<AppointmentResponse>();
@@ -273,6 +273,17 @@ public sealed class AppointmentFoundationEndpointTests : IAsyncLifetime
         await AuthenticateAsync(StaffBEmail, StaffBPassword);
         var response = await _client!.GetAsync($"/api/v1/appointments/{Guid.NewGuid()}");
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    /// <summary>
+    /// Returns a UTC instant that is 09:00 Asia/Riyadh on a future calendar day (30-min slot boundary).
+    /// </summary>
+    private static DateTimeOffset AlignedFutureSlotUtc(int daysAhead)
+    {
+        var localDate = DateOnly.FromDateTime(DateTime.UtcNow.Date).AddDays(daysAhead);
+        // Asia/Riyadh is UTC+3 year-round.
+        return new DateTimeOffset(localDate.ToDateTime(new TimeOnly(9, 0), DateTimeKind.Unspecified), TimeSpan.FromHours(3))
+            .ToUniversalTime();
     }
 
     private async Task<Guid> GetClinicADoctorStaffIdAsync()

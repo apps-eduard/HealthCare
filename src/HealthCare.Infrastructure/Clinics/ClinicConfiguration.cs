@@ -41,6 +41,11 @@ public sealed class ClinicConfiguration : IEntityTypeConfiguration<Clinic>
         builder.Property(x => x.Email)
             .HasMaxLength(256);
 
+        builder.Property(x => x.TimeZoneId)
+            .IsRequired()
+            .HasMaxLength(64)
+            .HasDefaultValue("Asia/Riyadh");
+
         builder.Property(x => x.IsActive)
             .IsRequired()
             .HasDefaultValue(true);

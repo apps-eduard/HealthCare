@@ -32,6 +32,7 @@ public sealed class AppointmentService : IAppointmentService
     private readonly ICurrentStaff _currentStaff;
     private readonly ICurrentPatient _currentPatient;
     private readonly IClinicPublicLookup _clinicLookup;
+    private readonly IAppointmentSlotService _slots;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<AppointmentService> _logger;
 
@@ -41,6 +42,7 @@ public sealed class AppointmentService : IAppointmentService
         ICurrentStaff currentStaff,
         ICurrentPatient currentPatient,
         IClinicPublicLookup clinicLookup,
+        IAppointmentSlotService slots,
         TimeProvider timeProvider,
         ILogger<AppointmentService> logger)
     {
@@ -49,6 +51,7 @@ public sealed class AppointmentService : IAppointmentService
         _currentStaff = currentStaff;
         _currentPatient = currentPatient;
         _clinicLookup = clinicLookup;
+        _slots = slots;
         _timeProvider = timeProvider;
         _logger = logger;
     }
@@ -367,6 +370,14 @@ public sealed class AppointmentService : IAppointmentService
 
         try
         {
+            await _slots.EnsureSlotIsBookableAsync(
+                appointment.ClinicId,
+                appointment.DoctorStaffMemberId,
+                appointment.AppointmentDateUtc,
+                appointment.DurationMinutes,
+                excludeAppointmentId: null,
+                cancellationToken);
+
             if (await HasSlotConflictAsync(
                     appointment.ClinicId,
                     appointment.DoctorStaffMemberId,

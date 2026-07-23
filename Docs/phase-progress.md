@@ -2,10 +2,10 @@
 
 ## Progress overview
 
-**Overall completion: 43%**
+**Overall completion: 44%**
 
 ```text
-[█████████████░░░░░░░░░░░░░░░░░░░]  43%
+[██████████████░░░░░░░░░░░░░░░░░░]  44%
 ```
 
 | Metric | Value |
@@ -15,11 +15,11 @@
 | Partial | 5 (Phases 2, 3, 4, 6, 7) |
 | In progress | 0 |
 | Not started | 6 |
-| Weighted score | (3×1.0) + (0.7 + 0.75 + 0.5 + 0.5 + 0.55) = 6.0 / 14 ≈ **43%** |
+| Weighted score | (3×1.0) + (0.7 + 0.75 + 0.5 + 0.5 + 0.75) = 6.2 / 14 ≈ **44%** |
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Appointment availability / scheduling rules, or Google auth / staff UI
+**Current focus:** Appointment PR merge prep, or Google auth / staff UI
 
 ### All phases at a glance
 
@@ -33,7 +33,7 @@
 | 4 | Organizations and clinics | Partial | `█████░░░░░` 50% |
 | 5 | Patients and clinic-patient registration | Complete | `██████████` 100% |
 | 6 | Staff and doctors | Partial | `█████░░░░░` 50% |
-| 7 | Appointment booking | Partial | `██████░░░░` 55% |
+| 7 | Appointment booking | Partial | `████████░░` 75% |
 | 8 | Staff web application (MudBlazor) | Not started | `░░░░░░░░░░` 0% |
 | 9 | Medical notes | Not started | `░░░░░░░░░░` 0% |
 | 10 | Hangfire and notifications | Not started | `░░░░░░░░░░` 0% |
@@ -90,7 +90,7 @@ Authoritative design docs:
 | 4 | Organizations and clinics | Partial (entities + schema only) | 2026-07-23 |
 | 5 | Patients and clinic-patient registration | Complete (staff search + clinic admin) | 2026-07-23 |
 | 6 | Staff and doctors | Partial (StaffMember entity + schema only) | 2026-07-23 |
-| 7 | Appointment booking | Partial (foundation) | 2026-07-23 |
+| 7 | Appointment booking | Partial (foundation + availability) | 2026-07-23 |
 | 8 | Staff web application (MudBlazor) | Not started | — |
 | 9 | Medical notes | Not started | — |
 | 10 | Hangfire and notifications | Not started | — |
@@ -355,7 +355,7 @@ Authoritative design docs:
 
 ## Phase 7 — Appointment booking
 
-**Status:** Partial (~55% — foundation)  
+**Status:** Partial (~75% — foundation + availability)  
 **Updated:** 2026-07-23
 
 ### Already done (foundation)
@@ -391,20 +391,62 @@ Authoritative design docs:
 **Migration**
 - `AddAppointmentFoundation` applied to `healthcare_db`
 
+### Availability and scheduling (this increment)
+
+**Availability model**
+- `DoctorAvailability`: weekly recurring window per doctor/clinic with DayOfWeek, Start/End local time, SlotDurationMinutes (10–240), EffectiveFrom/To, IsActive, Version
+- OrganizationId and ClinicId derived server-side from the doctor membership
+- Overlapping active windows for the same doctor/day/effective range are rejected (`appointment.availability_conflict`)
+
+**Exception behavior**
+- `DoctorAvailabilityException`: UnavailableFullDay, UnavailableRange, CustomAvailableRange
+- Exceptions override weekly windows for that date
+- Reason max length 250
+
+**Doctor listing**
+- `GET /api/v1/clinics/{clinicCode}/doctors` — authenticated patient or staff
+- Active DOCTOR members of the resolved clinic only; safe fields (StaffMemberId, DisplayName, Specialty, ClinicCode, AcceptsBookings)
+- No email, UserId, phone, or other clinic memberships
+
+**Slot-generation rules**
+- One date per request: `GET /api/v1/clinics/{clinicCode}/doctors/{staffMemberId}/available-slots?date=&durationMinutes=`
+- Active weekly windows + effective dates + exceptions
+- Exclude past times; exclude slots overlapping Requested/Confirmed/CheckedIn/InProgress
+- Cancelled appointments do not block
+- Starts must land on slot boundaries; duration must match window slot duration; end must stay in window
+
+**Timezone strategy**
+- `Clinic.TimeZoneId` IANA id (default `Asia/Riyadh` for existing/dev clinics)
+- Availability times are clinic-local; `Appointment.AppointmentDateUtc` remains UTC
+- Conversion via `IClinicTimeZoneConverter` (Windows fallback: Arab Standard Time for Riyadh)
+- Never uses server local time implicitly
+
+**Booking-validation changes**
+- Patient and staff create paths call `EnsureSlotIsBookableAsync` before existing Serializable overlap check
+- 409 codes: `appointment.outside_availability`, `appointment.slot_unavailable`, `appointment.availability_exception`, `appointment.invalid_slot_duration`
+
+**Staff availability administration**
+- `GET/POST/PATCH/DELETE /api/v1/staff/doctors/{staffMemberId}/availability`
+- `POST/DELETE .../availability-exceptions`
+- ClinicAdmin: same clinic; OrgAdmin: same organization; Doctor: own availability; PATIENT: forbidden; PLATFORM_ADMIN: explicit bypass
+
+**Migration result**
+- `AddAppointmentAvailability` applied to `healthcare_db` (DoctorAvailabilities, DoctorAvailabilityExceptions, Clinics.TimeZoneId)
+
 ### Verification
 
 - Build: succeeded
-- Unit tests: 101 passed (17 appointment)
-- Architecture tests: 12 passed
-- Integration tests: Docker unavailable (suite retained)
-- Manual: health 200; patient create Requested; list own; Clinic B doctor assign 400; overlap 409; confirm + stale 409; cancel + slot reuse; Clinic B cannot see Clinic A appt; invalid complete transition 409
+- Unit tests: **124 passed** (40 appointment/availability)
+- Architecture tests: **14 passed**
+- Integration tests: Docker unavailable (`npipe://./pipe/docker_engine`); suite retained (foundation + availability endpoints)
+- Manual (http://localhost:5080): health **200**; weekly availability created; full-day exception created; doctor list returned Clinic A doctor; slots returned 24 for one date (`Asia/Riyadh`); exception day returned 0 slots; patient booking in slot succeeded (UTC `06:30` = local `09:30+03`); occupied slot removed; cancel restored slot; outside availability **409**; Clinic B doctor managing Clinic A availability **403**
 
 ### Remaining Appointment work
 
-- Doctor availability / schedules / clinic calendar
-- `GET /clinics/{id}/doctors` and availability endpoints
 - Reminder notifications (Hangfire)
-- Staff UI appointment queue
+- Staff UI appointment queue / calendar
+- Advanced recurring schedules
+- Merge `feature/appointment-foundation` and `feature/appointment-availability` into `main` via focused PRs
 - Broader assignable roles if needed beyond DOCTOR
 
 ---
@@ -498,6 +540,7 @@ Authoritative design docs:
 | 2026-07-23 | 5 | Profile PATCH + patient clinic self-register via slug; concurrency Version; overall ~39% |
 | 2026-07-23 | 5 | Staff patient search + ClinicPatient admin; Phase 5 complete; overall ~40% |
 | 2026-07-23 | 7 | Appointment foundation (entity, booking, transitions, conflicts); overall ~43% |
+| 2026-07-23 | 7 | Availability windows, exceptions, doctor list, slots, booking rules; overall ~44% |
 
 ---
 

@@ -144,6 +144,10 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IPatientClinicRegistrationService, PatientClinicRegistrationService>();
         services.AddScoped<IStaffPatientService, StaffPatientService>();
         services.AddScoped<IAppointmentService, AppointmentService>();
+        services.AddScoped<IClinicTimeZoneConverter, ClinicTimeZoneConverter>();
+        services.AddScoped<IDoctorDirectoryService, DoctorDirectoryService>();
+        services.AddScoped<IDoctorAvailabilityService, DoctorAvailabilityService>();
+        services.AddScoped<IAppointmentSlotService, AppointmentSlotService>();
         services.AddScoped<IClinicPublicLookup, ClinicPublicLookup>();
         services.AddScoped<ILocalPatientNumberGenerator, LocalPatientNumberGenerator>();
         services.AddSingleton<IDevelopmentConfirmationTokenStore, DevelopmentConfirmationTokenStore>();

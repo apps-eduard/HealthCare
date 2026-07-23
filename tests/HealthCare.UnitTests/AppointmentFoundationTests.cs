@@ -79,7 +79,7 @@ public sealed class AppointmentFoundationTests
             PatientId = data.PatientId,
             DoctorStaffMemberId = data.DoctorAStaffId,
             AppointmentDateUtc = h.Now.AddDays(2),
-            DurationMinutes = 45,
+            DurationMinutes = 30,
         });
 
         created.Status.Should().Be(nameof(AppointmentStatus.Confirmed));
@@ -156,19 +156,19 @@ public sealed class AppointmentFoundationTests
             ClinicCode = data.ClinicASlug,
             DoctorStaffMemberId = data.DoctorAStaffId,
             AppointmentDateUtc = start,
-            DurationMinutes = 60,
+            DurationMinutes = 30,
         });
 
         var act = () => sut.CreateForCurrentPatientAsync(new CreatePatientAppointmentRequest
         {
             ClinicCode = data.ClinicASlug,
             DoctorStaffMemberId = data.DoctorAStaffId,
-            AppointmentDateUtc = start.AddMinutes(30),
+            AppointmentDateUtc = start,
             DurationMinutes = 30,
         });
 
-        await act.Should().ThrowAsync<AppointmentException>()
-            .Where(e => e.ErrorCode == AppointmentErrorCodes.SlotConflict);
+        await act.Should().ThrowAsync<AvailabilityException>()
+            .Where(e => e.ErrorCode == AvailabilityErrorCodes.SlotUnavailable);
     }
 
     [Fact]
@@ -309,6 +309,7 @@ public sealed class AppointmentFoundationTests
             new FakeCurrentStaff(),
             new FakeCurrentPatient(),
             new ClinicPublicLookup(h.Db),
+            h.CreateSlots(),
             h.Time,
             NullLogger<AppointmentService>.Instance);
 
@@ -446,8 +447,24 @@ internal sealed class AppointmentHarness : IAsyncDisposable
             Status = OrganizationStatus.Active,
         });
         Db.Clinics.AddRange(
-            new Domain.Clinics.Clinic { Id = clinicA, OrganizationId = org1, Name = "A", Slug = slugA, IsActive = true },
-            new Domain.Clinics.Clinic { Id = clinicB, OrganizationId = org1, Name = "B", Slug = slugB, IsActive = true });
+            new Domain.Clinics.Clinic
+            {
+                Id = clinicA,
+                OrganizationId = org1,
+                Name = "A",
+                Slug = slugA,
+                TimeZoneId = "Asia/Riyadh",
+                IsActive = true,
+            },
+            new Domain.Clinics.Clinic
+            {
+                Id = clinicB,
+                OrganizationId = org1,
+                Name = "B",
+                Slug = slugB,
+                TimeZoneId = "Asia/Riyadh",
+                IsActive = true,
+            });
         Db.Patients.Add(new Patient
         {
             Id = patientId,
@@ -485,6 +502,38 @@ internal sealed class AppointmentHarness : IAsyncDisposable
                 Role = AppRoles.Doctor,
                 IsActive = true,
             });
+
+        foreach (DayOfWeek day in Enum.GetValues<DayOfWeek>())
+        {
+            Db.DoctorAvailabilities.AddRange(
+                new DoctorAvailability
+                {
+                    Id = Guid.NewGuid(),
+                    OrganizationId = org1,
+                    ClinicId = clinicA,
+                    DoctorStaffMemberId = doctorAStaff,
+                    DayOfWeek = day,
+                    StartLocalTime = new TimeOnly(8, 0),
+                    EndLocalTime = new TimeOnly(20, 0),
+                    SlotDurationMinutes = 30,
+                    EffectiveFrom = new DateOnly(2020, 1, 1),
+                    IsActive = true,
+                },
+                new DoctorAvailability
+                {
+                    Id = Guid.NewGuid(),
+                    OrganizationId = org1,
+                    ClinicId = clinicB,
+                    DoctorStaffMemberId = doctorBStaff,
+                    DayOfWeek = day,
+                    StartLocalTime = new TimeOnly(8, 0),
+                    EndLocalTime = new TimeOnly(20, 0),
+                    SlotDurationMinutes = 30,
+                    EffectiveFrom = new DateOnly(2020, 1, 1),
+                    IsActive = true,
+                });
+        }
+
         await Db.SaveChangesAsync();
 
         return new SeedData(
@@ -542,7 +591,7 @@ internal sealed class AppointmentHarness : IAsyncDisposable
         };
         var patient = new FakeCurrentPatient { HasLinkedPatient = true, PatientId = patientId };
         return new AppointmentService(
-            Db, user, new FakeCurrentStaff(), patient, new ClinicPublicLookup(Db), Time,
+            Db, user, new FakeCurrentStaff(), patient, new ClinicPublicLookup(Db), CreateSlots(), Time,
             NullLogger<AppointmentService>.Instance);
     }
 
@@ -568,9 +617,49 @@ internal sealed class AppointmentHarness : IAsyncDisposable
             Role = role,
         };
         return new AppointmentService(
-            Db, user, staff, new FakeCurrentPatient(), new ClinicPublicLookup(Db), Time,
+            Db, user, staff, new FakeCurrentPatient(), new ClinicPublicLookup(Db), CreateSlots(), Time,
             NullLogger<AppointmentService>.Instance);
     }
+
+    public AppointmentSlotService CreateSlots() =>
+        new(
+            Db,
+            new ClinicPublicLookup(Db),
+            new ClinicTimeZoneConverter(NullLogger<ClinicTimeZoneConverter>.Instance),
+            Time,
+            NullLogger<AppointmentSlotService>.Instance);
+
+    public DoctorAvailabilityService CreateAvailabilityService(
+        Guid userId,
+        Guid orgId,
+        Guid clinicId,
+        Guid staffMemberId,
+        string role,
+        bool isPatient = false)
+    {
+        var roles = isPatient ? new[] { AppRoles.Patient } : new[] { role };
+        var user = new FakeCurrentUser
+        {
+            IsAuthenticated = true,
+            UserId = userId,
+            Roles = roles,
+            PatientId = isPatient ? Guid.NewGuid() : null,
+        };
+        var staff = isPatient
+            ? new FakeCurrentStaff()
+            : new FakeCurrentStaff
+            {
+                HasActiveMembership = true,
+                StaffMemberId = staffMemberId,
+                OrganizationId = orgId,
+                ClinicId = clinicId,
+                Role = role,
+            };
+        return new DoctorAvailabilityService(
+            Db, user, staff, NullLogger<DoctorAvailabilityService>.Instance);
+    }
+
+    public DoctorDirectoryService CreateDirectory() => new(Db, new ClinicPublicLookup(Db));
 
     public ValueTask DisposeAsync()
     {
