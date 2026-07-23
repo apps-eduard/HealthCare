@@ -38,12 +38,16 @@ public sealed class HealthCareDbContext : IdentityDbContext<ApplicationUser, Ide
 
     public DbSet<Appointment> Appointments => Set<Appointment>();
 
+    public DbSet<DoctorAvailability> DoctorAvailabilities => Set<DoctorAvailability>();
+
+    public DbSet<DoctorAvailabilityException> DoctorAvailabilityExceptions => Set<DoctorAvailabilityException>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
         modelBuilder.HasDefaultSchema("public");
-        modelBuilder.HasAnnotation("HealthCare:SchemaVersion", "7");
+        modelBuilder.HasAnnotation("HealthCare:SchemaVersion", "8");
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(HealthCareDbContext).Assembly);
     }
@@ -128,6 +132,22 @@ public sealed class HealthCareDbContext : IdentityDbContext<ApplicationUser, Ide
                     }
 
                     appointment.UpdatedAtUtc = utcNow;
+                    break;
+                case DoctorAvailability availability:
+                    if (entry.State == EntityState.Added)
+                    {
+                        availability.CreatedAtUtc = utcNow;
+                    }
+
+                    availability.UpdatedAtUtc = utcNow;
+                    break;
+                case DoctorAvailabilityException availabilityException:
+                    if (entry.State == EntityState.Added)
+                    {
+                        availabilityException.CreatedAtUtc = utcNow;
+                    }
+
+                    availabilityException.UpdatedAtUtc = utcNow;
                     break;
             }
         }

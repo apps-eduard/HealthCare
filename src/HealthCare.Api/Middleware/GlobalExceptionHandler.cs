@@ -113,6 +113,18 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
                 cancellationToken);
         }
 
+        if (exception is AvailabilityException availabilityException)
+        {
+            return await WriteAuthProblemAsync(
+                httpContext,
+                availabilityException.StatusCode,
+                availabilityException.Title,
+                availabilityException.ErrorCode,
+                correlationId,
+                "Availability operation denied",
+                cancellationToken);
+        }
+
         _logger.LogError(
             exception,
             "Unhandled exception. CorrelationId={CorrelationId} Path={Path}",

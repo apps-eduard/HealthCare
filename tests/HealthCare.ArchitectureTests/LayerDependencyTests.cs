@@ -145,6 +145,10 @@ public sealed class LayerDependencyTests
     public void Appointment_Services_Use_Tenant_Abstractions_And_Contracts_Not_Entities()
     {
         typeof(IAppointmentService).Namespace.Should().StartWith("HealthCare.Application.Appointments");
+        typeof(IDoctorAvailabilityService).Namespace.Should().StartWith("HealthCare.Application.Appointments");
+        typeof(IAppointmentSlotService).Namespace.Should().StartWith("HealthCare.Application.Appointments");
+        typeof(IClinicTimeZoneConverter).Namespace.Should().StartWith("HealthCare.Application.Appointments");
+        typeof(IDoctorDirectoryService).Namespace.Should().StartWith("HealthCare.Application.Appointments");
         typeof(ITenantAccessService).Namespace.Should().StartWith("HealthCare.Application");
         typeof(ICurrentStaff).Namespace.Should().StartWith("HealthCare.Application");
         typeof(ICurrentPatient).Namespace.Should().StartWith("HealthCare.Application");
@@ -153,6 +157,39 @@ public sealed class LayerDependencyTests
             .GetName().Name.Should().Be("HealthCare.Contracts");
         typeof(Contracts.Appointments.AppointmentResponse)
             .Should().NotBeAssignableTo(typeof(Domain.Appointments.Appointment));
+        typeof(Contracts.Appointments.DoctorAvailabilityResponse)
+            .Should().NotBeAssignableTo(typeof(Domain.Appointments.DoctorAvailability));
+        typeof(Contracts.Appointments.AvailableSlotResponse)
+            .Should().NotBeAssignableTo(typeof(Domain.Appointments.DoctorAvailability));
+    }
+
+    [Fact]
+    public void Availability_Rules_Live_In_Domain_And_Timezone_Is_Abstracted()
+    {
+        typeof(Domain.Appointments.AvailabilitySlotRules).Namespace
+            .Should().StartWith("HealthCare.Domain.Appointments");
+        typeof(IClinicTimeZoneConverter).Namespace
+            .Should().StartWith("HealthCare.Application.Appointments");
+        typeof(IAppointmentSlotService).GetMethod(nameof(IAppointmentSlotService.GetAvailableSlotsAsync))
+            .Should().NotBeNull();
+        typeof(IAppointmentSlotService).GetMethod(nameof(IAppointmentSlotService.EnsureSlotIsBookableAsync))
+            .Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Controllers_Do_Not_Contain_Slot_Generation_Logic()
+    {
+        var controller = typeof(Program).Assembly
+            .GetTypes()
+            .Single(t => t.Name == "DoctorAvailabilityController");
+
+        controller.GetMethods()
+            .Where(m => m.DeclaringType == controller)
+            .Select(m => m.Name)
+            .Should()
+            .NotContain(n => n.Contains("Generate", StringComparison.OrdinalIgnoreCase));
+
+        controller.Should().NotBeAssignableTo(typeof(IAppointmentSlotService));
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using HealthCare.Application.Patients;
+using HealthCare.Domain.Appointments;
 using HealthCare.Domain.Clinics;
 using HealthCare.Domain.Identity;
 using HealthCare.Domain.Organizations;
@@ -158,6 +159,12 @@ public sealed class DevelopmentPatientSeeder : IDevelopmentPatientSeeder
             .SingleOrDefaultAsync(c => c.Slug == slug, cancellationToken);
         if (existing is not null)
         {
+            if (string.IsNullOrWhiteSpace(existing.TimeZoneId))
+            {
+                existing.TimeZoneId = "Asia/Riyadh";
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+
             return existing;
         }
 
@@ -167,6 +174,7 @@ public sealed class DevelopmentPatientSeeder : IDevelopmentPatientSeeder
             OrganizationId = organizationId,
             Name = name,
             Slug = slug,
+            TimeZoneId = "Asia/Riyadh",
             IsActive = true,
         };
         _dbContext.Clinics.Add(clinic);
@@ -308,23 +316,58 @@ public sealed class DevelopmentPatientSeeder : IDevelopmentPatientSeeder
             }
         }
 
-        var membershipExists = await _dbContext.StaffMembers
-            .AnyAsync(s => s.UserId == user.Id, cancellationToken);
-        if (membershipExists)
+        var membership = await _dbContext.StaffMembers
+            .SingleOrDefaultAsync(s => s.UserId == user.Id, cancellationToken);
+        if (membership is null)
+        {
+            membership = new StaffMember
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.Id,
+                OrganizationId = organizationId,
+                ClinicId = clinicId,
+                Role = role,
+                JobTitle = role,
+                IsActive = true,
+            };
+            _dbContext.StaffMembers.Add(membership);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        if (role == AppRoles.Doctor)
+        {
+            await EnsureDefaultDoctorAvailabilityAsync(membership, cancellationToken);
+        }
+    }
+
+    private async Task EnsureDefaultDoctorAvailabilityAsync(
+        StaffMember doctor,
+        CancellationToken cancellationToken)
+    {
+        var hasAny = await _dbContext.DoctorAvailabilities
+            .AnyAsync(a => a.DoctorStaffMemberId == doctor.Id, cancellationToken);
+        if (hasAny)
         {
             return;
         }
 
-        _dbContext.StaffMembers.Add(new StaffMember
+        foreach (DayOfWeek day in Enum.GetValues<DayOfWeek>())
         {
-            Id = Guid.NewGuid(),
-            UserId = user.Id,
-            OrganizationId = organizationId,
-            ClinicId = clinicId,
-            Role = role,
-            JobTitle = role,
-            IsActive = true,
-        });
+            _dbContext.DoctorAvailabilities.Add(new DoctorAvailability
+            {
+                Id = Guid.NewGuid(),
+                OrganizationId = doctor.OrganizationId,
+                ClinicId = doctor.ClinicId,
+                DoctorStaffMemberId = doctor.Id,
+                DayOfWeek = day,
+                StartLocalTime = new TimeOnly(8, 0),
+                EndLocalTime = new TimeOnly(20, 0),
+                SlotDurationMinutes = 30,
+                EffectiveFrom = new DateOnly(2020, 1, 1),
+                IsActive = true,
+            });
+        }
+
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 }
