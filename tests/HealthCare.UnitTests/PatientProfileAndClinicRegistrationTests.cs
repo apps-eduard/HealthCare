@@ -91,7 +91,7 @@ public sealed class PatientProfileUpdateTests
             staffUser,
             new FakeCurrentStaff { HasActiveMembership = true, ClinicId = Guid.NewGuid(), OrganizationId = Guid.NewGuid(), Role = AppRoles.Doctor, StaffMemberId = Guid.NewGuid() },
             new FakeCurrentPatient { HasLinkedPatient = false },
-            new TenantAccessService(staffUser, new FakeCurrentStaff(), new FakeCurrentPatient(), NullLogger<TenantAccessService>.Instance),
+            new TenantAccessService(staffUser, new FakeCurrentStaff(), new FakeCurrentPatient(), new NoOpAuthorizationAuditLogger(), NullLogger<TenantAccessService>.Instance),
             NullLogger<PatientService>.Instance);
 
         var act = () => sut.UpdateCurrentPatientProfileAsync(new UpdatePatientProfileRequest
@@ -289,7 +289,7 @@ internal sealed class ProfileTestHarness : IAsyncDisposable
             PatientId = linkedPatientId,
         };
         var staff = new FakeCurrentStaff();
-        var tenant = new TenantAccessService(user, staff, patient, NullLogger<TenantAccessService>.Instance);
+        var tenant = new TenantAccessService(user, staff, patient, new NoOpAuthorizationAuditLogger(), NullLogger<TenantAccessService>.Instance);
         return new PatientService(Db, user, staff, patient, tenant, NullLogger<PatientService>.Instance);
     }
 

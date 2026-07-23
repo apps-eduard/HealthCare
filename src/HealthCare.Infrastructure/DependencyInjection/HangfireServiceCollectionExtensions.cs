@@ -1,4 +1,5 @@
 using HealthCare.Application.Appointments;
+using HealthCare.Application.Authorization;
 using HealthCare.Domain.Identity;
 using HealthCare.Infrastructure.Appointments;
 using HealthCare.Infrastructure.Configuration;
@@ -197,7 +198,13 @@ public sealed class HangfireDashboardAuthFilter : IDashboardAuthorizationFilter
     public bool Authorize(DashboardContext context)
     {
         var http = context.GetHttpContext();
-        return http.User.Identity?.IsAuthenticated == true
-               && http.User.IsInRole(AppRoles.PlatformAdmin);
+        if (http.User.Identity?.IsAuthenticated != true
+            || !http.User.IsInRole(AppRoles.PlatformAdmin))
+        {
+            return false;
+        }
+
+        var permissions = http.RequestServices.GetService(typeof(IPermissionService)) as IPermissionService;
+        return permissions?.HasPermission(Permissions.Hangfire.Dashboard) == true;
     }
 }

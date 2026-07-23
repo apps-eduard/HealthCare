@@ -1,3 +1,4 @@
+using HealthCare.Api.Authorization;
 using HealthCare.Application.Authorization;
 using HealthCare.Application.Patients;
 using HealthCare.Contracts.Patients;
@@ -21,11 +22,8 @@ public sealed class PatientsController : ControllerBase
         _clinicRegistration = clinicRegistration;
     }
 
-    /// <summary>
-    /// Returns the authenticated patient's own profile using the server-resolved PatientId.
-    /// Client-supplied PatientId values are ignored.
-    /// </summary>
     [Authorize(Policy = AuthorizationPolicies.PatientSelfScope)]
+    [AuthorizePermission(Permissions.Patients.UpdateOwnProfile)]
     [HttpGet("me")]
     [ProducesResponseType(typeof(PatientProfileResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -36,10 +34,8 @@ public sealed class PatientsController : ControllerBase
         return Ok(profile);
     }
 
-    /// <summary>
-    /// Partially updates the authenticated patient's own profile.
-    /// </summary>
     [Authorize(Policy = AuthorizationPolicies.PatientSelfScope)]
+    [AuthorizePermission(Permissions.Patients.UpdateOwnProfile)]
     [HttpPatch("me")]
     [ProducesResponseType(typeof(PatientProfileResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -54,10 +50,8 @@ public sealed class PatientsController : ControllerBase
         return Ok(profile);
     }
 
-    /// <summary>
-    /// Registers the authenticated patient with a clinic using a trusted public clinic code (slug).
-    /// </summary>
     [Authorize(Policy = AuthorizationPolicies.PatientSelfScope)]
+    [AuthorizePermission(Permissions.Clinics.Read)]
     [HttpPost("me/clinics/register")]
     [ProducesResponseType(typeof(ClinicPatientEnrollmentResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -72,10 +66,7 @@ public sealed class PatientsController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Returns a patient profile when the caller is authorized (self, clinic/org staff, or explicit platform bypass).
-    /// </summary>
-    [Authorize(Policy = AuthorizationPolicies.Authenticated)]
+    [AuthorizePermission(Permissions.Patients.Read)]
     [HttpGet("{patientId:guid}")]
     [ProducesResponseType(typeof(PatientProfileResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]

@@ -1,3 +1,4 @@
+using HealthCare.Api.Authorization;
 using HealthCare.Application.Authorization;
 using HealthCare.Application.Patients;
 using HealthCare.Contracts.Patients;
@@ -17,6 +18,7 @@ public sealed class ClinicsController : ControllerBase
         _enrollmentService = enrollmentService;
     }
 
+    [AuthorizePermission(Permissions.Patients.UpdateClinicStatus)]
     [HttpPost("{clinicId:guid}/patients/{patientId:guid}/enroll")]
     [ProducesResponseType(typeof(ClinicPatientEnrollmentResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]

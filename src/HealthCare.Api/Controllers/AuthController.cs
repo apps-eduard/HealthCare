@@ -15,6 +15,7 @@ public sealed class AuthController : ApiControllerBase
     private readonly ICurrentUser _currentUser;
     private readonly ICurrentStaff _currentStaff;
     private readonly ICurrentPatient _currentPatient;
+    private readonly IPermissionService _permissionService;
     private readonly IDevelopmentConfirmationTokenStore _confirmationTokenStore;
     private readonly IHostEnvironment _environment;
 
@@ -24,6 +25,7 @@ public sealed class AuthController : ApiControllerBase
         ICurrentUser currentUser,
         ICurrentStaff currentStaff,
         ICurrentPatient currentPatient,
+        IPermissionService permissionService,
         IDevelopmentConfirmationTokenStore confirmationTokenStore,
         IHostEnvironment environment)
     {
@@ -32,6 +34,7 @@ public sealed class AuthController : ApiControllerBase
         _currentUser = currentUser;
         _currentStaff = currentStaff;
         _currentPatient = currentPatient;
+        _permissionService = permissionService;
         _confirmationTokenStore = confirmationTokenStore;
         _environment = environment;
     }
@@ -154,6 +157,24 @@ public sealed class AuthController : ApiControllerBase
             StaffMemberId = _currentUser.StaffMemberId,
             HasActiveStaffMembership = _currentStaff.HasActiveMembership,
             HasLinkedPatient = _currentPatient.HasLinkedPatient,
+            Permissions = _permissionService.GetCurrentPermissions(),
+        });
+    }
+
+    [Authorize(Policy = AuthorizationPolicies.Authenticated)]
+    [HttpGet("me/permissions")]
+    [ProducesResponseType(typeof(CurrentUserPermissionsResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    public ActionResult<CurrentUserPermissionsResponse> MePermissions()
+    {
+        if (!_currentUser.IsAuthenticated || _currentUser.UserId is null)
+        {
+            throw AuthorizationException.NotAuthenticated();
+        }
+
+        return Ok(new CurrentUserPermissionsResponse
+        {
+            Permissions = _permissionService.GetCurrentPermissions(),
         });
     }
 

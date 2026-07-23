@@ -246,7 +246,23 @@ public sealed class CurrentUserContext : ICurrentUser, ICurrentStaff, ICurrentPa
         _isAuthenticated = true;
         _userId = user.Id;
         _email = user.Email;
-        _roles = principal.FindAll(ClaimTypes.Role).Select(c => c.Value).Distinct(StringComparer.Ordinal).ToArray();
+
+        // Prefer Identity role assignments from the database so revoked roles take effect immediately
+        // (JWT role claims alone are not authoritative for authorization).
+        // Two-step query keeps InMemory and relational providers happy.
+        var roleIds = _dbContext.UserRoles.AsNoTracking()
+            .Where(ur => ur.UserId == userId)
+            .Select(ur => ur.RoleId)
+            .ToList();
+        _roles = roleIds.Count == 0
+            ? Array.Empty<string>()
+            : _dbContext.Roles.AsNoTracking()
+                .Where(r => roleIds.Contains(r.Id))
+                .ToList()
+                .Where(r => !string.IsNullOrWhiteSpace(r.Name))
+                .Select(r => r.Name!)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
 
         // Resolve PatientId only from the server-side Patient↔User linkage.
         // Ignore any client- or claim-supplied patient id unless it matches the DB link.

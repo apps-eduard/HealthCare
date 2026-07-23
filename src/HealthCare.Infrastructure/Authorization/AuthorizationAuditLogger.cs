@@ -1,0 +1,95 @@
+using HealthCare.Application.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
+
+namespace HealthCare.Infrastructure.Authorization;
+
+/// <summary>
+/// Structured authorization audit events. Never logs tokens, passwords, or clinical payloads.
+/// </summary>
+public sealed class AuthorizationAuditLogger : IAuthorizationAuditLogger
+{
+    public const string CorrelationIdItemKey = "CorrelationId";
+
+    private readonly ICurrentUser _currentUser;
+    private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly ILogger<AuthorizationAuditLogger> _logger;
+
+    public AuthorizationAuditLogger(
+        ICurrentUser currentUser,
+        IHttpContextAccessor httpContextAccessor,
+        ILogger<AuthorizationAuditLogger> logger)
+    {
+        _currentUser = currentUser;
+        _httpContextAccessor = httpContextAccessor;
+        _logger = logger;
+    }
+
+    public void PermissionDenied(string permission, string operation, string reasonCode) =>
+        _logger.LogInformation(
+            "Authorization denied. Event=permission_denied UserId={UserId} Permission={Permission} Operation={Operation} OrganizationId={OrganizationId} ClinicId={ClinicId} CorrelationId={CorrelationId} ReasonCode={ReasonCode}",
+            _currentUser.UserId,
+            permission,
+            operation,
+            _currentUser.OrganizationId,
+            _currentUser.ClinicId,
+            CorrelationId(),
+            reasonCode);
+
+    public void CrossTenantDenied(string operation, string reasonCode, Guid? organizationId = null, Guid? clinicId = null) =>
+        _logger.LogInformation(
+            "Authorization denied. Event=cross_tenant_denied UserId={UserId} Operation={Operation} OrganizationId={OrganizationId} ClinicId={ClinicId} CorrelationId={CorrelationId} ReasonCode={ReasonCode}",
+            _currentUser.UserId,
+            operation,
+            organizationId ?? _currentUser.OrganizationId,
+            clinicId ?? _currentUser.ClinicId,
+            CorrelationId(),
+            reasonCode);
+
+    public void ExplicitPlatformBypassUsed(string operation, Guid? organizationId = null, Guid? clinicId = null) =>
+        _logger.LogInformation(
+            "Authorization event. Event=platform_bypass_used UserId={UserId} Operation={Operation} OrganizationId={OrganizationId} ClinicId={ClinicId} CorrelationId={CorrelationId}",
+            _currentUser.UserId,
+            operation,
+            organizationId,
+            clinicId,
+            CorrelationId());
+
+    public void RoleAssignmentDenied(string actorRole, string targetRole, string reasonCode) =>
+        _logger.LogInformation(
+            "Authorization denied. Event=role_assignment_denied UserId={UserId} ActorRole={ActorRole} TargetRole={TargetRole} CorrelationId={CorrelationId} ReasonCode={ReasonCode}",
+            _currentUser.UserId,
+            actorRole,
+            targetRole,
+            CorrelationId(),
+            reasonCode);
+
+    public void InactiveMembershipRejected(string operation) =>
+        _logger.LogInformation(
+            "Authorization denied. Event=inactive_membership UserId={UserId} Operation={Operation} CorrelationId={CorrelationId} ReasonCode={ReasonCode}",
+            _currentUser.UserId,
+            operation,
+            CorrelationId(),
+            Contracts.Identity.AuthorizationErrorCodes.InactiveMembership);
+
+    public void UnknownPermissionRequested(string permission) =>
+        _logger.LogWarning(
+            "Authorization denied. Event=unknown_permission UserId={UserId} Permission={Permission} CorrelationId={CorrelationId} ReasonCode={ReasonCode}",
+            _currentUser.UserId,
+            permission,
+            CorrelationId(),
+            Contracts.Identity.AuthorizationErrorCodes.InvalidPermission);
+
+    private string CorrelationId()
+    {
+        var http = _httpContextAccessor.HttpContext;
+        if (http?.Items.TryGetValue(CorrelationIdItemKey, out var value) == true
+            && value is string s
+            && !string.IsNullOrWhiteSpace(s))
+        {
+            return s;
+        }
+
+        return http?.TraceIdentifier ?? string.Empty;
+    }
+}

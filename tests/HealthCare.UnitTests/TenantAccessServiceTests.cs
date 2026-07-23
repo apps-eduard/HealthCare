@@ -171,7 +171,7 @@ public sealed class TenantAccessServiceTests
         ICurrentUser user,
         ICurrentStaff staff,
         ICurrentPatient patient) =>
-        new(user, staff, patient, NullLogger<TenantAccessService>.Instance);
+        new(user, staff, patient, new NoOpAuthorizationAuditLogger(), NullLogger<TenantAccessService>.Instance);
 }
 
 internal sealed class FakeCurrentUser : ICurrentUser

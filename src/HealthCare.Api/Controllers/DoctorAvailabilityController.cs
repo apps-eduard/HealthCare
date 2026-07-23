@@ -1,3 +1,4 @@
+using HealthCare.Api.Authorization;
 using HealthCare.Application.Appointments;
 using HealthCare.Application.Authorization;
 using HealthCare.Contracts.Appointments;
@@ -24,7 +25,7 @@ public sealed class DoctorAvailabilityController : ControllerBase
         _slots = slots;
     }
 
-    [Authorize(Policy = AuthorizationPolicies.Authenticated)]
+    [AuthorizePermission(Permissions.Availability.Read)]
     [HttpGet("clinics/{clinicCode}/doctors")]
     [ProducesResponseType(typeof(IReadOnlyList<ClinicDoctorResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -36,7 +37,7 @@ public sealed class DoctorAvailabilityController : ControllerBase
         return Ok(result);
     }
 
-    [Authorize(Policy = AuthorizationPolicies.Authenticated)]
+    [AuthorizePermission(Permissions.Availability.Read)]
     [HttpGet("clinics/{clinicCode}/doctors/{staffMemberId:guid}/available-slots")]
     [ProducesResponseType(typeof(IReadOnlyList<AvailableSlotResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -58,6 +59,10 @@ public sealed class DoctorAvailabilityController : ControllerBase
     }
 
     [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    [AuthorizeAnyPermission(
+        Permissions.Availability.ManageSelf,
+        Permissions.Availability.ManageClinic,
+        Permissions.Availability.ManageOrganization)]
     [HttpGet("staff/doctors/{staffMemberId:guid}/availability")]
     [ProducesResponseType(typeof(IReadOnlyList<DoctorAvailabilityResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<DoctorAvailabilityResponse>>> ListAvailability(
@@ -71,6 +76,10 @@ public sealed class DoctorAvailabilityController : ControllerBase
     }
 
     [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    [AuthorizeAnyPermission(
+        Permissions.Availability.ManageSelf,
+        Permissions.Availability.ManageClinic,
+        Permissions.Availability.ManageOrganization)]
     [HttpPost("staff/doctors/{staffMemberId:guid}/availability")]
     [ProducesResponseType(typeof(DoctorAvailabilityResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -89,6 +98,10 @@ public sealed class DoctorAvailabilityController : ControllerBase
     }
 
     [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    [AuthorizeAnyPermission(
+        Permissions.Availability.ManageSelf,
+        Permissions.Availability.ManageClinic,
+        Permissions.Availability.ManageOrganization)]
     [HttpPatch("staff/doctors/{staffMemberId:guid}/availability/{availabilityId:guid}")]
     [ProducesResponseType(typeof(DoctorAvailabilityResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
@@ -110,6 +123,10 @@ public sealed class DoctorAvailabilityController : ControllerBase
     }
 
     [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    [AuthorizeAnyPermission(
+        Permissions.Availability.ManageSelf,
+        Permissions.Availability.ManageClinic,
+        Permissions.Availability.ManageOrganization)]
     [HttpDelete("staff/doctors/{staffMemberId:guid}/availability/{availabilityId:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
@@ -131,6 +148,10 @@ public sealed class DoctorAvailabilityController : ControllerBase
     }
 
     [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    [AuthorizeAnyPermission(
+        Permissions.Availability.ManageSelf,
+        Permissions.Availability.ManageClinic,
+        Permissions.Availability.ManageOrganization)]
     [HttpPost("staff/doctors/{staffMemberId:guid}/availability-exceptions")]
     [ProducesResponseType(typeof(DoctorAvailabilityExceptionResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -147,6 +168,10 @@ public sealed class DoctorAvailabilityController : ControllerBase
     }
 
     [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    [AuthorizeAnyPermission(
+        Permissions.Availability.ManageSelf,
+        Permissions.Availability.ManageClinic,
+        Permissions.Availability.ManageOrganization)]
     [HttpDelete("staff/doctors/{staffMemberId:guid}/availability-exceptions/{exceptionId:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]

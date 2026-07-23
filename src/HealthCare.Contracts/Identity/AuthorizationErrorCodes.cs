@@ -15,4 +15,11 @@ public static class AuthorizationErrorCodes
     public const string MissingPatientLinkage = "authz.missing_patient_linkage";
     public const string PatientSelfScopeDenied = "authz.patient_self_scope_denied";
     public const string Forbidden = "authz.forbidden";
+
+    public const string PermissionRequired = "authorization.permission_required";
+    public const string PermissionDenied = "authorization.permission_denied";
+    public const string InvalidPermission = "authorization.invalid_permission";
+    public const string InactiveMembership = "authorization.inactive_membership";
+    public const string RoleAssignmentDenied = "authorization.role_assignment_denied";
+    public const string ExplicitBypassRequired = "authorization.explicit_bypass_required";
 }

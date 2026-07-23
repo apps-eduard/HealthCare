@@ -9,17 +9,20 @@ public sealed class TenantAccessService : ITenantAccessService
     private readonly ICurrentUser _currentUser;
     private readonly ICurrentStaff _currentStaff;
     private readonly ICurrentPatient _currentPatient;
+    private readonly IAuthorizationAuditLogger _audit;
     private readonly ILogger<TenantAccessService> _logger;
 
     public TenantAccessService(
         ICurrentUser currentUser,
         ICurrentStaff currentStaff,
         ICurrentPatient currentPatient,
+        IAuthorizationAuditLogger audit,
         ILogger<TenantAccessService> logger)
     {
         _currentUser = currentUser;
         _currentStaff = currentStaff;
         _currentPatient = currentPatient;
+        _audit = audit;
         _logger = logger;
     }
 
@@ -32,10 +35,7 @@ public sealed class TenantAccessService : ITenantAccessService
 
         if (bypass == PlatformAdminBypass.Explicit && _currentUser.IsInRole(AppRoles.PlatformAdmin))
         {
-            _logger.LogInformation(
-                "PLATFORM_ADMIN explicit organization bypass. UserId={UserId} OrganizationId={OrganizationId}",
-                _currentUser.UserId,
-                organizationId);
+            _audit.ExplicitPlatformBypassUsed("organization_access", organizationId, null);
             return true;
         }
 
@@ -56,10 +56,7 @@ public sealed class TenantAccessService : ITenantAccessService
 
         if (bypass == PlatformAdminBypass.Explicit && _currentUser.IsInRole(AppRoles.PlatformAdmin))
         {
-            _logger.LogInformation(
-                "PLATFORM_ADMIN explicit clinic bypass. UserId={UserId} ClinicId={ClinicId}",
-                _currentUser.UserId,
-                clinicId);
+            _audit.ExplicitPlatformBypassUsed("clinic_access", null, clinicId);
             return true;
         }
 
@@ -80,10 +77,7 @@ public sealed class TenantAccessService : ITenantAccessService
 
         if (bypass == PlatformAdminBypass.Explicit && _currentUser.IsInRole(AppRoles.PlatformAdmin))
         {
-            _logger.LogInformation(
-                "PLATFORM_ADMIN explicit patient bypass. UserId={UserId} PatientId={PatientId}",
-                _currentUser.UserId,
-                patientId);
+            _audit.ExplicitPlatformBypassUsed("patient_access", null, null);
             return true;
         }
 

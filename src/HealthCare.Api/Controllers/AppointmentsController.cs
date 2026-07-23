@@ -1,3 +1,4 @@
+using HealthCare.Api.Authorization;
 using HealthCare.Application.Appointments;
 using HealthCare.Application.Authorization;
 using HealthCare.Contracts.Appointments;
@@ -19,6 +20,7 @@ public sealed class AppointmentsController : ControllerBase
     }
 
     [Authorize(Policy = AuthorizationPolicies.PatientSelfScope)]
+    [AuthorizePermission(Permissions.Appointments.Create)]
     [HttpPost("patients/me/appointments")]
     [ProducesResponseType(typeof(AppointmentResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -34,6 +36,7 @@ public sealed class AppointmentsController : ControllerBase
     }
 
     [Authorize(Policy = AuthorizationPolicies.PatientSelfScope)]
+    [AuthorizePermission(Permissions.Appointments.Read)]
     [HttpGet("patients/me/appointments")]
     [ProducesResponseType(typeof(PagedResponse<AppointmentResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<PagedResponse<AppointmentResponse>>> ListForPatient(
@@ -45,6 +48,7 @@ public sealed class AppointmentsController : ControllerBase
     }
 
     [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    [AuthorizePermission(Permissions.Appointments.Create)]
     [HttpPost("staff/appointments")]
     [ProducesResponseType(typeof(AppointmentResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -62,6 +66,7 @@ public sealed class AppointmentsController : ControllerBase
     }
 
     [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    [AuthorizePermission(Permissions.Appointments.Read)]
     [HttpGet("staff/appointments")]
     [ProducesResponseType(typeof(PagedResponse<AppointmentResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<PagedResponse<AppointmentResponse>>> ListForStaff(
@@ -74,7 +79,7 @@ public sealed class AppointmentsController : ControllerBase
         return Ok(result);
     }
 
-    [Authorize(Policy = AuthorizationPolicies.Authenticated)]
+    [AuthorizePermission(Permissions.Appointments.Read)]
     [HttpGet("appointments/{appointmentId:guid}")]
     [ProducesResponseType(typeof(AppointmentResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -89,6 +94,7 @@ public sealed class AppointmentsController : ControllerBase
     }
 
     [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    [AuthorizePermission(Permissions.Appointments.Confirm)]
     [HttpPost("staff/appointments/{appointmentId:guid}/confirm")]
     public async Task<ActionResult<AppointmentResponse>> Confirm(
         Guid appointmentId,
@@ -100,7 +106,7 @@ public sealed class AppointmentsController : ControllerBase
         return Ok(await _appointments.ConfirmAsync(appointmentId, request, bypass, cancellationToken));
     }
 
-    [Authorize(Policy = AuthorizationPolicies.Authenticated)]
+    [AuthorizePermission(Permissions.Appointments.Cancel)]
     [HttpPost("appointments/{appointmentId:guid}/cancel")]
     public async Task<ActionResult<AppointmentResponse>> Cancel(
         Guid appointmentId,
@@ -112,7 +118,7 @@ public sealed class AppointmentsController : ControllerBase
         return Ok(await _appointments.CancelAsync(appointmentId, request, bypass, cancellationToken));
     }
 
-    [Authorize(Policy = AuthorizationPolicies.Authenticated)]
+    [AuthorizePermission(Permissions.Appointments.Reschedule)]
     [HttpPost("appointments/{appointmentId:guid}/reschedule")]
     [ProducesResponseType(typeof(AppointmentResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -131,6 +137,7 @@ public sealed class AppointmentsController : ControllerBase
     }
 
     [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    [AuthorizePermission(Permissions.Appointments.CheckIn)]
     [HttpPost("staff/appointments/{appointmentId:guid}/check-in")]
     public async Task<ActionResult<AppointmentResponse>> CheckIn(
         Guid appointmentId,
@@ -143,6 +150,7 @@ public sealed class AppointmentsController : ControllerBase
     }
 
     [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    [AuthorizePermission(Permissions.Appointments.Complete)]
     [HttpPost("staff/appointments/{appointmentId:guid}/complete")]
     public async Task<ActionResult<AppointmentResponse>> Complete(
         Guid appointmentId,
@@ -155,6 +163,7 @@ public sealed class AppointmentsController : ControllerBase
     }
 
     [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    [AuthorizePermission(Permissions.Appointments.NoShow)]
     [HttpPost("staff/appointments/{appointmentId:guid}/no-show")]
     public async Task<ActionResult<AppointmentResponse>> NoShow(
         Guid appointmentId,

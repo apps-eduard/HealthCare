@@ -2,10 +2,10 @@
 
 ## Progress overview
 
-**Overall completion: 52%**
+**Overall completion: 53%**
 
 ```text
-[████████████████░░░░░░░░░░░░░░░░]  52%
+[████████████████░░░░░░░░░░░░░░░░]  53%
 ```
 
 | Metric | Value |
@@ -15,7 +15,7 @@
 | Partial | 6 (Phases 2, 3, 4, 6, 7, 10) |
 | In progress | 0 |
 | Not started | 5 |
-| Weighted score | (3×1.0) + (0.7 + 0.75 + 0.5 + 0.5 + 0.85 + 0.85) = 7.15 / 14 ≈ **52%** |
+| Weighted score | (3×1.0) + (0.7 + 0.9 + 0.5 + 0.5 + 0.85 + 0.85) = 7.3 / 14 ≈ **53%** |
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
@@ -29,7 +29,7 @@
 | 1 | Solution foundation | Complete | `██████████` 100% |
 | 1b | Identity + core entities foundation *(sub-step)* | Complete | `██████████` 100% |
 | 2 | Identity and authentication (JWT / refresh / endpoints) | Partial | `███████░░░` 70% |
-| 3 | Roles and authorization foundation | Partial | `████████░░` 75% |
+| 3 | Roles and authorization foundation | Partial | `█████████░` 90% |
 | 4 | Organizations and clinics | Partial | `█████░░░░░` 50% |
 | 5 | Patients and clinic-patient registration | Complete | `██████████` 100% |
 | 6 | Staff and doctors | Partial | `█████░░░░░` 50% |
@@ -239,26 +239,36 @@ Authoritative design docs:
 
 ## Phase 3 — Roles and authorization foundation
 
-**Status:** Partial (~75%)  
+**Status:** Partial (~90% — fine-grained permission catalog added)  
 **Updated:** 2026-07-23
 
 ### Already done
 
 - Role definitions, constants, and idempotent seeding
 - `ICurrentUser`, `ICurrentStaff`, `ICurrentPatient` (request-scoped)
-- Trusted scope resolution from JWT + DB staff membership (claims never trusted alone)
-- `ITenantAccessService` with org/clinic/patient guards and explicit `PLATFORM_ADMIN` bypass
+- Trusted scope resolution from JWT principal + **DB Identity roles** + DB staff membership (claims never trusted alone)
+- `ITenantAccessService` with org/clinic/patient guards and explicit `PLATFORM_ADMIN` bypass (audited)
 - Authorization policy constants and handlers (`Authenticated`, `PlatformAdmin`, `StaffUser`, `OrganizationScoped`, `ClinicScoped`, `PatientUser`, `PatientSelfScope`)
-- `GET /api/v1/auth/me`
+- **Fine-grained permission catalog** (`Permissions`) + **role-permission matrix** (`RolePermissionMatrix`) — code-defined, no migration
+- `IPermissionService` + dynamic `perm:` policy provider; controllers use `[AuthorizePermission]` / `[AuthorizeAnyPermission]`
+- `GET /api/v1/auth/me` includes `Permissions`; `GET /api/v1/auth/me/permissions`
+- `IRoleAssignmentAuthorizationService` (rules only; no staff-management API yet)
+- Hangfire dashboard requires PLATFORM_ADMIN **and** `hangfire.dashboard`
 - Isolation probe: `GET /api/v1/scope-probe/{organization|clinic|patient}`
-- Unit + architecture tests; manual API verification
+- Docs: [authorization-matrix.md](./authorization-matrix.md)
 
 ### Remaining
 
-- Broader permission constants catalog (fine-grained permissions beyond roles)
-- Patient linkage when Patient entity exists (Phase 5) — **done in Phase 5 foundation**
-- Docker/Testcontainers integration suite for current-user endpoints (blocked: Docker not ready)
-- EF global query filters deferred; Patient access enforced in services via ClinicPatient
+- Staff-management CRUD / role-assignment HTTP APIs
+- Docker/Testcontainers integration suite when Docker is available (suite retained)
+- EF global query filters deferred; tenant access enforced in services
+
+### Verification (permission catalog)
+- Build: succeeded
+- Unit tests: **213 passed** (permission matrix + role-assignment + existing)
+- Architecture tests: **17 passed**
+- Integration tests: Docker unavailable; suite retained (`PermissionAuthorizationEndpointTests`)
+- Manual: `/health` **200**; `/auth/me` returns permissions; PLATFORM_ADMIN has `hangfire.dashboard`; DOCTOR has `appointments.complete` not `availability.manage_clinic`; PATIENT has create not search; staff search PATIENT **403**, anonymous **401**; platform without bypass still denied cross-clinic probe
 
 ---
 
@@ -750,6 +760,7 @@ Authoritative design docs:
 | 2026-07-23 | 7 | Appointment reschedule workflow + history + Upcoming replacement; overall ~49% |
 | 2026-07-23 | 10 | Daily clinic appointment summary Hangfire dispatcher + runs; overall ~51% |
 | 2026-07-23 | 10 | Configurable Hangfire worker hosting (non-Dev enablement); overall ~52% |
+| 2026-07-23 | 3 | Fine-grained permission catalog + authorization matrix; overall ~53% |
 
 ---
 

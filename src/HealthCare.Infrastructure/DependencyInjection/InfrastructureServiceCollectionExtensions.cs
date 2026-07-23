@@ -101,12 +101,19 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<ICurrentStaff>(sp => sp.GetRequiredService<CurrentUserContext>());
         services.AddScoped<ICurrentPatient>(sp => sp.GetRequiredService<CurrentUserContext>());
         services.AddScoped<ITenantAccessService, TenantAccessService>();
+        services.AddScoped<IAuthorizationAuditLogger, AuthorizationAuditLogger>();
+        services.AddScoped<IPermissionService, PermissionService>();
+        services.AddScoped<IRoleAssignmentAuthorizationService, RoleAssignmentAuthorizationService>();
 
+        services.AddSingleton<IAuthorizationPolicyProvider, PermissionAuthorizationPolicyProvider>();
         services.AddScoped<IAuthorizationHandler, StaffUserHandler>();
         services.AddScoped<IAuthorizationHandler, OrganizationScopedHandler>();
         services.AddScoped<IAuthorizationHandler, ClinicScopedHandler>();
         services.AddScoped<IAuthorizationHandler, PatientUserHandler>();
         services.AddScoped<IAuthorizationHandler, PatientSelfScopeHandler>();
+        services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
+        services.AddScoped<IAuthorizationHandler, AnyPermissionAuthorizationHandler>();
+        services.AddScoped<IAuthorizationHandler, UnknownPermissionAuthorizationHandler>();
 
         services.AddAuthorization(options =>
         {

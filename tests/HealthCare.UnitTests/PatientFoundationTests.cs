@@ -461,6 +461,7 @@ internal sealed class PatientTestHarness : IAsyncDisposable
             user,
             staff,
             patient,
+            new NoOpAuthorizationAuditLogger(),
             NullLogger<Infrastructure.Authorization.TenantAccessService>.Instance);
         return new PatientService(
             Db,

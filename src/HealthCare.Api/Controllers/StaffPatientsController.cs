@@ -1,3 +1,4 @@
+using HealthCare.Api.Authorization;
 using HealthCare.Application.Authorization;
 using HealthCare.Application.Patients;
 using HealthCare.Contracts.Common;
@@ -22,6 +23,7 @@ public sealed class StaffPatientsController : ControllerBase
         _staffPatientService = staffPatientService;
     }
 
+    [AuthorizePermission(Permissions.Patients.Search)]
     [HttpGet]
     [ProducesResponseType(typeof(PagedResponse<StaffPatientSummaryResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -37,6 +39,7 @@ public sealed class StaffPatientsController : ControllerBase
         return Ok(result);
     }
 
+    [AuthorizePermission(Permissions.Patients.Read)]
     [HttpGet("{patientId:guid}")]
     [ProducesResponseType(typeof(StaffPatientDetailResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -51,6 +54,7 @@ public sealed class StaffPatientsController : ControllerBase
         return Ok(result);
     }
 
+    [AuthorizePermission(Permissions.Patients.UpdateClinicStatus)]
     [HttpPatch("{patientId:guid}/clinic-profile")]
     [ProducesResponseType(typeof(StaffPatientDetailResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]

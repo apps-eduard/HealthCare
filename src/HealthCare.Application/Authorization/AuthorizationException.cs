@@ -47,4 +47,33 @@ public sealed class AuthorizationException : Exception
 
     public static AuthorizationException Forbidden() =>
         new(AuthorizationErrorCodes.Forbidden, "Access is denied.");
+
+    public static AuthorizationException PermissionRequired(string? permission = null) =>
+        new(
+            AuthorizationErrorCodes.PermissionRequired,
+            string.IsNullOrWhiteSpace(permission)
+                ? "A required permission is missing."
+                : "A required permission is missing.",
+            403);
+
+    public static AuthorizationException PermissionDenied(string? permission = null) =>
+        new(
+            AuthorizationErrorCodes.PermissionDenied,
+            "You do not have permission to perform this operation.",
+            403);
+
+    public static AuthorizationException InvalidPermission() =>
+        new(AuthorizationErrorCodes.InvalidPermission, "The requested permission is invalid.", 403);
+
+    public static AuthorizationException InactiveMembership() =>
+        new(AuthorizationErrorCodes.InactiveMembership, "The membership required for this operation is inactive.", 403);
+
+    public static AuthorizationException RoleAssignmentDenied() =>
+        new(AuthorizationErrorCodes.RoleAssignmentDenied, "Role assignment is not permitted.", 403);
+
+    public static AuthorizationException ExplicitBypassRequired() =>
+        new(
+            AuthorizationErrorCodes.ExplicitBypassRequired,
+            "Explicit platform-admin bypass is required for this cross-tenant operation.",
+            403);
 }

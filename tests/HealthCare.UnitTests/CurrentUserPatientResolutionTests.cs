@@ -5,6 +5,7 @@ using HealthCare.Domain.Patients;
 using HealthCare.Infrastructure.Authorization;
 using HealthCare.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Security.Claims;
@@ -19,6 +20,7 @@ public sealed class CurrentUserPatientResolutionTests
         var userId = Guid.NewGuid();
         var linkedPatientId = Guid.NewGuid();
         var claimPatientId = Guid.NewGuid();
+        var roleId = Guid.NewGuid();
 
         var options = new DbContextOptionsBuilder<HealthCareDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
@@ -35,6 +37,13 @@ public sealed class CurrentUserPatientResolutionTests
             IsActive = true,
             SecurityStamp = Guid.NewGuid().ToString(),
         });
+        db.Roles.Add(new IdentityRole<Guid>
+        {
+            Id = roleId,
+            Name = AppRoles.Patient,
+            NormalizedName = AppRoles.Patient.ToUpperInvariant(),
+        });
+        db.UserRoles.Add(new IdentityUserRole<Guid> { UserId = userId, RoleId = roleId });
         db.Patients.Add(new Patient
         {
             Id = linkedPatientId,

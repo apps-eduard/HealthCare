@@ -65,6 +65,9 @@ dotnet run --project src/HealthCare.Api --launch-profile http
 - Health: http://localhost:5080/health
 - Readiness: http://localhost:5080/health/ready
 - Hangfire dashboard (Development, PLATFORM_ADMIN): http://localhost:5080/hangfire
+- Current user / permissions: `GET /api/v1/auth/me`, `GET /api/v1/auth/me/permissions`
+
+Authorization uses a code-defined permission catalog (`Docs/authorization-matrix.md`). Controllers declare `[AuthorizePermission]`; tenant scope remains enforced in services.
 
 ### 5. Build and test
 

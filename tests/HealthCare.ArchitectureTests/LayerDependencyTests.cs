@@ -282,6 +282,47 @@ public sealed class LayerDependencyTests
         typeof(ITenantAccessService).Namespace.Should().StartWith("HealthCare.Application");
         typeof(ICurrentUser).Namespace.Should().StartWith("HealthCare.Application");
         typeof(AuthorizationPolicies).Namespace.Should().StartWith("HealthCare.Application");
+        typeof(IPermissionService).Namespace.Should().StartWith("HealthCare.Application");
+        typeof(Permissions).Namespace.Should().StartWith("HealthCare.Application");
+        typeof(RolePermissionMatrix).Namespace.Should().StartWith("HealthCare.Application");
+        typeof(IRoleAssignmentAuthorizationService).Namespace.Should().StartWith("HealthCare.Application");
+    }
+
+    [Fact]
+    public void Permission_Resolution_Does_Not_Depend_On_HttpContext_In_Application()
+    {
+        var result = Types.InAssembly(typeof(ApplicationAssemblyMarker).Assembly)
+            .That()
+            .HaveNameMatching("Permission|RoleAssignment")
+            .ShouldNot()
+            .HaveDependencyOn("Microsoft.AspNetCore.Http")
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue(Because(result));
+
+        typeof(Permissions).Assembly.GetName().Name.Should().Be("HealthCare.Application");
+        typeof(IPermissionService).Assembly.GetName().Name.Should().Be("HealthCare.Application");
+    }
+
+    [Fact]
+    public void Controllers_Should_Not_Contain_Scattered_AppRoles_Literals()
+    {
+        var controllers = typeof(Program).Assembly.GetTypes()
+            .Where(t => t.Namespace == "HealthCare.Api.Controllers" && t.Name.EndsWith("Controller", StringComparison.Ordinal));
+
+        foreach (var controller in controllers)
+        {
+            var sourceHints = controller.GetMethods()
+                .SelectMany(m => m.GetCustomAttributes(false))
+                .Select(a => a.GetType().Name)
+                .ToArray();
+
+            // Controllers authorize via policies / permission attributes, not RequireRole(AppRoles.*) attributes.
+            sourceHints.Should().NotContain("AuthorizeRolesAttribute");
+        }
+
+        // Hangfire dashboard filter may still check PLATFORM_ADMIN + hangfire.dashboard permission in Infrastructure.
+        typeof(IPermissionService).Namespace.Should().StartWith("HealthCare.Application");
     }
 
     private static string Because(TestResult result)

@@ -229,6 +229,17 @@ The API must never trust these values simply because the client provided them:
 
 Resolve scope from the authenticated identity and server-side records.
 
+### 6.1a Fine-grained permissions (MVP)
+
+Operations authorize through the code-defined catalog in `Permissions` / `RolePermissionMatrix`
+(see [authorization-matrix.md](./authorization-matrix.md)). Permission grants capability only;
+tenant isolation, patient self-scope, and explicit `PLATFORM_ADMIN` bypass remain mandatory.
+
+- Never trust client-supplied permission claims.
+- Resolve effective roles from DB Identity roles + active staff membership + patient linkage.
+- Unknown permissions fail closed.
+- Custom DB-editable role/permission editing is deferred (no permission tables in MVP).
+
 ### 6.2 Clinic staff rule
 
 For clinic-owned data, access is allowed only when:

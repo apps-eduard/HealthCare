@@ -19,4 +19,9 @@ public sealed class CurrentUserResponse
     public bool HasActiveStaffMembership { get; init; }
 
     public bool HasLinkedPatient { get; init; }
+
+    /// <summary>
+    /// Informational permission names for UI. The API enforces permissions server-side on every request.
+    /// </summary>
+    public required IReadOnlyList<string> Permissions { get; init; }
 }

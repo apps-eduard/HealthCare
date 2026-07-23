@@ -1,3 +1,4 @@
+using HealthCare.Api.Authorization;
 using HealthCare.Application.Appointments;
 using HealthCare.Application.Authorization;
 using HealthCare.Contracts.Appointments;
@@ -17,6 +18,7 @@ public sealed class ClinicAppointmentSummariesController : ControllerBase
         _summaries = summaries;
     }
 
+    [AuthorizePermission(Permissions.Summaries.Read)]
     [HttpGet("current/appointment-summary")]
     [ProducesResponseType(typeof(ClinicAppointmentSummaryResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -33,6 +35,7 @@ public sealed class ClinicAppointmentSummariesController : ControllerBase
         return Ok(result);
     }
 
+    [AuthorizePermission(Permissions.Summaries.Retry)]
     [HttpPost("{clinicId:guid}/appointment-summary/{date}/retry")]
     [ProducesResponseType(typeof(ClinicAppointmentSummaryRunResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]

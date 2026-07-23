@@ -1,3 +1,4 @@
+using HealthCare.Api.Authorization;
 using HealthCare.Application.Appointments;
 using HealthCare.Application.Authorization;
 using HealthCare.Contracts.Appointments;
@@ -17,6 +18,7 @@ public sealed class AppointmentRemindersController : ControllerBase
         _reminders = reminders;
     }
 
+    [AuthorizePermission(Permissions.Reminders.Read)]
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<AppointmentReminderResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -32,6 +34,7 @@ public sealed class AppointmentRemindersController : ControllerBase
         return Ok(result);
     }
 
+    [AuthorizePermission(Permissions.Reminders.Retry)]
     [HttpPost("retry")]
     [ProducesResponseType(typeof(AppointmentReminderResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]

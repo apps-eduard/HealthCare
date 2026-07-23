@@ -376,6 +376,7 @@ internal sealed class RegistrationTestHarness : IAsyncDisposable
             user,
             staff,
             new FakeCurrentPatient(),
+            new NoOpAuthorizationAuditLogger(),
             NullLogger<Infrastructure.Authorization.TenantAccessService>.Instance);
         var numbers = new LocalPatientNumberGenerator(Db, NullLogger<LocalPatientNumberGenerator>.Instance);
         return new ClinicEnrollmentService(
