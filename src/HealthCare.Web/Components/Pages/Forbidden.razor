@@ -1,4 +1,5 @@
 @page "/forbidden"
+@attribute [Authorize]
 
 <PageTitle>Access denied</PageTitle>
 
@@ -7,5 +8,32 @@
     <MudText Typo="Typo.body1" Class="mb-4">
         You do not have permission to view this page.
     </MudText>
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/dashboard">Back to dashboard</MudButton>
+    @if (Permissions.IsPatientOnly)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-4">
+            Patient accounts cannot use the staff application.
+        </MudAlert>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SignOutAsync">Sign out</MudButton>
+    }
+    else
+    {
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/dashboard">Back to dashboard</MudButton>
+    }
 </MudPaper>
+
+@code {
+    [Inject]
+    private IPermissionState Permissions { get; set; } = default!;
+
+    [Inject]
+    private StaffAuthenticationStateProvider AuthState { get; set; } = default!;
+
+    [Inject]
+    private NavigationManager Navigation { get; set; } = default!;
+
+    private async Task SignOutAsync()
+    {
+        await AuthState.MarkLoggedOutAsync(callRemoteLogout: true);
+        Navigation.NavigateTo("/login", forceLoad: true);
+    }
+}

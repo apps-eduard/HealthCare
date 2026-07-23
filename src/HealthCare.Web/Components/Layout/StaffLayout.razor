@@ -39,6 +39,7 @@
             <MudAlert Severity="Severity.Error" Class="mb-4">
                 Patient accounts cannot use the staff application.
             </MudAlert>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/forbidden">View access details</MudButton>
         }
         else
         {
@@ -81,6 +82,6 @@
             Snackbar.Add("Signed out locally.", Severity.Info);
         }
 
-        Navigation.NavigateTo("/login", forceLoad: false);
+        Navigation.NavigateTo("/login", forceLoad: true);
     }
 }

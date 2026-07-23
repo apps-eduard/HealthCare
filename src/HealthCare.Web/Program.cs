@@ -2,6 +2,7 @@ using HealthCare.Web.Auth;
 using HealthCare.Web.Components;
 using HealthCare.Web.Configuration;
 using HealthCare.Web.Services;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Components.Authorization;
 using MudBlazor;
 using MudBlazor.Services;
@@ -13,10 +14,42 @@ builder.Services.Configure<ApiOptions>(builder.Configuration.GetSection(ApiOptio
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddCascadingAuthenticationState();
-builder.Services.AddAuthorizationCore();
+
+builder.Services
+    .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.Cookie.Name = "HealthCare.Staff.Auth";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+            ? CookieSecurePolicy.SameAsRequest
+            : CookieSecurePolicy.Always;
+        options.LoginPath = "/login";
+        options.AccessDeniedPath = "/forbidden";
+        options.ReturnUrlParameter = "returnUrl";
+        options.SlidingExpiration = true;
+        options.ExpireTimeSpan = TimeSpan.FromHours(8);
+        options.Events.OnRedirectToLogin = context =>
+        {
+            // Staff Web is HTML-only; always challenge to login with a safe local return URL.
+            var returnUrl = context.Request.Path + context.Request.QueryString;
+            context.Response.Redirect(SafeReturnUrl.BuildLoginUrl(returnUrl));
+            return Task.CompletedTask;
+        };
+        options.Events.OnRedirectToAccessDenied = context =>
+        {
+            context.Response.Redirect("/forbidden");
+            return Task.CompletedTask;
+        };
+    });
+
+builder.Services.AddAuthorization();
 builder.Services.AddScoped<IApiTokenStore, ProtectedSessionApiTokenStore>();
 builder.Services.AddScoped<IPermissionState, PermissionState>();
+builder.Services.AddScoped<IStaffWebAuthCookie, StaffWebAuthCookie>();
 builder.Services.AddScoped<StaffAuthenticationStateProvider>();
 builder.Services.AddScoped<AuthenticationStateProvider>(sp =>
     sp.GetRequiredService<StaffAuthenticationStateProvider>());
@@ -50,6 +83,8 @@ if (!app.Environment.IsDevelopment())
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseAntiforgery();
 
 app.MapStaticAssets();

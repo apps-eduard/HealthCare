@@ -82,8 +82,8 @@ dotnet run --project src/HealthCare.Web --launch-profile http
 - Sign in with a staff account (for example `clinicadmin@healthcare.local`)
 - Staff clinic filter/create uses the clinic directory API (`/api/v1/staff-management/clinics`) via `ClinicPicker` — not free-text Clinic IDs
 - Appointments: `/appointments` (queue) and `/appointments/calendar` (day/week). Uses `appointments.*` / `availability.read` / `patients.search` permissions from `/auth/me`. Create flow uses `PatientPicker` + clinic doctors + available slots. Times display in the clinic `TimeZoneId` (API UTC). Mutations send `ExpectedVersion`.
-
-MVP token storage uses circuit memory plus ASP.NET Core `ProtectedSessionStorage` (not HttpOnly cookies). Prefer a BFF cookie pattern before production hardening.
+- Auth: anonymous requests to protected pages challenge to `/login?returnUrl=...` (no 500). Staff Web uses an HttpOnly session cookie for host authentication (minimal claims; no API tokens). API access/refresh tokens remain in `ProtectedSessionStorage` (MVP). Prefer a full BFF cookie session before production hardening.
+- Return URLs are validated as local paths only (`SafeReturnUrl`); external/`//` URLs fall back to `/dashboard`.
 
 ### 6. Build and test
 

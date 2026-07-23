@@ -7,6 +7,7 @@
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ILogger<Login> Logger
 
 <PageTitle>Staff sign in</PageTitle>
 
@@ -63,9 +64,20 @@
     protected override async Task OnInitializedAsync()
     {
         var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        if (state.User.Identity?.IsAuthenticated == true && Permissions.IsStaffUser && !Permissions.IsPatientOnly)
+        if (state.User.Identity?.IsAuthenticated != true)
         {
-            Navigation.NavigateTo(GetSafeReturnUrl(), forceLoad: false);
+            return;
+        }
+
+        if (Permissions.IsPatientOnly)
+        {
+            Navigation.NavigateTo("/forbidden", forceLoad: false);
+            return;
+        }
+
+        if (Permissions.IsStaffUser)
+        {
+            Navigation.NavigateTo(SafeReturnUrl.Resolve(ReturnUrl), forceLoad: false);
         }
     }
 
@@ -84,14 +96,15 @@
             await AuthState.SignInAsync(tokens);
             _model.Password = string.Empty;
 
+            // PATIENT accounts may authenticate, but staff pages remain forbidden.
             if (Permissions.IsPatientOnly || !Permissions.IsStaffUser)
             {
-                await AuthState.MarkLoggedOutAsync(callRemoteLogout: true);
-                _error = "This application is for staff accounts only.";
+                Logger.LogInformation("Non-staff account signed in; redirecting to forbidden.");
+                Navigation.NavigateTo("/forbidden", forceLoad: false);
                 return;
             }
 
-            Navigation.NavigateTo(GetSafeReturnUrl(), forceLoad: false);
+            Navigation.NavigateTo(SafeReturnUrl.Resolve(ReturnUrl), forceLoad: false);
         }
         catch (ApiProblemException ex)
         {
@@ -112,27 +125,6 @@
         {
             _busy = false;
         }
-    }
-
-    private string GetSafeReturnUrl()
-    {
-        if (string.IsNullOrWhiteSpace(ReturnUrl))
-        {
-            return "/dashboard";
-        }
-
-        var decoded = Uri.UnescapeDataString(ReturnUrl);
-        if (!decoded.StartsWith('/') || decoded.StartsWith("//", StringComparison.Ordinal) || decoded.Contains("://", StringComparison.Ordinal))
-        {
-            return "/dashboard";
-        }
-
-        if (decoded.StartsWith("/login", StringComparison.OrdinalIgnoreCase))
-        {
-            return "/dashboard";
-        }
-
-        return decoded;
     }
 
     private static string MapLoginError(ApiProblemException ex) =>

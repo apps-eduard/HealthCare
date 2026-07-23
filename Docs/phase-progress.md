@@ -548,6 +548,7 @@ Authoritative design docs:
 - Staff login (`/login`) against `POST /api/v1/auth/login`
 - Token handling via `IApiTokenStore` (circuit memory + `ProtectedSessionStorage`) and refresh via `AuthDelegatingHandler`
 - Custom `StaffAuthenticationStateProvider` + `IPermissionState` from `/api/v1/auth/me`
+- **Anonymous protected-route fix:** Cookie authentication scheme (`HealthCare.Staff.Auth`) registers `IAuthenticationService` with default authenticate/challenge/forbid schemes; `UseAuthentication`/`UseAuthorization` ordered correctly. Anonymous GET to `/appointments` etc. challenges to `/login?returnUrl=...` (no HTTP 500). Cookie is HttpOnly, SameSite=Lax, Secure outside Development, holds minimal claims only (never access/refresh tokens). API bearer tokens remain in ProtectedSessionStorage. `SafeReturnUrl` rejects absolute/protocol-relative/open redirects. `RedirectToLogin` waits for confirmed anonymous state. PATIENT may authenticate but sees forbidden UI (not login loop). Logout/refresh-failure clear tokens, permissions, and cookie.
 - Authenticated MudBlazor shell (app bar, drawer, logout)
 - Dashboard (`/` / `/dashboard`) with session context and permission-aware links
 - Staff management page (`/staff`): server-side search/filter/pagination, detail, create, activate/deactivate, role assign
@@ -576,13 +577,13 @@ Authoritative design docs:
 ### Remaining
 
 - Patient directory screens, notes, settings, audit viewer
-- HttpOnly BFF cookie auth (replace ProtectedSessionStorage MVP)
+- Full BFF pattern (HttpOnly cookie session that replaces browser token storage)
 - Drag-and-drop calendar reschedule / SignalR realtime (explicitly out of this slice)
 - Broader bUnit component coverage (prefer support/view-model tests while bUnit restore is flaky)
 
 ### Known limitations
 
-- Refresh tokens stored in ProtectedSessionStorage (encrypted browser session storage), not HttpOnly cookies
+- API access/refresh tokens still stored in ProtectedSessionStorage (encrypted browser session storage). The new staff Web cookie authenticates the Blazor host only and does **not** replace API bearer auth.
 - PLATFORM_ADMIN clinic picker still needs an OrganizationId scope field (no org directory UI yet); calendar requires explicit clinic selection
 - List API has no free-text search parameter (queue filters by date/status/doctor/clinic only)
 - Reason for visit / patient notes are not shown in staff appointment UI

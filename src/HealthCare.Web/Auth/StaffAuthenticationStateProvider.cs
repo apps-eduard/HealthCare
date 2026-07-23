@@ -13,6 +13,7 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
     private readonly IPermissionState _permissionState;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IClinicDirectoryCache _clinicCache;
+    private readonly IStaffWebAuthCookie _webAuthCookie;
     private readonly ILogger<StaffAuthenticationStateProvider> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -21,12 +22,14 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
         IPermissionState permissionState,
         IHttpClientFactory httpClientFactory,
         IClinicDirectoryCache clinicCache,
+        IStaffWebAuthCookie webAuthCookie,
         ILogger<StaffAuthenticationStateProvider> logger)
     {
         _tokenStore = tokenStore;
         _permissionState = permissionState;
         _httpClientFactory = httpClientFactory;
         _clinicCache = clinicCache;
+        _webAuthCookie = webAuthCookie;
         _logger = logger;
     }
 
@@ -39,6 +42,7 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
             if (tokens is null || string.IsNullOrWhiteSpace(tokens.AccessToken))
             {
                 await _permissionState.ClearAsync();
+                await ClearStaleWebCookieAsync();
                 return Anonymous();
             }
 
@@ -49,6 +53,7 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
                 {
                     await _tokenStore.ClearAsync();
                     await _permissionState.ClearAsync();
+                    await _webAuthCookie.SignOutAsync();
                     return Anonymous();
                 }
             }
@@ -59,6 +64,13 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
         {
             _gate.Release();
         }
+    }
+
+    private async Task ClearStaleWebCookieAsync()
+    {
+        // Only clear when a cookie principal is present to avoid unnecessary SignOut noise.
+        // IHttpContextAccessor is used inside StaffWebAuthCookie; SignOut is safe when no cookie.
+        await _webAuthCookie.SignOutAsync();
     }
 
     public async Task SignInAsync(AuthTokenResponse tokens, CancellationToken cancellationToken = default)
@@ -78,9 +90,11 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
         {
             await _tokenStore.ClearAsync(cancellationToken);
             await _permissionState.ClearAsync(cancellationToken);
+            await _webAuthCookie.SignOutAsync(cancellationToken);
             throw new InvalidOperationException("Unable to load the current user after login.");
         }
 
+        await _webAuthCookie.SignInAsync(_permissionState.CurrentUser!, cancellationToken);
         NotifyAuthenticationStateChanged(Task.FromResult(Authenticated(_permissionState.CurrentUser!)));
     }
 
@@ -110,6 +124,7 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
         await _tokenStore.ClearAsync();
         await _permissionState.ClearAsync();
         _clinicCache.Clear();
+        await _webAuthCookie.SignOutAsync();
         NotifyAuthenticationStateChanged(Task.FromResult(Anonymous()));
     }
 
@@ -122,6 +137,7 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
             return;
         }
 
+        await _webAuthCookie.SignInAsync(_permissionState.CurrentUser!, cancellationToken);
         NotifyAuthenticationStateChanged(Task.FromResult(Authenticated(_permissionState.CurrentUser!)));
     }
 
@@ -178,7 +194,7 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
             claims.Add(new Claim("permission", permission));
         }
 
-        var identity = new ClaimsIdentity(claims, authenticationType: "HealthCareStaff");
+        var identity = new ClaimsIdentity(claims, authenticationType: StaffWebAuthCookie.AuthenticationType);
         return new AuthenticationState(new ClaimsPrincipal(identity));
     }
 }

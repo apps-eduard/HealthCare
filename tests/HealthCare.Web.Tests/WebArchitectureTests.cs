@@ -1,5 +1,6 @@
 using System.Reflection;
 using FluentAssertions;
+using HealthCare.Contracts.Identity;
 using HealthCare.Web.Appointments;
 using HealthCare.Web.Auth;
 using HealthCare.Web.Services;
@@ -78,6 +79,37 @@ public sealed class WebArchitectureTests
                 .Should()
                 .NotContain(typeof(HttpClient), because: $"{page.Name} must use typed API clients");
         }
+    }
+
+    [Fact]
+    public void Return_Url_And_Redirect_Helpers_Are_Centralized()
+    {
+        typeof(SafeReturnUrl).Namespace.Should().Be("HealthCare.Web.Auth");
+        typeof(IStaffWebAuthCookie).Namespace.Should().Be("HealthCare.Web.Auth");
+        typeof(StaffWebAuthCookie).GetMethod(nameof(StaffWebAuthCookie.CreatePrincipal))
+            .Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Web_Auth_Cookie_Does_Not_Store_Api_Tokens()
+    {
+        var source = typeof(StaffWebAuthCookie).Assembly.Location;
+        source.Should().NotBeNullOrWhiteSpace();
+
+        // Cookie principal factory must not accept or emit token claim types.
+        var user = new CurrentUserResponse
+        {
+            UserId = Guid.NewGuid(),
+            Email = "a@b.c",
+            Roles = ["DOCTOR"],
+            Permissions = ["appointments.read"],
+            HasActiveStaffMembership = true,
+        };
+        var principal = StaffWebAuthCookie.CreatePrincipal(user);
+        string.Join(',', principal.Claims.Select(c => c.Type + "=" + c.Value))
+            .Should().NotContain("eyJ"); // JWT prefix
+        principal.Claims.Select(c => c.Type).Should().NotContain("access_token");
+        principal.Claims.Select(c => c.Type).Should().NotContain("refresh_token");
     }
 
     [Fact]

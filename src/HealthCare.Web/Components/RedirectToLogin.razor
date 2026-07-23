@@ -1,9 +1,60 @@
 @inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ILogger<RedirectToLogin> Logger
+@implements IDisposable
+
+@* Renders nothing; navigates to login once anonymous state is confirmed. *@
 
 @code {
-    protected override void OnInitialized()
+    private CancellationTokenSource? _cts;
+    private bool _navigated;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        var returnUrl = Uri.EscapeDataString(Navigation.ToBaseRelativePath(Navigation.Uri));
-        Navigation.NavigateTo(string.IsNullOrWhiteSpace(returnUrl) ? "/login" : $"/login?returnUrl={returnUrl}", forceLoad: false);
+        if (!firstRender || _navigated)
+        {
+            return;
+        }
+
+        _cts = new CancellationTokenSource();
+        try
+        {
+            var state = await AuthStateProvider.GetAuthenticationStateAsync();
+            if (state.User.Identity?.IsAuthenticated == true)
+            {
+                // Authenticated but unauthorized — Routes.razor should show Forbidden, not login.
+                return;
+            }
+
+            var path = SafeReturnUrl.FromNavigationUri(Navigation.Uri, Navigation.BaseUri);
+            var loginUrl = SafeReturnUrl.BuildLoginUrl(path);
+            if (!SafeReturnUrl.TryValidate(path, out _))
+            {
+                Logger.LogInformation("Rejected unsafe return URL while redirecting anonymous user to login.");
+            }
+            else
+            {
+                Logger.LogInformation("Redirecting anonymous user from protected route to login.");
+            }
+
+            _navigated = true;
+            Navigation.NavigateTo(loginUrl, forceLoad: false);
+        }
+        catch (OperationCanceledException)
+        {
+            // disposed
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Authentication-state check failed while redirecting to login.");
+            _navigated = true;
+            Navigation.NavigateTo("/login", forceLoad: false);
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
     }
 }
