@@ -134,10 +134,15 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IRefreshTokenHasher, RefreshTokenHasher>();
         services.AddScoped<IRefreshTokenGenerator, RefreshTokenGenerator>();
         services.AddScoped<IAuthService, AuthService>();
-        services.AddScoped<IRoleSeeder, RoleSeeder>();
-        services.AddScoped<IDevelopmentAdminSeeder, DevelopmentAdminSeeder>();
+        services.AddScoped<IPatientRegistrationService, PatientRegistrationService>();
         services.AddScoped<IPatientAccountLinker, PatientAccountLinker>();
         services.AddScoped<IPatientService, PatientService>();
+        services.AddScoped<IClinicEnrollmentService, ClinicEnrollmentService>();
+        services.AddScoped<ILocalPatientNumberGenerator, LocalPatientNumberGenerator>();
+        services.AddSingleton<IDevelopmentConfirmationTokenStore, DevelopmentConfirmationTokenStore>();
+        services.AddScoped<IAccountEmailSender, DevelopmentAccountEmailSender>();
+        services.AddScoped<IRoleSeeder, RoleSeeder>();
+        services.AddScoped<IDevelopmentAdminSeeder, DevelopmentAdminSeeder>();
         services.AddScoped<IDevelopmentPatientSeeder, DevelopmentPatientSeeder>();
 
         return services;

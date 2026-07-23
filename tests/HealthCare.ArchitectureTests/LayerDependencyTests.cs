@@ -1,6 +1,7 @@
 using FluentAssertions;
 using HealthCare.Application;
 using HealthCare.Application.Authorization;
+using HealthCare.Application.Identity;
 using HealthCare.Application.Patients;
 using HealthCare.Contracts;
 using HealthCare.Domain;
@@ -14,7 +15,6 @@ public sealed class LayerDependencyTests
     private const string ApplicationNamespace = "HealthCare.Application";
     private const string InfrastructureNamespace = "HealthCare.Infrastructure";
     private const string ApiNamespace = "HealthCare.Api";
-    private const string ContractsNamespace = "HealthCare.Contracts";
 
     [Fact]
     public void Domain_Should_Not_Depend_On_Application_Infrastructure_Or_Api()
@@ -106,6 +106,15 @@ public sealed class LayerDependencyTests
             .GetResult();
 
         result.IsSuccessful.Should().BeTrue(Because(result));
+    }
+
+    [Fact]
+    public void Registration_And_Enrollment_Use_Application_Abstractions()
+    {
+        typeof(IPatientRegistrationService).Namespace.Should().StartWith("HealthCare.Application");
+        typeof(IAccountEmailSender).Namespace.Should().StartWith("HealthCare.Application");
+        typeof(IClinicEnrollmentService).Namespace.Should().StartWith("HealthCare.Application");
+        typeof(ILocalPatientNumberGenerator).Namespace.Should().StartWith("HealthCare.Application");
     }
 
     [Fact]

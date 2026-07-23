@@ -33,12 +33,14 @@ public sealed class HealthCareDbContext : IdentityDbContext<ApplicationUser, Ide
 
     public DbSet<ClinicPatient> ClinicPatients => Set<ClinicPatient>();
 
+    public DbSet<ClinicPatientNumberSequence> ClinicPatientNumberSequences => Set<ClinicPatientNumberSequence>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
         modelBuilder.HasDefaultSchema("public");
-        modelBuilder.HasAnnotation("HealthCare:SchemaVersion", "4");
+        modelBuilder.HasAnnotation("HealthCare:SchemaVersion", "5");
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(HealthCareDbContext).Assembly);
     }

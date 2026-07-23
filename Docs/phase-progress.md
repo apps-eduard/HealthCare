@@ -2,10 +2,10 @@
 
 ## Progress overview
 
-**Overall completion: 34%**
+**Overall completion: 37%**
 
 ```text
-[██████████░░░░░░░░░░░░░░░░░░░░░░]  34%
+[███████████░░░░░░░░░░░░░░░░░░░░░]  37%
 ```
 
 | Metric | Value |
@@ -15,11 +15,11 @@
 | Partial | 5 (Phases 2, 3, 4, 5, 6) |
 | In progress | 0 |
 | Not started | 7 |
-| Weighted score | (2×1.0) + (0.5 + 0.75 + 0.5 + 0.5 + 0.5) = 4.75 / 14 ≈ **34%** |
+| Weighted score | (2×1.0) + (0.7 + 0.75 + 0.5 + 0.75 + 0.5) = 5.2 / 14 ≈ **37%** |
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Patient registration / activation workflow (Phase 5 remaining) or finish Phase 2 Google auth
+**Current focus:** Patient profile PATCH / clinic self-registration on booking, or Google auth (Phase 2)
 
 ### All phases at a glance
 
@@ -28,10 +28,10 @@
 | 0 | Repository and documentation | Complete | `██████████` 100% |
 | 1 | Solution foundation | Complete | `██████████` 100% |
 | 1b | Identity + core entities foundation *(sub-step)* | Complete | `██████████` 100% |
-| 2 | Identity and authentication (JWT / refresh / endpoints) | Partial | `█████░░░░░` 50% |
+| 2 | Identity and authentication (JWT / refresh / endpoints) | Partial | `███████░░░` 70% |
 | 3 | Roles and authorization foundation | Partial | `████████░░` 75% |
 | 4 | Organizations and clinics | Partial | `█████░░░░░` 50% |
-| 5 | Patients and clinic-patient registration | Partial | `█████░░░░░` 50% |
+| 5 | Patients and clinic-patient registration | Partial | `████████░░` 75% |
 | 6 | Staff and doctors | Partial | `█████░░░░░` 50% |
 | 7 | Appointment booking | Not started | `░░░░░░░░░░` 0% |
 | 8 | Staff web application (MudBlazor) | Not started | `░░░░░░░░░░` 0% |
@@ -85,10 +85,10 @@ Authoritative design docs:
 | 0 | Repository and documentation | Complete | 2026-07-23 |
 | 1 | Solution foundation | Complete | 2026-07-23 |
 | 1b | Identity + core entities foundation | Complete | 2026-07-23 |
-| 2 | Identity and authentication (JWT / refresh / endpoints) | Partial | 2026-07-23 |
+| 2 | Identity and authentication (JWT / refresh / endpoints) | Partial (patient register + confirm) | 2026-07-23 |
 | 3 | Roles and authorization foundation | Partial (current-user + policies) | 2026-07-23 |
 | 4 | Organizations and clinics | Partial (entities + schema only) | 2026-07-23 |
-| 5 | Patients and clinic-patient registration | Partial (Patient foundation) | 2026-07-23 |
+| 5 | Patients and clinic-patient registration | Partial (foundation + registration/enroll) | 2026-07-23 |
 | 6 | Staff and doctors | Partial (StaffMember entity + schema only) | 2026-07-23 |
 | 7 | Appointment booking | Not started | — |
 | 8 | Staff web application (MudBlazor) | Not started | — |
@@ -226,9 +226,7 @@ Authoritative design docs:
 ### Remaining
 
 - Patient Google authentication
-- Optional patient email/password registration
-- `GET /api/v1/auth/me`
-- Account activation/deactivation admin workflows (beyond `IsActive` login checks)
+- Account activation/deactivation admin workflows (beyond `IsActive` / email confirmation)
 - Integration tests under Testcontainers (blocked locally: Docker engine not ready)
 
 ### Exit criteria (still open)
@@ -286,42 +284,46 @@ Authoritative design docs:
 
 ## Phase 5 — Patients and clinic-patient registration
 
-**Status:** Partial (~50%)  
+**Status:** Partial (~75%)  
 **Updated:** 2026-07-23
 
-### Already done (Patient foundation)
+### Already done
 
-- `Patient` global entity (demographics, optional `UserId`, `IsActive`, audit timestamps)
-- `ClinicPatient` clinic-owned link with unique `(ClinicId, PatientId)` and local patient number
-- Server-side account linkage (`IPatientAccountLinker`) with PATIENT-only + no-staff rules
-- `ICurrentUser.PatientId` resolved from DB linkage (claims ignored)
-- Patient self-scope completed via policies + `IPatientService`
-- Staff access via active `ClinicPatient` + org/clinic membership; explicit `PLATFORM_ADMIN` bypass
-- Endpoints: `GET /api/v1/patients/me`, `GET /api/v1/patients/{patientId}`
-- Development patient/staff seeder (config-driven, idempotent)
-- Migration `AddPatientFoundation` applied to `healthcare_db`
-- Unit tests (linkage + access); architecture tests; integration tests written
-- Manual verification against running API succeeded
+**Foundation**
+- `Patient`, `ClinicPatient`, linkage, self-scope, staff tenant access, `/patients/me`
 
-### EF query filters
+**Registration and activation**
+- `POST /api/v1/auth/register/patient` — transactional user + PATIENT role + Patient link
+- Generic duplicate-email responses (no account enumeration)
+- `POST /api/v1/auth/confirm-email`, `POST /api/v1/auth/resend-confirmation`
+- Identity confirmation tokens; Development token capture (`GET /api/v1/auth/dev/confirmation-token`)
+- Login blocked with `auth.email_not_confirmed` until confirmed
 
-- Deferred: `Patient` is a global identity; clinic isolation uses `ClinicPatient` predicates in `PatientService` (documented). Avoid scattering `IgnoreQueryFilters()`.
+**Clinic enrollment**
+- `POST /api/v1/clinics/{clinicId}/patients/{patientId}/enroll` (staff-authorized, idempotent)
+- Local patient numbers: `P-000001` format via `ClinicPatientNumberSequences` atomic upsert
+- Migration `AddClinicPatientNumberSequence` applied to `healthcare_db`
+
+### Local patient number strategy
+
+- Assumption (no format in docs): `P-{n:D6}` unique per clinic
+- Sequence table + PostgreSQL `INSERT ... ON CONFLICT DO UPDATE RETURNING`
+- Unique index on `(ClinicId, LocalPatientNumber)` retained
 
 ### Verification
 
 - Build: succeeded
-- Unit tests: 41 passed
-- Architecture tests: 8 passed
-- Integration tests: **failed** — Docker/Testcontainers unavailable (`DockerUnavailableException` on `npipe://./pipe/docker_engine`)
-- Migration applied: `AddPatientFoundation`
-- Manual: `/health` 200; patient login; `/auth/me` returns PatientId; `/patients/me` own profile; cross-patient 403; client PatientId ignored; clinic A staff 200 / clinic B staff 403
+- Unit tests: 51 passed
+- Architecture tests: 9 passed
+- Integration tests: **failed** — Docker unavailable (`npipe://./pipe/docker_engine`); tests not weakened
+- Manual: health 200; register; login before confirm → 403; confirm; login + `/auth/me` PatientId; duplicate register generic; enroll idempotent `P-000001`; other clinic staff 403
 
 ### Remaining
 
-- Patient registration / activation workflow APIs
-- Clinic registration workflow (find-or-create `ClinicPatient` on first booking)
-- Public/profile PATCH endpoints from the phase plan
-- Staff patient search
+- Patient profile PATCH
+- Patient-driven clinic registration on first booking
+- Staff patient search / directory
+- Real email provider (Hangfire notifications phase)
 - Integration suite green once Docker is available
 
 ---
@@ -442,6 +444,7 @@ Authoritative design docs:
 | 2026-07-23 | 2 | JWT + refresh-token foundation, auth endpoints, migration applied; overall 29% |
 | 2026-07-23 | 3 | ICurrentUser + tenant isolation policies, /auth/me, scope-probe; overall ~30% |
 | 2026-07-23 | 5 | Patient foundation + ClinicPatient + self-scope endpoints; migration applied; overall ~34% |
+| 2026-07-23 | 5 / 2 | Patient registration, email confirmation, clinic enroll + local numbers; overall ~37% |
 
 ---
 
