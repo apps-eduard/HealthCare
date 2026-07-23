@@ -27,6 +27,8 @@ Resolution uses server-side Identity roles (DB) + active staff membership + pati
 | `reminders.read` / `reminders.retry` | Staff reminder inspection |
 | `summaries.read` / `summaries.retry` | Daily clinic summary |
 | `clinics.read` / `clinics.manage` | Clinic discovery / management foundation |
+| `organizations.read` | PLATFORM_ADMIN organization directory search/detail |
+| `organizations.select` | PLATFORM_ADMIN UI tenant selection (Web usability aid; API remains authoritative) |
 | `staff.read` / `staff.manage` | Staff-management list/detail/create/update/activate |
 | `roles.read` / `roles.assign` | Assignable-role catalog and role assignment |
 | `hangfire.dashboard` | Hangfire dashboard (with PLATFORM_ADMIN) |
@@ -38,8 +40,8 @@ Resolution uses server-side Identity roles (DB) + active staff membership + pati
 
 ## Role mappings (assumptions)
 
-- **PLATFORM_ADMIN:** broad permissions including dashboard; **does not** auto-bypass tenants — requires `PlatformAdminBypass.Explicit`.
-- **ORGANIZATION_ADMIN:** org-scoped ops; can assign roles except PLATFORM_ADMIN.
+- **PLATFORM_ADMIN:** broad permissions including dashboard + `organizations.read` / `organizations.select`; **does not** auto-bypass tenants — requires `PlatformAdminBypass.Explicit`. Organization directory listing is a platform operation and does **not** grant clinic/resource access. No `medical_notes.*`.
+- **ORGANIZATION_ADMIN:** org-scoped ops; can assign roles except PLATFORM_ADMIN. **No** global organization directory.
 - **CLINIC_ADMIN:** clinic-scoped ops; cannot assign ORG/PLATFORM admin.
 - **DOCTOR:** clinic appointments + own availability; no clinic administration.
 - **NURSE:** clinical-operational appointment actions (no create/reschedule/availability manage); medical notes: `medical_notes.read/create/update_draft/sign` limited to **Nursing** note type in services.
@@ -157,13 +159,27 @@ Doctor directory and available-slots require authentication + `availability.read
 
 ## Staff web application (HealthCare.Web)
 
-MudBlazor Interactive Server app consumes the API. UI permissions (`staff.read` / `staff.manage` / `roles.read` / `roles.assign` / `clinics.read`) only control presentation; the API enforces authorization.
+MudBlazor Interactive Server app consumes the API. UI permissions (`staff.read` / `staff.manage` / `roles.read` / `roles.assign` / `clinics.read` / `organizations.read` / `organizations.select`) only control presentation; the API enforces authorization.
 
 Pages:
 
 - `/login` — staff sign-in
 - `/dashboard` — authenticated shell home
 - `/staff` — staff list/management (`staff.read` required)
+- `/appointments`, `/appointments/calendar`, `/patients`, `/availability` — scoped operational pages
+
+### Organization directory (platform)
+
+- `GET /api/v1/platform/organizations` — searchable paged directory (`organizations.read`, PLATFORM_ADMIN only)
+- `GET /api/v1/platform/organizations/{organizationId}` — safe detail (no billing/secrets)
+
+Staff Web:
+
+- `OrganizationPicker` + platform tenant banner for PLATFORM_ADMIN
+- Circuit-scoped `IPlatformTenantContext` (selected OrganizationId/name, optional ClinicId, explicit bypass flag)
+- Cleared on logout, auth failure, and user change — never stored in JWT claims
+- Selecting an organization does **not** grant clinic/resource access; downstream APIs still require permissions + `platformAdminBypass=true` + validated ClinicId
+- Ordinary tenant users do not see the organization picker
 
 ### Clinic directory
 
@@ -174,10 +190,10 @@ Tenant behavior:
 
 - Clinic-scoped staff: own clinic only (picker read-only)
 - ORGANIZATION_ADMIN: all clinics in trusted organization; optional clinic filter / “All clinics”
-- PLATFORM_ADMIN: `platformAdminBypass=true` **and** `OrganizationId` required for listing
+- PLATFORM_ADMIN: select organization via platform banner/picker, then `platformAdminBypass=true` **and** `OrganizationId` required for listing; ClinicPicker disabled until organization selected
 - PATIENT: denied on staff clinic directory
 
-Staff UI uses `ClinicPicker` (no free-text ClinicId). MVP token storage: circuit memory + `ProtectedSessionStorage`.
+Staff UI uses `ClinicPicker` / `OrganizationPicker` (no free-text ClinicId or OrganizationId). MVP token storage: circuit memory + `ProtectedSessionStorage`.
 
 ## Securing new endpoints
 

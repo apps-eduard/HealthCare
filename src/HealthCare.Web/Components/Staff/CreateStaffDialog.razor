@@ -1,5 +1,6 @@
 @inject IStaffManagementApiClient StaffApi
 @inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
 @inject ISnackbar Snackbar
 
 <MudDialog>
@@ -14,23 +15,22 @@
             <MudTextField @bind-Value="_displayName" Label="Display name" Disabled="_busy" />
             <MudTextField @bind-Value="_jobTitle" Label="Job title" Disabled="_busy" />
             <MudTextField @bind-Value="_phone" Label="Phone" Disabled="_busy" />
+            @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true">
+                    Select an organization in the platform banner before creating staff.
+                </MudAlert>
+            }
             @if (Permissions.CanFilterByClinic)
             {
-                @if (Permissions.IsPlatformAdmin)
-                {
-                    <MudTextField @bind-Value="_platformOrgIdText"
-                                  Label="Organization ID (platform bypass)"
-                                  Disabled="_busy"
-                                  HelperText="Required before selecting a clinic." />
-                }
                 <ClinicPicker @bind-Value="_clinicId"
                               Label="Clinic"
                               Required="true"
                               AllowClear="false"
-                              Disabled="_busy"
+                              Disabled="@(_busy || (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization))"
                               ActiveOnly="true"
                               PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
-                              PlatformOrganizationId="_platformOrganizationId"
+                              PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
                               HelperText="Choose an authorized clinic." />
             }
             else if (Permissions.Has(WebPermissions.ClinicsRead))
@@ -73,16 +73,17 @@
     private string? _jobTitle;
     private string? _phone;
     private Guid? _clinicId;
-    private string? _platformOrgIdText;
     private string? _role;
     private string _temporaryPassword = string.Empty;
     private string _confirmPassword = string.Empty;
 
-    private Guid? _platformOrganizationId =>
-        Guid.TryParse(_platformOrgIdText, out var orgId) && orgId != Guid.Empty ? orgId : null;
-
     protected override async Task OnInitializedAsync()
     {
+        if (Permissions.IsPlatformAdmin && PlatformTenant.HasClinic)
+        {
+            _clinicId = PlatformTenant.SelectedClinicId;
+        }
+
         if (!Permissions.Has(WebPermissions.RolesRead))
         {
             _error = "Assignable roles could not be loaded (roles.read required).";
@@ -136,7 +137,7 @@
             }
 
             if (Permissions.IsPlatformAdmin
-                && (_platformOrganizationId is null || _platformOrganizationId == Guid.Empty))
+                && (!PlatformTenant.HasOrganization || PlatformTenant.SelectedOrganizationId is null))
             {
                 _error = "Organization scope is required for platform clinic selection.";
                 return;

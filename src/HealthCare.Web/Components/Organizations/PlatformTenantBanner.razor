@@ -1,0 +1,82 @@
+@namespace HealthCare.Web.Components.Organizations
+@implements IDisposable
+@inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
+@inject IDialogService DialogService
+
+@if (Permissions.IsPlatformAdmin)
+{
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Filled" Dense="true" Class="mb-4" Elevation="0">
+        <MudStack Spacing="1">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                <MudText Typo="Typo.subtitle2">
+                    Platform context:
+                    @(PlatformTenant.HasOrganization
+                        ? $"{PlatformTenant.SelectedOrganizationName}{(PlatformTenant.HasClinic ? $" / {PlatformTenant.SelectedClinicName ?? PlatformTenant.SelectedClinicId.ToString()}" : string.Empty)}"
+                        : "(none selected)")
+                </MudText>
+                <MudStack Row="true" Spacing="1">
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Inherit" OnClick="OpenSelectOrganizationAsync">
+                        @(PlatformTenant.HasOrganization ? "Change organization" : "Select organization")
+                    </MudButton>
+                    @if (PlatformTenant.HasOrganization)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Inherit" OnClick="OpenSelectClinicAsync">
+                            @(PlatformTenant.HasClinic ? "Change clinic" : "Select clinic")
+                        </MudButton>
+                        @if (PlatformTenant.HasClinic)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Inherit" OnClick="ClearClinic">Clear clinic</MudButton>
+                        }
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Inherit" OnClick="ClearOrganization">Clear organization</MudButton>
+                    }
+                </MudStack>
+            </MudStack>
+            <MudText Typo="Typo.caption">
+                Elevated platform access. Selection is a usability aid only — API authorization and explicit bypass remain required.
+                Medical notes stay denied for PLATFORM_ADMIN.
+            </MudText>
+            @if (!PlatformTenant.HasOrganization)
+            {
+                <MudText Typo="Typo.caption">Select an organization before using staff, appointments, patients, or availability pages.</MudText>
+            }
+        </MudStack>
+    </MudAlert>
+}
+
+@code {
+    protected override void OnInitialized()
+    {
+        PlatformTenant.Changed += OnChanged;
+        Permissions.Changed += OnChanged;
+    }
+
+    public void Dispose()
+    {
+        PlatformTenant.Changed -= OnChanged;
+        Permissions.Changed -= OnChanged;
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    private void ClearOrganization() => PlatformTenant.Clear();
+
+    private void ClearClinic() => PlatformTenant.ClearClinic();
+
+    private async Task OpenSelectOrganizationAsync()
+    {
+        var parameters = new DialogParameters<PlatformOrganizationSelectDialog>();
+        await DialogService.ShowAsync<PlatformOrganizationSelectDialog>("Select organization", parameters);
+    }
+
+    private async Task OpenSelectClinicAsync()
+    {
+        if (!PlatformTenant.HasOrganization)
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters<PlatformClinicSelectDialog>();
+        await DialogService.ShowAsync<PlatformClinicSelectDialog>("Select clinic", parameters);
+    }
+}

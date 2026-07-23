@@ -35,6 +35,8 @@ public static class RolePermissionMatrix
                 Permissions.Summaries.Retry,
                 Permissions.Clinics.Read,
                 Permissions.Clinics.Manage,
+                Permissions.Organizations.Read,
+                Permissions.Organizations.Select,
                 Permissions.Staff.Read,
                 Permissions.Staff.Manage,
                 Permissions.Roles.Read,

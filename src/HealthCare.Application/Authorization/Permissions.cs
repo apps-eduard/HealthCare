@@ -54,6 +54,12 @@ public static class Permissions
         public const string Manage = "clinics.manage";
     }
 
+    public static class Organizations
+    {
+        public const string Read = "organizations.read";
+        public const string Select = "organizations.select";
+    }
+
     public static class Staff
     {
         public const string Read = "staff.read";
@@ -105,6 +111,8 @@ public static class Permissions
         Summaries.Retry,
         Clinics.Read,
         Clinics.Manage,
+        Organizations.Read,
+        Organizations.Select,
         Staff.Read,
         Staff.Manage,
         Roles.Read,

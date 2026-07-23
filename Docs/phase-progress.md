@@ -588,7 +588,7 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 ### Known limitations
 
 - API access/refresh tokens still stored in ProtectedSessionStorage (encrypted browser session storage). The new staff Web cookie authenticates the Blazor host only and does **not** replace API bearer auth.
-- PLATFORM_ADMIN clinic picker still needs an OrganizationId scope field (no org directory UI yet); calendar/availability require explicit clinic selection
+- PLATFORM_ADMIN uses organization directory + tenant banner (no free-text OrganizationId); calendar/availability still require explicit clinic selection
 - Patient directory list masks mobile numbers; detail shows full mobile when returned by API. Address/emergency contact shown in detail only when present on the safe contract.
 - List API has no free-text search parameter (queue filters by date/status/doctor/clinic only)
 - Reason for visit / patient notes are not shown in staff appointment UI
@@ -602,6 +602,34 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 - Unit / architecture / web support tests: availability helpers + Web architecture checks
 - Integration: existing appointment/availability suites retained (Docker/Testcontainers)
 - Manual: see latest commit notes for `/availability` flows
+
+---
+## Phase 8b — PLATFORM_ADMIN organization directory + tenant selector
+
+**Status:** Complete  
+**Updated:** 2026-07-23
+
+### Delivered
+
+- Permissions: `organizations.read`, `organizations.select` (PLATFORM_ADMIN only)
+- API: `GET /api/v1/platform/organizations`, `GET /api/v1/platform/organizations/{organizationId}`
+- Safe DTO fields only (id, name, slug, active, clinic count, createdAtUtc) — no billing/secrets
+- Web: `IOrganizationDirectoryApiClient`, circuit-scoped `IPlatformTenantContext`, `OrganizationPicker`, platform tenant banner
+- Removed free-text Organization ID from Staff, Appointments, Calendar, Patients, Availability, create dialogs
+- ClinicPicker disabled for PLATFORM_ADMIN until organization selected; switching org clears clinic + page data
+- Medical notes remain denied to PLATFORM_ADMIN (regression covered)
+- No migration (existing Organizations schema)
+
+### Known limitations
+
+- Organization selection is a usability aid — API authorization + explicit bypass remain required
+- No organization create/update/suspend UI or API in this slice
+- No medical-notes UI
+- bUnit component tests still limited; support/architecture Web tests cover free-text removal and tenant state
+
+### Verification
+
+- See commit verification notes
 
 ---
 ## Phase 9 — Medical notes

@@ -4,8 +4,10 @@
 @using HealthCare.Web.Availability
 @using HealthCare.Web.Components.Availability
 @using HealthCare.Web.Components.Clinics
+@implements IDisposable
 @inject IDoctorAvailabilityApiClient AvailabilityApi
 @inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject IClinicDirectoryApiClient ClinicsApi
@@ -34,21 +36,23 @@ else
         <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="RefreshAllAsync" Disabled="_loading">Refresh</MudButton>
     </MudStack>
 
+    @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            Select an organization in the platform banner before managing availability. Global availability load is not allowed.
+        </MudAlert>
+    }
+    else if (Permissions.IsPlatformAdmin && !PlatformTenant.HasClinic)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            Select a clinic in the platform banner (or below) before loading availability for the selected organization.
+        </MudAlert>
+    }
+
     <MudPaper Class="pa-4 mb-4" Outlined="true">
         <MudGrid>
             @if (Permissions.CanFilterByClinic)
             {
-                @if (Permissions.IsPlatformAdmin)
-                {
-                    <MudItem xs="12" md="3">
-                        <MudTextField @bind-Value="_platformOrgIdText"
-                                      Label="Organization ID (platform bypass)"
-                                      HelperText="Required before clinic selection"
-                                      Variant="Variant.Outlined"
-                                      Immediate="true"
-                                      TextChanged="OnPlatformOrgTextChanged" />
-                    </MudItem>
-                }
                 <MudItem xs="12" md="4">
                     <ClinicPicker Value="_clinicId"
                                   ValueChanged="OnClinicChanged"
@@ -57,7 +61,8 @@ else
                                   AllowClear="false"
                                   ActiveOnly="true"
                                   PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
-                                  PlatformOrganizationId="_platformOrganizationId" />
+                                  PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
+                                  Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)" />
                 </MudItem>
             }
             else if (Permissions.Has(WebPermissions.ClinicsRead))
@@ -238,24 +243,36 @@ else
     private string? _timeZoneId;
     private Guid? _doctorId;
     private string? _selfDoctorLabel;
-    private string? _platformOrgIdText;
-    private Guid? _platformOrganizationId;
+    private Guid? _boundOrganizationId;
     private DateTime? _previewDate = DateTime.Today;
     private int _previewDuration = 30;
 
     protected override async Task OnInitializedAsync()
     {
+        PlatformTenant.Changed += OnPlatformTenantChanged;
+
         if (Permissions.IsPatientOnly || !AvailabilityPermissionRules.CanManage(Permissions))
         {
             return;
         }
 
         _selfOnly = AvailabilityPermissionRules.IsSelfOnly(Permissions);
+        SyncFromPlatformTenant();
+
+        if (Permissions.IsPlatformAdmin
+            && (!PlatformTenant.HasOrganization || !PlatformTenant.HasClinic))
+        {
+            return;
+        }
 
         if (!Permissions.CanFilterByClinic && Permissions.CurrentUser?.ClinicId is Guid clinicId)
         {
             _clinicId = clinicId;
             await ResolveClinicMetaAsync(clinicId);
+        }
+        else if (Permissions.IsPlatformAdmin && _clinicId is Guid platformClinic)
+        {
+            await ResolveClinicMetaAsync(platformClinic);
         }
 
         if (_selfOnly)
@@ -278,15 +295,83 @@ else
         }
     }
 
-    private void OnPlatformOrgTextChanged(string? value)
+    public void Dispose() => PlatformTenant.Changed -= OnPlatformTenantChanged;
+
+    private void OnPlatformTenantChanged() => InvokeAsync(async () =>
     {
-        _platformOrgIdText = value;
-        _platformOrganizationId = Guid.TryParse(value, out var orgId) ? orgId : null;
+        var orgChanged = _boundOrganizationId != PlatformTenant.SelectedOrganizationId;
+        SyncFromPlatformTenant();
+        if (orgChanged)
+        {
+            if (!_selfOnly)
+            {
+                _doctorId = null;
+            }
+
+            _windows.Clear();
+            _exceptions.Clear();
+            _slots.Clear();
+            _doctors.Clear();
+            _clinicSlug = null;
+            _clinicName = null;
+            _timeZoneId = null;
+            _error = null;
+        }
+
+        if (_clinicId is Guid id)
+        {
+            await ResolveClinicMetaAsync(id);
+            await LoadDoctorsAsync();
+            if (_doctorId is not null)
+            {
+                await RefreshAllAsync();
+            }
+        }
+        else
+        {
+            _windows.Clear();
+            _exceptions.Clear();
+            _slots.Clear();
+            _doctors.Clear();
+            _clinicSlug = null;
+            _clinicName = null;
+            _timeZoneId = null;
+            if (!_selfOnly)
+            {
+                _doctorId = null;
+            }
+        }
+
+        StateHasChanged();
+    });
+
+    private void SyncFromPlatformTenant()
+    {
+        _boundOrganizationId = PlatformTenant.SelectedOrganizationId;
+        if (Permissions.IsPlatformAdmin)
+        {
+            _clinicId = PlatformTenant.SelectedClinicId;
+        }
     }
 
     private async Task OnClinicChanged(Guid? clinicId)
     {
         _clinicId = clinicId;
+        if (Permissions.IsPlatformAdmin)
+        {
+            if (clinicId is Guid id && id != Guid.Empty)
+            {
+                if (PlatformTenant.SelectedClinicId != id)
+                {
+                    PlatformTenant.SelectClinic(id);
+                }
+            }
+            else if (PlatformTenant.HasClinic)
+            {
+                PlatformTenant.ClearClinic();
+            }
+        }
+
         if (!_selfOnly)
         {
             _doctorId = null;
@@ -300,9 +385,9 @@ else
         _clinicName = null;
         _timeZoneId = null;
 
-        if (clinicId is Guid id)
+        if (clinicId is Guid clinic)
         {
-            await ResolveClinicMetaAsync(id);
+            await ResolveClinicMetaAsync(clinic);
             await LoadDoctorsAsync();
         }
     }
@@ -351,6 +436,12 @@ else
             return;
         }
 
+        if (Permissions.IsPlatformAdmin
+            && (!PlatformTenant.HasOrganization || _clinicId is null || _clinicId == Guid.Empty))
+        {
+            return;
+        }
+
         _doctorsLoading = true;
         try
         {
@@ -381,12 +472,22 @@ else
             return;
         }
 
+        if (Permissions.IsPlatformAdmin
+            && (!PlatformTenant.HasOrganization || _clinicId is null || _clinicId == Guid.Empty))
+        {
+            _windows.Clear();
+            _exceptions.Clear();
+            _loading = false;
+            return;
+        }
+
         _loading = true;
         _error = null;
         try
         {
-            var windows = await AvailabilityApi.ListAvailabilityAsync(doctorId, Permissions.IsPlatformAdmin);
-            var exceptions = await AvailabilityApi.ListExceptionsAsync(doctorId, Permissions.IsPlatformAdmin);
+            var bypass = Permissions.IsPlatformAdmin;
+            var windows = await AvailabilityApi.ListAvailabilityAsync(doctorId, bypass);
+            var exceptions = await AvailabilityApi.ListExceptionsAsync(doctorId, bypass);
             _windows.Clear();
             _windows.AddRange(windows);
             _exceptions.Clear();
@@ -552,6 +653,12 @@ else
             || string.IsNullOrWhiteSpace(_clinicSlug)
             || _previewDate is not DateTime date
             || !Permissions.Has(WebPermissions.AvailabilityRead))
+        {
+            return;
+        }
+
+        if (Permissions.IsPlatformAdmin
+            && (!PlatformTenant.HasOrganization || _clinicId is null || _clinicId == Guid.Empty))
         {
             return;
         }

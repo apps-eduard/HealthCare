@@ -1,0 +1,66 @@
+@namespace HealthCare.Web.Components.Organizations
+@inject IPlatformTenantContext PlatformTenant
+@inject IClinicDirectoryCache ClinicCache
+@inject IClinicDirectoryApiClient ClinicsApi
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Select clinic</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (!PlatformTenant.HasOrganization)
+        {
+            <MudAlert Severity="Severity.Warning">Select an organization first.</MudAlert>
+        }
+        else
+        {
+            <MudText Typo="Typo.body2" Class="mb-3">
+                Clinics for @PlatformTenant.SelectedOrganizationName. Explicit platform bypass is sent with directory requests.
+            </MudText>
+            <ClinicPicker Value="_clinicId"
+                          ValueChanged="OnClinicChanged"
+                          Label="Clinic"
+                          Required="true"
+                          AllowClear="false"
+                          ActiveOnly="true"
+                          PlatformAdminBypass="true"
+                          PlatformOrganizationId="PlatformTenant.SelectedOrganizationId"
+                          HelperText="Only clinics in the selected organization" />
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private Guid? _clinicId;
+
+    protected override void OnInitialized()
+    {
+        _clinicId = PlatformTenant.SelectedClinicId;
+    }
+
+    private async Task OnClinicChanged(Guid? clinicId)
+    {
+        _clinicId = clinicId;
+        if (clinicId is Guid id && id != Guid.Empty)
+        {
+            string? name = null;
+            try
+            {
+                var detail = await ClinicsApi.GetByIdAsync(id, platformAdminBypass: true);
+                ClinicCache.Set(detail);
+                name = detail.Name;
+            }
+            catch { }
+            PlatformTenant.SelectClinic(id, name);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

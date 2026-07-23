@@ -79,15 +79,19 @@ PATIENT
 Allowed:
 
 - Manage platform configuration.
-- Manage organizations.
-- Activate or deactivate organizations.
+- Browse the organization directory (`organizations.read`) for tenant selection.
+- Select a tenant context in Staff Web (`organizations.select`) as a usability aid.
+- Manage organizations (future create/update/suspend — not in current slice).
+- Activate or deactivate organizations (future).
 - View operational audit information.
+- Cross-tenant staff/clinic/appointment/patient/availability operations only with **explicit** `platformAdminBypass=true` plus validated OrganizationId/ClinicId where required.
 
 Not automatically allowed:
 
-- Read medical note contents.
-- Browse patient records without a support purpose.
+- Read medical note contents (no `medical_notes.*`; selected organization does not change this).
+- Browse patient records without a support purpose and without explicit bypass + clinic scope.
 - Impersonate a user without an explicit audited process.
+- Treat organization selection as authorization — API remains authoritative.
 
 ### 4.2 ORGANIZATION_ADMIN
 

@@ -80,12 +80,15 @@ dotnet run --project src/HealthCare.Web --launch-profile http
 - Staff UI: http://localhost:5018
 - Configure API base URL via `Api:BaseUrl` in `src/HealthCare.Web/appsettings*.json` (default `http://localhost:5080/`)
 - Sign in with a staff account (for example `clinicadmin@healthcare.local`)
-- Staff clinic filter/create uses the clinic directory API (`/api/v1/staff-management/clinics`) via `ClinicPicker` — not free-text Clinic IDs
+- PLATFORM_ADMIN (`admin@healthcare.local`): use the platform tenant banner to search/select an organization (`OrganizationPicker`), then select a clinic. Free-text Organization IDs are not accepted. Selection is circuit-scoped only and cleared on logout.
+- Staff clinic filter/create uses the clinic directory API (`/api/v1/staff-management/clinics`) via `ClinicPicker` — not free-text Clinic IDs. For PLATFORM_ADMIN, ClinicPicker requires the selected organization + `platformAdminBypass=true`.
+- Organization directory API: `GET /api/v1/platform/organizations` (PLATFORM_ADMIN + `organizations.read` only)
 - Appointments: `/appointments` (queue) and `/appointments/calendar` (day/week). Uses `appointments.*` / `availability.read` / `patients.search` permissions from `/auth/me`. Create flow uses `PatientPicker` + clinic doctors + available slots. Times display in the clinic `TimeZoneId` (API UTC). Mutations send `ExpectedVersion`.
 - Auth: anonymous requests to protected pages challenge to `/login?returnUrl=...` (no 500). Staff Web uses an HttpOnly session cookie for host authentication (minimal claims; no API tokens). API access/refresh tokens remain in `ProtectedSessionStorage` (MVP). Prefer a full BFF cookie session before production hardening.
 - Return URLs are validated as local paths only (`SafeReturnUrl`); external/`//` URLs fall back to `/dashboard`.
 - Patients: `/patients` directory (requires `patients.search`). Detail and ClinicPatient status update require `patients.read` / `patients.update_clinic_status`. Uses typed `IStaffPatientApiClient`.
 - Availability: `/availability` (requires `availability.manage_self`, `availability.manage_clinic`, or `availability.manage_organization`). Doctors manage self only (fixed clinic/doctor). Clinic admins pick a clinic doctor. Org admins use `ClinicPicker` then doctors. Weekly windows + date exceptions; times shown in clinic `TimeZoneId` (not browser-local). Mutations send `ExpectedVersion`. Optional slot preview via available-slots API. Typed `IDoctorAvailabilityApiClient`. `availability.read` alone does not open the management page.
+- Medical notes: no staff UI yet; PLATFORM_ADMIN remains denied even with a selected organization.
 
 ### 6. Build and test
 

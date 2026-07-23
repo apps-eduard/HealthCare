@@ -1,7 +1,9 @@
 @page "/staff"
 @attribute [Authorize]
+@implements IDisposable
 @inject IStaffManagementApiClient StaffApi
 @inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
@@ -21,10 +23,26 @@ else
             <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="RefreshClicked" Disabled="_loading">Refresh</MudButton>
             @if (Permissions.Has(WebPermissions.StaffManage))
             {
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="OpenCreateAsync">Create staff</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="OpenCreateAsync"
+                           Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !PlatformTenant.HasClinic))">
+                    Create staff
+                </MudButton>
             }
         </MudStack>
     </MudStack>
+
+    @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            Select an organization in the platform banner before searching staff. Global staff search is not allowed.
+        </MudAlert>
+    }
+    else if (Permissions.IsPlatformAdmin && !PlatformTenant.HasClinic)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            Select a clinic in the platform banner (or below) before loading staff for the selected organization.
+        </MudAlert>
+    }
 
     <MudPaper Class="pa-4 mb-4" Outlined="true">
         <MudGrid>
@@ -53,24 +71,17 @@ else
             </MudItem>
             @if (Permissions.CanFilterByClinic)
             {
-                @if (Permissions.IsPlatformAdmin)
-                {
-                    <MudItem xs="12" md="3">
-                        <MudTextField @bind-Value="_platformOrgIdText"
-                                      Label="Organization ID (platform bypass)"
-                                      HelperText="Required with clinic filter for PLATFORM_ADMIN" />
-                    </MudItem>
-                }
                 <MudItem xs="12" md="3">
                     <ClinicPicker Value="_clinicId"
                                   ValueChanged="OnClinicFilterChanged"
                                   Label="Clinic filter"
-                                  HelperText="Leave empty for all clinics in your organization"
-                                  AllowClear="true"
-                                  Required="false"
+                                  HelperText="@(Permissions.IsPlatformAdmin ? "Required for PLATFORM_ADMIN" : "Leave empty for all clinics in your organization")"
+                                  AllowClear="@(!Permissions.IsPlatformAdmin)"
+                                  Required="@(Permissions.IsPlatformAdmin)"
                                   ActiveOnly="null"
                                   PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
-                                  PlatformOrganizationId="_platformOrganizationId" />
+                                  PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
+                                  Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)" />
                 </MudItem>
             }
             else if (Permissions.Has(WebPermissions.ClinicsRead))
@@ -80,7 +91,10 @@ else
                 </MudItem>
             }
             <MudItem xs="12" md="1" Class="d-flex align-end">
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="RefreshClicked" FullWidth="true">Apply</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="RefreshClicked" FullWidth="true"
+                           Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !_clinicId.HasValue))">
+                    Apply
+                </MudButton>
             </MudItem>
         </MudGrid>
     </MudPaper>
@@ -158,17 +172,16 @@ else
     private string? _role;
     private string? _activeFilter;
     private Guid? _clinicId;
-    private string? _platformOrgIdText;
     private int _page = 1;
     private int _pageSize = 20;
     private int _totalCount;
     private int _totalPages = 1;
-
-    private Guid? _platformOrganizationId =>
-        Guid.TryParse(_platformOrgIdText, out var orgId) && orgId != Guid.Empty ? orgId : null;
+    private Guid? _boundOrganizationId;
 
     protected override async Task OnInitializedAsync()
     {
+        PlatformTenant.Changed += OnPlatformTenantChanged;
+
         if (!Permissions.IsStaffUser || Permissions.IsPatientOnly)
         {
             Navigation.NavigateTo("/forbidden");
@@ -181,7 +194,34 @@ else
             return;
         }
 
+        SyncFromPlatformTenant();
         await ReloadAsync();
+    }
+
+    public void Dispose() => PlatformTenant.Changed -= OnPlatformTenantChanged;
+
+    private void OnPlatformTenantChanged() => InvokeAsync(async () =>
+    {
+        var orgChanged = _boundOrganizationId != PlatformTenant.SelectedOrganizationId;
+        SyncFromPlatformTenant();
+        if (orgChanged)
+        {
+            _items = [];
+            _error = null;
+            _search = null;
+        }
+
+        await ReloadAsync(resetPage: true);
+        StateHasChanged();
+    });
+
+    private void SyncFromPlatformTenant()
+    {
+        _boundOrganizationId = PlatformTenant.SelectedOrganizationId;
+        if (Permissions.IsPlatformAdmin)
+        {
+            _clinicId = PlatformTenant.SelectedClinicId;
+        }
     }
 
     private Task RefreshClicked() => ReloadAsync(resetPage: true);
@@ -189,6 +229,21 @@ else
     private async Task OnClinicFilterChanged(Guid? clinicId)
     {
         _clinicId = clinicId;
+        if (Permissions.IsPlatformAdmin)
+        {
+            if (clinicId is Guid id && id != Guid.Empty)
+            {
+                if (PlatformTenant.SelectedClinicId != id)
+                {
+                    PlatformTenant.SelectClinic(id);
+                }
+            }
+            else if (PlatformTenant.HasClinic)
+            {
+                PlatformTenant.ClearClinic();
+            }
+        }
+
         await ReloadAsync(resetPage: true);
     }
 
@@ -211,6 +266,16 @@ else
         if (resetPage)
         {
             _page = 1;
+        }
+
+        if (Permissions.IsPlatformAdmin
+            && (!PlatformTenant.HasOrganization || _clinicId is null || _clinicId == Guid.Empty))
+        {
+            _items = [];
+            _totalCount = 0;
+            _totalPages = 1;
+            _loading = false;
+            return;
         }
 
         _loading = true;
@@ -268,6 +333,13 @@ else
 
     private async Task OpenCreateAsync()
     {
+        if (Permissions.IsPlatformAdmin
+            && (!PlatformTenant.HasOrganization || !PlatformTenant.HasClinic))
+        {
+            Snackbar.Add("Select organization and clinic in the platform banner first.", Severity.Warning);
+            return;
+        }
+
         var dialog = await DialogService.ShowAsync<CreateStaffDialog>("Create staff");
         var result = await dialog.Result;
         if (result is { Canceled: false })

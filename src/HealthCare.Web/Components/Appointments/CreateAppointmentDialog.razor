@@ -14,15 +14,14 @@
         else
         {
             <MudStack Spacing="3">
+                @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true">
+                        Select an organization in the platform banner before creating an appointment.
+                    </MudAlert>
+                }
                 @if (Permissions.CanFilterByClinic || Permissions.IsPlatformAdmin)
                 {
-                    @if (Permissions.IsPlatformAdmin)
-                    {
-                        <MudTextField @bind-Value="_platformOrgIdText"
-                                      Label="Organization ID (platform bypass)"
-                                      HelperText="Required for PLATFORM_ADMIN clinic selection"
-                                      Variant="Variant.Outlined" />
-                    }
                     <ClinicPicker Value="_clinicId"
                                   ValueChanged="OnClinicChanged"
                                   Label="Clinic"
@@ -30,8 +29,8 @@
                                   AllowClear="false"
                                   ActiveOnly="true"
                                   PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
-                                  PlatformOrganizationId="_platformOrganizationId"
-                                  Disabled="_busy" />
+                                  PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
+                                  Disabled="@(_busy || (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization))" />
                 }
                 else if (Permissions.Has(WebPermissions.ClinicsRead))
                 {
@@ -151,6 +150,9 @@
     private IPermissionState Permissions { get; set; } = default!;
 
     [Inject]
+    private IPlatformTenantContext PlatformTenant { get; set; } = default!;
+
+    [Inject]
     private ISnackbar Snackbar { get; set; } = default!;
 
     private Guid? _clinicId;
@@ -167,8 +169,6 @@
     private bool _slotsLoading;
     private bool _busy;
     private string? _error;
-    private string? _platformOrgIdText;
-    private Guid? _platformOrganizationId;
 
     private bool CanSubmit =>
         Permissions.Has(WebPermissions.AppointmentsCreate)
@@ -176,33 +176,28 @@
         && _doctorId is not null
         && _selectedSlot is not null
         && (!_busy)
+        && (!Permissions.IsPlatformAdmin || (PlatformTenant.HasOrganization && _clinicId is not null))
         && (!Permissions.CanFilterByClinic || _clinicId is not null || !Permissions.IsOrganizationAdmin);
 
     protected override async Task OnInitializedAsync()
     {
-        if (InitialClinicId is Guid clinicId)
+        if (Permissions.IsPlatformAdmin && PlatformTenant.HasClinic)
+        {
+            _clinicId = PlatformTenant.SelectedClinicId;
+        }
+        else if (InitialClinicId is Guid clinicId)
         {
             _clinicId = clinicId;
-            await ResolveClinicMetaAsync(clinicId);
-            await LoadDoctorsAsync();
         }
         else if (!Permissions.CanFilterByClinic && Permissions.CurrentUser?.ClinicId is Guid membershipClinic)
         {
             _clinicId = membershipClinic;
-            await ResolveClinicMetaAsync(membershipClinic);
-            await LoadDoctorsAsync();
         }
-    }
 
-    protected override void OnParametersSet()
-    {
-        if (Guid.TryParse(_platformOrgIdText, out var orgId))
+        if (_clinicId is Guid resolvedClinic)
         {
-            _platformOrganizationId = orgId;
-        }
-        else
-        {
-            _platformOrganizationId = null;
+            await ResolveClinicMetaAsync(resolvedClinic);
+            await LoadDoctorsAsync();
         }
     }
 
@@ -334,10 +329,19 @@
             return;
         }
 
+        if (Permissions.IsPlatformAdmin
+            && (!PlatformTenant.HasOrganization || _clinicId is null || _clinicId == Guid.Empty))
+        {
+            _error = "Select organization and clinic before creating an appointment.";
+            return;
+        }
+
         _busy = true;
         _error = null;
         try
         {
+            var bypass = (PlatformAdminBypass || Permissions.IsPlatformAdmin) && _clinicId is not null;
+
             var created = await AppointmentsApi.CreateStaffAsync(
                 new CreateStaffAppointmentRequest
                 {
@@ -347,7 +351,7 @@
                     DurationMinutes = _selectedSlot.DurationMinutes,
                     ClinicId = Permissions.CanFilterByClinic || Permissions.IsPlatformAdmin ? _clinicId : null,
                 },
-                PlatformAdminBypass || Permissions.IsPlatformAdmin);
+                bypass);
 
             Snackbar.Add("Appointment created.", Severity.Success);
             await LoadSlotsAsync();

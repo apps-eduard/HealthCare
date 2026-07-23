@@ -1,0 +1,46 @@
+@namespace HealthCare.Web.Components.Organizations
+@inject IPlatformTenantContext PlatformTenant
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Select organization</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Search and choose an organization. This does not grant clinic or resource access by itself.
+        </MudText>
+        <OrganizationPicker Value="_organizationId"
+                            ValueChanged="OnOrganizationChanged"
+                            Label="Organization"
+                            Required="true"
+                            AllowClear="false"
+                            SyncPlatformContext="true"
+                            HelperText="Server-side search by name or slug" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private Guid? _organizationId;
+
+    protected override void OnInitialized()
+    {
+        _organizationId = PlatformTenant.SelectedOrganizationId;
+    }
+
+    private void OnOrganizationChanged(Guid? organizationId)
+    {
+        _organizationId = organizationId;
+        if (organizationId is not null)
+        {
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

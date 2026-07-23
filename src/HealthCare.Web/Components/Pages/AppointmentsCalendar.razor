@@ -4,8 +4,10 @@
 @using HealthCare.Web.Appointments
 @using HealthCare.Web.Components.Appointments
 @using HealthCare.Web.Components.Clinics
+@implements IDisposable
 @inject IAppointmentApiClient AppointmentsApi
 @inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject IClinicDirectoryCache ClinicCache
@@ -36,6 +38,19 @@ else
             <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync" Disabled="_loading">Refresh</MudButton>
         </MudStack>
     </MudStack>
+
+    @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            Select an organization in the platform banner before loading the calendar. Global calendar load is not allowed.
+        </MudAlert>
+    }
+    else if (Permissions.IsPlatformAdmin && !PlatformTenant.HasClinic)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            Select a clinic in the platform banner (or below) before loading the calendar for the selected organization.
+        </MudAlert>
+    }
 
     <MudPaper Class="pa-4 mb-4" Outlined="true">
         <MudGrid>
@@ -71,30 +86,24 @@ else
             </MudItem>
             @if (Permissions.CanFilterByClinic)
             {
-                @if (Permissions.IsPlatformAdmin)
-                {
-                    <MudItem xs="12" md="3">
-                        <MudTextField @bind-Value="_platformOrgIdText"
-                                      Label="Organization ID (platform bypass)"
-                                      HelperText="Required for PLATFORM_ADMIN clinic selection"
-                                      Variant="Variant.Outlined"
-                                      TextChanged="OnPlatformOrgChanged" />
-                    </MudItem>
-                }
                 <MudItem xs="12" md="3">
                     <ClinicPicker Value="_clinicId"
                                   ValueChanged="OnClinicFilterChanged"
                                   Label="Clinic"
                                   AllowClear="false"
                                   Required="true"
-                                  HelperText="Select a clinic for calendar scope"
+                                  HelperText="@(Permissions.IsPlatformAdmin ? "Required for PLATFORM_ADMIN" : "Select a clinic for calendar scope")"
                                   ActiveOnly="true"
                                   PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
-                                  PlatformOrganizationId="_platformOrganizationId" />
+                                  PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
+                                  Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)" />
                 </MudItem>
             }
             <MudItem xs="12" md="2" Class="d-flex align-end">
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAsync" FullWidth="true">Apply</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAsync" FullWidth="true"
+                           Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !_clinicId.HasValue))">
+                    Apply
+                </MudButton>
             </MudItem>
         </MudGrid>
     </MudPaper>
@@ -194,20 +203,23 @@ else
     private Guid? _clinicId;
     private string? _timezoneLabel;
     private string? _rangeLabel;
-    private string? _platformOrgIdText;
-    private Guid? _platformOrganizationId;
+    private Guid? _boundOrganizationId;
 
     protected override async Task OnInitializedAsync()
     {
+        PlatformTenant.Changed += OnPlatformTenantChanged;
+
         if (Permissions.IsPatientOnly || !Permissions.Has(WebPermissions.AppointmentsRead))
         {
             return;
         }
 
-        if (Permissions.IsPlatformAdmin)
+        SyncFromPlatformTenant();
+
+        if (Permissions.IsPlatformAdmin
+            && (!PlatformTenant.HasOrganization || !PlatformTenant.HasClinic))
         {
-            // PLATFORM_ADMIN must pick an explicit clinic — do not load a global calendar.
-            _error = "PLATFORM_ADMIN must select an organization ID and clinic before loading the calendar.";
+            RebuildWeekDays();
             return;
         }
 
@@ -216,15 +228,54 @@ else
             _clinicId = clinicId;
             await ResolveClinicMetaAsync(clinicId);
         }
-        else if (Permissions.CanFilterByClinic && Permissions.CurrentUser?.ClinicId is Guid membershipClinic)
+        else if (Permissions.CanFilterByClinic && !Permissions.IsPlatformAdmin && Permissions.CurrentUser?.ClinicId is Guid membershipClinic)
         {
             _clinicId = membershipClinic;
             await ResolveClinicMetaAsync(membershipClinic);
+        }
+        else if (Permissions.IsPlatformAdmin && _clinicId is Guid platformClinic)
+        {
+            await ResolveClinicMetaAsync(platformClinic);
         }
 
         RebuildWeekDays();
         await LoadDoctorsAsync();
         await LoadAsync();
+    }
+
+    public void Dispose() => PlatformTenant.Changed -= OnPlatformTenantChanged;
+
+    private void OnPlatformTenantChanged() => InvokeAsync(async () =>
+    {
+        var orgChanged = _boundOrganizationId != PlatformTenant.SelectedOrganizationId;
+        SyncFromPlatformTenant();
+        if (orgChanged)
+        {
+            _items.Clear();
+            _doctors = [];
+            _doctorId = null;
+            _error = null;
+            _timezoneLabel = null;
+        }
+
+        if (_clinicId is Guid clinicId)
+        {
+            await ResolveClinicMetaAsync(clinicId);
+        }
+
+        RebuildWeekDays();
+        await LoadDoctorsAsync();
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    private void SyncFromPlatformTenant()
+    {
+        _boundOrganizationId = PlatformTenant.SelectedOrganizationId;
+        if (Permissions.IsPlatformAdmin)
+        {
+            _clinicId = PlatformTenant.SelectedClinicId;
+        }
     }
 
     private async Task SetMode(CalendarMode mode)
@@ -269,18 +320,28 @@ else
         _rangeLabel = $"{_weekDays[0]:dd MMM} – {_weekDays[6]:dd MMM yyyy}";
     }
 
-    private void OnPlatformOrgChanged(string? value)
-    {
-        _platformOrgIdText = value;
-        _platformOrganizationId = Guid.TryParse(value, out var orgId) ? orgId : null;
-    }
-
     private async Task OnClinicFilterChanged(Guid? clinicId)
     {
         _clinicId = clinicId;
+        if (Permissions.IsPlatformAdmin)
+        {
+            if (clinicId is Guid id && id != Guid.Empty)
+            {
+                if (PlatformTenant.SelectedClinicId != id)
+                {
+                    PlatformTenant.SelectClinic(id);
+                }
+            }
+            else if (PlatformTenant.HasClinic)
+            {
+                PlatformTenant.ClearClinic();
+            }
+        }
+
         _doctorId = null;
         await ResolveClinicMetaAsync(clinicId);
         await LoadDoctorsAsync();
+        await LoadAsync();
     }
 
     private async Task ResolveClinicMetaAsync(Guid? clinicId)
@@ -313,6 +374,12 @@ else
     {
         _doctors = [];
         if (!Permissions.Has(WebPermissions.AvailabilityRead) || _clinicId is not Guid clinicId)
+        {
+            return;
+        }
+
+        if (Permissions.IsPlatformAdmin
+            && (!PlatformTenant.HasOrganization || _clinicId is null || _clinicId == Guid.Empty))
         {
             return;
         }
@@ -350,10 +417,11 @@ else
             return;
         }
 
-        if (Permissions.IsPlatformAdmin && _clinicId is null)
+        if (Permissions.IsPlatformAdmin
+            && (!PlatformTenant.HasOrganization || _clinicId is null || _clinicId == Guid.Empty))
         {
-            _error = "PLATFORM_ADMIN must select an explicit clinic.";
             _items.Clear();
+            _loading = false;
             return;
         }
 
@@ -381,6 +449,8 @@ else
                 to = _weekDays.Last();
             }
 
+            var bypass = Permissions.IsPlatformAdmin && _clinicId is not null;
+
             var query = AppointmentListQueryBuilder.Build(
                 from.ToDateTime(TimeOnly.MinValue),
                 to.ToDateTime(TimeOnly.MinValue),
@@ -393,7 +463,7 @@ else
                 sortDirection: "asc",
                 clinicTimeZoneId: _timezoneLabel);
 
-            var result = await AppointmentsApi.ListStaffAsync(query, Permissions.IsPlatformAdmin);
+            var result = await AppointmentsApi.ListStaffAsync(query, bypass);
             _items.Clear();
             _items.AddRange(result.Items);
             if (_items.Count > 0 && string.IsNullOrWhiteSpace(_timezoneLabel))

@@ -13,15 +13,18 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
     private readonly IPermissionState _permissionState;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IClinicDirectoryCache _clinicCache;
+    private readonly IPlatformTenantContext _platformTenant;
     private readonly IStaffWebAuthCookie _webAuthCookie;
     private readonly ILogger<StaffAuthenticationStateProvider> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private Guid? _authenticatedUserId;
 
     public StaffAuthenticationStateProvider(
         IApiTokenStore tokenStore,
         IPermissionState permissionState,
         IHttpClientFactory httpClientFactory,
         IClinicDirectoryCache clinicCache,
+        IPlatformTenantContext platformTenant,
         IStaffWebAuthCookie webAuthCookie,
         ILogger<StaffAuthenticationStateProvider> logger)
     {
@@ -29,6 +32,7 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
         _permissionState = permissionState;
         _httpClientFactory = httpClientFactory;
         _clinicCache = clinicCache;
+        _platformTenant = platformTenant;
         _webAuthCookie = webAuthCookie;
         _logger = logger;
     }
@@ -124,6 +128,8 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
         await _tokenStore.ClearAsync();
         await _permissionState.ClearAsync();
         _clinicCache.Clear();
+        _platformTenant.Clear();
+        _authenticatedUserId = null;
         await _webAuthCookie.SignOutAsync();
         NotifyAuthenticationStateChanged(Task.FromResult(Anonymous()));
     }
@@ -158,6 +164,13 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
                 return false;
             }
 
+            if (_authenticatedUserId is Guid previous && previous != user.UserId)
+            {
+                _platformTenant.Clear();
+                _clinicCache.Clear();
+            }
+
+            _authenticatedUserId = user.UserId;
             await _permissionState.SetFromUserAsync(user, cancellationToken);
             return true;
         }

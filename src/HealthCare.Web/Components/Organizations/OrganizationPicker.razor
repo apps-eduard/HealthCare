@@ -1,0 +1,209 @@
+@namespace HealthCare.Web.Components.Organizations
+@inject IOrganizationDirectoryApiClient OrganizationsApi
+@inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
+
+@if (!Permissions.IsPlatformAdmin || !Permissions.Has(WebPermissions.OrganizationsRead))
+{
+    @* Hidden for non-platform users — do not call the directory API. *@
+}
+else
+{
+    <MudAutocomplete T="OrganizationDirectoryItemResponse"
+                     Label="@Label"
+                     Value="_selected"
+                     ValueChanged="OnValueChanged"
+                     SearchFunc="SearchOrganizationsAsync"
+                     ToStringFunc="FormatOrganization"
+                     Dense="true"
+                     Clearable="@AllowClear"
+                     Disabled="@Disabled"
+                     Required="@Required"
+                     RequiredError="Organization is required"
+                     HelperText="@HelperText"
+                     MaxItems="20"
+                     ShowProgressIndicator="true"
+                     Variant="Variant.Outlined"
+                     ResetValueOnEmptyText="true" />
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <MudAlert Severity="Severity.Error" Dense="true" Class="mt-1">@_error</MudAlert>
+    }
+    else if (_emptyHint)
+    {
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mt-1">No organizations matched your search.</MudText>
+    }
+}
+
+@code {
+    [Parameter]
+    public Guid? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid?> ValueChanged { get; set; }
+
+    [Parameter]
+    public string Label { get; set; } = "Organization";
+
+    [Parameter]
+    public string? HelperText { get; set; }
+
+    [Parameter]
+    public bool Required { get; set; }
+
+    [Parameter]
+    public bool AllowClear { get; set; } = true;
+
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    [Parameter]
+    public bool? ActiveOnly { get; set; } = true;
+
+    /// <summary>
+    /// When true, selecting an organization also updates <see cref="IPlatformTenantContext"/>.
+    /// </summary>
+    [Parameter]
+    public bool SyncPlatformContext { get; set; } = true;
+
+    private OrganizationDirectoryItemResponse? _selected;
+    private string? _error;
+    private bool _emptyHint;
+    private CancellationTokenSource? _searchCts;
+    private int _searchVersion;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Permissions.IsPlatformAdmin || !Permissions.Has(WebPermissions.OrganizationsRead))
+        {
+            return;
+        }
+
+        if (Value is Guid id && id != Guid.Empty)
+        {
+            if (_selected?.OrganizationId == id)
+            {
+                return;
+            }
+
+            await EnsureSelectedAsync(id);
+        }
+        else if (Value is null)
+        {
+            _selected = null;
+        }
+    }
+
+    private async Task EnsureSelectedAsync(Guid organizationId)
+    {
+        try
+        {
+            var detail = await OrganizationsApi.GetOrganizationAsync(organizationId);
+            _selected = new OrganizationDirectoryItemResponse
+            {
+                OrganizationId = detail.OrganizationId,
+                Name = detail.Name,
+                Slug = detail.Slug,
+                IsActive = detail.IsActive,
+                ClinicCount = detail.ClinicCount,
+                CreatedAtUtc = detail.CreatedAtUtc,
+            };
+        }
+        catch (ApiProblemException)
+        {
+            _selected = null;
+        }
+    }
+
+    private async Task<IEnumerable<OrganizationDirectoryItemResponse>> SearchOrganizationsAsync(
+        string? value,
+        CancellationToken token)
+    {
+        _error = null;
+        _emptyHint = false;
+
+        _searchCts?.Cancel();
+        _searchCts?.Dispose();
+        _searchCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var cts = _searchCts;
+        var version = Interlocked.Increment(ref _searchVersion);
+
+        try
+        {
+            await Task.Delay(300, cts.Token);
+            if (version != _searchVersion)
+            {
+                return Array.Empty<OrganizationDirectoryItemResponse>();
+            }
+
+            var page = await OrganizationsApi.SearchOrganizationsAsync(
+                new OrganizationSearchRequest
+                {
+                    Search = string.IsNullOrWhiteSpace(value) ? null : value.Trim(),
+                    IsActive = ActiveOnly,
+                    Page = 1,
+                    PageSize = 20,
+                    SortBy = "name",
+                    SortDirection = "asc",
+                },
+                cts.Token);
+
+            if (version != _searchVersion)
+            {
+                return Array.Empty<OrganizationDirectoryItemResponse>();
+            }
+
+            _emptyHint = page.Items.Count == 0;
+            return page.Items;
+        }
+        catch (OperationCanceledException)
+        {
+            return Array.Empty<OrganizationDirectoryItemResponse>();
+        }
+        catch (ApiProblemException ex)
+        {
+            if (version == _searchVersion)
+            {
+                _error = ex.ToUserMessage();
+            }
+
+            return Array.Empty<OrganizationDirectoryItemResponse>();
+        }
+        catch (HttpRequestException)
+        {
+            if (version == _searchVersion)
+            {
+                _error = "Unable to reach the API.";
+            }
+
+            return Array.Empty<OrganizationDirectoryItemResponse>();
+        }
+    }
+
+    private async Task OnValueChanged(OrganizationDirectoryItemResponse? item)
+    {
+        _selected = item;
+
+        if (SyncPlatformContext)
+        {
+            if (item is null)
+            {
+                PlatformTenant.Clear();
+            }
+            else
+            {
+                PlatformTenant.SelectOrganization(item.OrganizationId, item.Name, item.Slug);
+            }
+        }
+
+        await ValueChanged.InvokeAsync(item?.OrganizationId);
+    }
+
+    private static string FormatOrganization(OrganizationDirectoryItemResponse? org) =>
+        org is null
+            ? string.Empty
+            : string.IsNullOrWhiteSpace(org.Slug)
+                ? org.Name
+                : $"{org.Name} ({org.Slug})";
+}

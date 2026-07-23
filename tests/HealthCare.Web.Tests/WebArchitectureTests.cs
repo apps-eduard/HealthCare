@@ -71,6 +71,8 @@ public sealed class WebArchitectureTests
             .Should().NotBeNull();
         typeof(IDoctorAvailabilityApiClient).GetMethod(nameof(IDoctorAvailabilityApiClient.GetAvailableSlotsAsync))
             .Should().NotBeNull();
+        typeof(IOrganizationDirectoryApiClient).GetMethod(nameof(IOrganizationDirectoryApiClient.SearchOrganizationsAsync))
+            .Should().NotBeNull();
     }
 
     [Fact]

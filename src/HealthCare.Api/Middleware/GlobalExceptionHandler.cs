@@ -4,6 +4,7 @@ using HealthCare.Application.Authorization;
 using HealthCare.Application.Clinics;
 using HealthCare.Application.Identity;
 using HealthCare.Application.MedicalNotes;
+using HealthCare.Application.Organizations;
 using HealthCare.Application.Patients;
 using HealthCare.Application.Staff;
 using Microsoft.AspNetCore.Diagnostics;
@@ -113,6 +114,18 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
                 clinicDirectoryException.ErrorCode,
                 correlationId,
                 "Clinic directory denied",
+                cancellationToken);
+        }
+
+        if (exception is OrganizationDirectoryException organizationDirectoryException)
+        {
+            return await WriteAuthProblemAsync(
+                httpContext,
+                organizationDirectoryException.StatusCode,
+                organizationDirectoryException.Title,
+                organizationDirectoryException.ErrorCode,
+                correlationId,
+                "Organization directory denied",
                 cancellationToken);
         }
 

@@ -25,10 +25,10 @@ else
                      ToStringFunc="FormatClinic"
                      Dense="true"
                      Clearable="@AllowClear"
-                     Disabled="@Disabled"
+                     Disabled="@EffectiveDisabled"
                      Required="@Required"
                      RequiredError="Clinic is required"
-                     HelperText="@HelperText"
+                     HelperText="@(IsPlatformScopeMissing ? "Select an organization in the platform banner first." : HelperText)"
                      MaxItems="20"
                      ShowProgressIndicator="true"
                      Variant="Variant.Outlined" />
@@ -80,12 +80,34 @@ else
     private bool _emptyHint;
     private CancellationTokenSource? _searchCts;
     private int _searchVersion;
+    private Guid? _lastPlatformOrganizationId;
+
+    private bool IsPlatformScopeMissing =>
+        PlatformAdminBypass
+        && (PlatformOrganizationId is null || PlatformOrganizationId == Guid.Empty);
+
+    private bool EffectiveDisabled => Disabled || IsPlatformScopeMissing;
 
     protected override async Task OnParametersSetAsync()
     {
         if (!Permissions.Has(WebPermissions.ClinicsRead))
         {
             return;
+        }
+
+        if (PlatformOrganizationId != _lastPlatformOrganizationId)
+        {
+            _lastPlatformOrganizationId = PlatformOrganizationId;
+            if (_selected is not null
+                && (PlatformOrganizationId is null
+                    || _selected.OrganizationId != PlatformOrganizationId))
+            {
+                _selected = null;
+                if (Value is not null)
+                {
+                    await ValueChanged.InvokeAsync(null);
+                }
+            }
         }
 
         if (!Permissions.CanFilterByClinic

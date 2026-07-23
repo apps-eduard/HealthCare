@@ -5,6 +5,7 @@ using HealthCare.Application.Authorization;
 using HealthCare.Application.Clinics;
 using HealthCare.Application.Identity;
 using HealthCare.Application.MedicalNotes;
+using HealthCare.Application.Organizations;
 using HealthCare.Application.Patients;
 using HealthCare.Application.Staff;
 using HealthCare.Contracts;
@@ -307,6 +308,7 @@ public sealed class LayerDependencyTests
         typeof(IStaffManagementService).Namespace.Should().StartWith("HealthCare.Application.Staff");
         typeof(ISecuritySessionInvalidationService).Namespace.Should().StartWith("HealthCare.Application.Identity");
         typeof(IClinicDirectoryService).Namespace.Should().StartWith("HealthCare.Application.Clinics");
+        typeof(IOrganizationDirectoryService).Namespace.Should().StartWith("HealthCare.Application.Organizations");
     }
 
     [Fact]
