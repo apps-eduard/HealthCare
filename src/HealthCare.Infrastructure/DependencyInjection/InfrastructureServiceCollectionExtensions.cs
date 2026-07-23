@@ -1,7 +1,9 @@
+using HealthCare.Application.Appointments;
 using HealthCare.Application.Authorization;
 using HealthCare.Application.Identity;
 using HealthCare.Application.Patients;
 using HealthCare.Domain.Identity;
+using HealthCare.Infrastructure.Appointments;
 using HealthCare.Infrastructure.Authorization;
 using HealthCare.Infrastructure.Clinics;
 using HealthCare.Infrastructure.Identity;
@@ -141,6 +143,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IClinicEnrollmentService, ClinicEnrollmentService>();
         services.AddScoped<IPatientClinicRegistrationService, PatientClinicRegistrationService>();
         services.AddScoped<IStaffPatientService, StaffPatientService>();
+        services.AddScoped<IAppointmentService, AppointmentService>();
         services.AddScoped<IClinicPublicLookup, ClinicPublicLookup>();
         services.AddScoped<ILocalPatientNumberGenerator, LocalPatientNumberGenerator>();
         services.AddSingleton<IDevelopmentConfirmationTokenStore, DevelopmentConfirmationTokenStore>();

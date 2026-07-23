@@ -1,3 +1,4 @@
+using HealthCare.Domain.Appointments;
 using HealthCare.Domain.Clinics;
 using HealthCare.Domain.Identity;
 using HealthCare.Domain.Organizations;
@@ -35,12 +36,14 @@ public sealed class HealthCareDbContext : IdentityDbContext<ApplicationUser, Ide
 
     public DbSet<ClinicPatientNumberSequence> ClinicPatientNumberSequences => Set<ClinicPatientNumberSequence>();
 
+    public DbSet<Appointment> Appointments => Set<Appointment>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
         modelBuilder.HasDefaultSchema("public");
-        modelBuilder.HasAnnotation("HealthCare:SchemaVersion", "6");
+        modelBuilder.HasAnnotation("HealthCare:SchemaVersion", "7");
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(HealthCareDbContext).Assembly);
     }
@@ -117,6 +120,14 @@ public sealed class HealthCareDbContext : IdentityDbContext<ApplicationUser, Ide
                     }
 
                     clinicPatient.UpdatedAtUtc = utcNow;
+                    break;
+                case Appointment appointment:
+                    if (entry.State == EntityState.Added)
+                    {
+                        appointment.CreatedAtUtc = utcNow;
+                    }
+
+                    appointment.UpdatedAtUtc = utcNow;
                     break;
             }
         }

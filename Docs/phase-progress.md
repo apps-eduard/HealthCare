@@ -2,24 +2,24 @@
 
 ## Progress overview
 
-**Overall completion: 40%**
+**Overall completion: 43%**
 
 ```text
-[████████████░░░░░░░░░░░░░░░░░░░░]  40%
+[█████████████░░░░░░░░░░░░░░░░░░░]  43%
 ```
 
 | Metric | Value |
 |--------|-------|
 | Official phases (0–13) | 14 |
 | Complete | 3 (Phases 0, 1, 5) |
-| Partial | 4 (Phases 2, 3, 4, 6) |
+| Partial | 5 (Phases 2, 3, 4, 6, 7) |
 | In progress | 0 |
-| Not started | 7 |
-| Weighted score | (3×1.0) + (0.7 + 0.75 + 0.5 + 0.5) = 5.45 / 14 ≈ **39%** → **40%** |
+| Not started | 6 |
+| Weighted score | (3×1.0) + (0.7 + 0.75 + 0.5 + 0.5 + 0.55) = 6.0 / 14 ≈ **43%** |
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Appointment module foundation (Phase 7), or Google auth / staff UI
+**Current focus:** Appointment availability / scheduling rules, or Google auth / staff UI
 
 ### All phases at a glance
 
@@ -33,7 +33,7 @@
 | 4 | Organizations and clinics | Partial | `█████░░░░░` 50% |
 | 5 | Patients and clinic-patient registration | Complete | `██████████` 100% |
 | 6 | Staff and doctors | Partial | `█████░░░░░` 50% |
-| 7 | Appointment booking | Not started | `░░░░░░░░░░` 0% |
+| 7 | Appointment booking | Partial | `██████░░░░` 55% |
 | 8 | Staff web application (MudBlazor) | Not started | `░░░░░░░░░░` 0% |
 | 9 | Medical notes | Not started | `░░░░░░░░░░` 0% |
 | 10 | Hangfire and notifications | Not started | `░░░░░░░░░░` 0% |
@@ -90,7 +90,7 @@ Authoritative design docs:
 | 4 | Organizations and clinics | Partial (entities + schema only) | 2026-07-23 |
 | 5 | Patients and clinic-patient registration | Complete (staff search + clinic admin) | 2026-07-23 |
 | 6 | Staff and doctors | Partial (StaffMember entity + schema only) | 2026-07-23 |
-| 7 | Appointment booking | Not started | — |
+| 7 | Appointment booking | Partial (foundation) | 2026-07-23 |
 | 8 | Staff web application (MudBlazor) | Not started | — |
 | 9 | Medical notes | Not started | — |
 | 10 | Hangfire and notifications | Not started | — |
@@ -355,15 +355,57 @@ Authoritative design docs:
 
 ## Phase 7 — Appointment booking
 
-**Status:** Not started
+**Status:** Partial (~55% — foundation)  
+**Updated:** 2026-07-23
 
-### Planned
+### Already done (foundation)
 
-- `Appointment` entity and status workflow
-- Booking, confirmation, cancellation
-- Conflict detection
-- Patient and staff appointment endpoints
-- Cross-clinic and self-scope tests
+**Entity / relationships**
+- `Appointment`: OrganizationId, ClinicId, PatientId, ClinicPatientId, DoctorStaffMemberId, AppointmentDateUtc, DurationMinutes, Reason, Status, PatientNotes, CancellationReason, Source, CreatedByUserId, Version, timestamps
+- Requires active ClinicPatient enrollment; doctor must be active DOCTOR in same clinic (MVP assumption)
+
+**Status workflow**
+- Requested → Confirmed / CancelledByPatient / CancelledByClinic
+- Confirmed → CheckedIn / Cancelled* / NoShow
+- CheckedIn → InProgress / Completed / NoShow / CancelledByClinic
+- InProgress → Completed / CancelledByClinic
+- Terminal: Completed, CancelledByPatient, CancelledByClinic, NoShow
+- Patient booking starts **Requested**; staff booking starts **Confirmed** (assumption)
+
+**Endpoints**
+- `POST/GET /api/v1/patients/me/appointments`
+- `POST/GET /api/v1/staff/appointments`
+- `GET /api/v1/appointments/{id}`
+- `POST .../confirm|check-in|complete|no-show` (staff); `POST /api/v1/appointments/{id}/cancel` (patient or staff)
+
+**Tenant isolation**
+- Patient: self only via ICurrentPatient
+- Clinic staff: trusted ClinicId
+- Org admin: organization-wide list; create uses assigned clinic membership
+- PLATFORM_ADMIN: explicit bypass only
+- Client OrganizationId/PatientId not accepted on patient create contract
+
+**Slot conflict**
+- Overlap detection for same clinic + doctor; cancelled ignored; Serializable transaction on relational DB
+
+**Migration**
+- `AddAppointmentFoundation` applied to `healthcare_db`
+
+### Verification
+
+- Build: succeeded
+- Unit tests: 101 passed (17 appointment)
+- Architecture tests: 12 passed
+- Integration tests: Docker unavailable (suite retained)
+- Manual: health 200; patient create Requested; list own; Clinic B doctor assign 400; overlap 409; confirm + stale 409; cancel + slot reuse; Clinic B cannot see Clinic A appt; invalid complete transition 409
+
+### Remaining Appointment work
+
+- Doctor availability / schedules / clinic calendar
+- `GET /clinics/{id}/doctors` and availability endpoints
+- Reminder notifications (Hangfire)
+- Staff UI appointment queue
+- Broader assignable roles if needed beyond DOCTOR
 
 ---
 
@@ -455,6 +497,7 @@ Authoritative design docs:
 | 2026-07-23 | 5 / 2 | Patient registration, email confirmation, clinic enroll + local numbers; overall ~37% |
 | 2026-07-23 | 5 | Profile PATCH + patient clinic self-register via slug; concurrency Version; overall ~39% |
 | 2026-07-23 | 5 | Staff patient search + ClinicPatient admin; Phase 5 complete; overall ~40% |
+| 2026-07-23 | 7 | Appointment foundation (entity, booking, transitions, conflicts); overall ~43% |
 
 ---
 

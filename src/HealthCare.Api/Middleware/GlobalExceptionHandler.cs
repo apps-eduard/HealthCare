@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using HealthCare.Application.Appointments;
 using HealthCare.Application.Authorization;
 using HealthCare.Application.Identity;
 using HealthCare.Application.Patients;
@@ -97,6 +98,18 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
                 clinicRegistrationException.ErrorCode,
                 correlationId,
                 "Clinic registration denied",
+                cancellationToken);
+        }
+
+        if (exception is AppointmentException appointmentException)
+        {
+            return await WriteAuthProblemAsync(
+                httpContext,
+                appointmentException.StatusCode,
+                appointmentException.Title,
+                appointmentException.ErrorCode,
+                correlationId,
+                "Appointment operation denied",
                 cancellationToken);
         }
 
