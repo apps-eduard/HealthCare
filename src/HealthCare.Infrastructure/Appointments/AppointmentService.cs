@@ -33,6 +33,7 @@ public sealed class AppointmentService : IAppointmentService
     private readonly ICurrentPatient _currentPatient;
     private readonly IClinicPublicLookup _clinicLookup;
     private readonly IAppointmentSlotService _slots;
+    private readonly IAppointmentReminderScheduler _reminders;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<AppointmentService> _logger;
 
@@ -43,6 +44,7 @@ public sealed class AppointmentService : IAppointmentService
         ICurrentPatient currentPatient,
         IClinicPublicLookup clinicLookup,
         IAppointmentSlotService slots,
+        IAppointmentReminderScheduler reminders,
         TimeProvider timeProvider,
         ILogger<AppointmentService> logger)
     {
@@ -52,6 +54,7 @@ public sealed class AppointmentService : IAppointmentService
         _currentPatient = currentPatient;
         _clinicLookup = clinicLookup;
         _slots = slots;
+        _reminders = reminders;
         _timeProvider = timeProvider;
         _logger = logger;
     }
@@ -122,6 +125,7 @@ public sealed class AppointmentService : IAppointmentService
         };
 
         await PersistNewAppointmentAsync(appointment, "appointment_requested", cancellationToken);
+        await _reminders.ScheduleAfterAppointmentCreatedAsync(appointment.Id, cancellationToken);
         return Map(appointment);
     }
 
@@ -180,6 +184,7 @@ public sealed class AppointmentService : IAppointmentService
         };
 
         await PersistNewAppointmentAsync(appointment, "appointment_created_by_staff", cancellationToken);
+        await _reminders.ScheduleAfterAppointmentCreatedAsync(appointment.Id, cancellationToken);
         return Map(appointment);
     }
 
@@ -350,6 +355,15 @@ public sealed class AppointmentService : IAppointmentService
             appointment.Id,
             appointment.Status,
             operation);
+
+        if (target == AppointmentStatus.Confirmed)
+        {
+            await _reminders.ScheduleAfterAppointmentConfirmedAsync(appointment.Id, cancellationToken);
+        }
+        else if (AppointmentStatusTransitions.IsCancelled(target))
+        {
+            await _reminders.ScheduleAfterAppointmentCancelledAsync(appointment.Id, cancellationToken);
+        }
 
         return Map(appointment);
     }

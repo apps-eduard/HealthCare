@@ -27,6 +27,7 @@ try
 
     builder.Services.AddApplication();
     builder.Services.AddInfrastructure(builder.Configuration);
+    builder.Services.AddAppointmentReminders(builder.Configuration, builder.Environment);
 
     builder.Services.AddControllers();
     builder.Services.AddFluentValidationAutoValidation();
@@ -98,6 +99,7 @@ try
     app.UseHttpsRedirection();
     app.UseAuthentication();
     app.UseAuthorization();
+    app.UseAppointmentReminderHangfire(app.Environment);
     app.MapControllers();
     app.MapHealthChecks("/health");
 

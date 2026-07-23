@@ -193,6 +193,38 @@ public sealed class LayerDependencyTests
     }
 
     [Fact]
+    public void Appointment_Reminder_Abstractions_And_Hangfire_Stay_Out_Of_Domain()
+    {
+        typeof(IAppointmentReminderService).Namespace.Should().StartWith("HealthCare.Application.Appointments");
+        typeof(IAppointmentReminderSender).Namespace.Should().StartWith("HealthCare.Application.Appointments");
+        typeof(IAppointmentReminderScheduler).Namespace.Should().StartWith("HealthCare.Application.Appointments");
+        typeof(IAppointmentReminderProcessor).Namespace.Should().StartWith("HealthCare.Application.Appointments");
+        typeof(IReminderBackgroundJobs).Namespace.Should().StartWith("HealthCare.Application.Appointments");
+
+        typeof(Contracts.Appointments.AppointmentReminderResponse)
+            .Should().NotBeAssignableTo(typeof(Domain.Appointments.AppointmentReminder));
+
+        typeof(Program).Assembly.GetTypes()
+            .Where(t => t.Name.EndsWith("Controller", StringComparison.Ordinal))
+            .Should()
+            .NotContain(t => t.GetMethods().Any(m => m.Name.Contains("DbContext", StringComparison.Ordinal)));
+
+        var domainResult = Types.InAssembly(typeof(DomainAssemblyMarker).Assembly)
+            .That()
+            .ResideInNamespace("HealthCare.Domain.Appointments")
+            .ShouldNot()
+            .HaveDependencyOn("Hangfire")
+            .GetResult();
+        domainResult.IsSuccessful.Should().BeTrue(Because(domainResult));
+
+        var appResult = Types.InAssembly(typeof(ApplicationAssemblyMarker).Assembly)
+            .ShouldNot()
+            .HaveDependencyOn("Hangfire")
+            .GetResult();
+        appResult.IsSuccessful.Should().BeTrue(Because(appResult));
+    }
+
+    [Fact]
     public void Staff_Patient_Search_Uses_Tenant_Abstractions_And_Contracts_Not_Entities()
     {
         typeof(IStaffPatientService).Namespace.Should().StartWith("HealthCare.Application.Patients");
