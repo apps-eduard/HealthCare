@@ -10,6 +10,18 @@ public static class WebPermissions
     public const string RolesRead = "roles.read";
     public const string RolesAssign = "roles.assign";
     public const string ClinicsRead = "clinics.read";
+
+    public const string AppointmentsRead = "appointments.read";
+    public const string AppointmentsCreate = "appointments.create";
+    public const string AppointmentsConfirm = "appointments.confirm";
+    public const string AppointmentsCheckIn = "appointments.check_in";
+    public const string AppointmentsComplete = "appointments.complete";
+    public const string AppointmentsNoShow = "appointments.no_show";
+    public const string AppointmentsCancel = "appointments.cancel";
+    public const string AppointmentsReschedule = "appointments.reschedule";
+
+    public const string AvailabilityRead = "availability.read";
+    public const string PatientsSearch = "patients.search";
 }
 
 public static class WebRoles

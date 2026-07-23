@@ -2,10 +2,10 @@
 
 ## Progress overview
 
-**Overall completion: 58%**
+**Overall completion: 61%**
 
 ```text
-[██████████████████░░░░░░░░░░░░░░]  58%
+[███████████████████░░░░░░░░░░░░░]  61%
 ```
 
 | Metric | Value |
@@ -15,11 +15,11 @@
 | Partial | 7 (Phases 2, 3, 4, 6, 7, 8, 10) |
 | In progress | 0 |
 | Not started | 4 |
-| Weighted score | (3×1.0) + (0.7 + 0.95 + 0.5 + 0.75 + 0.85 + 0.4 + 0.85) = 8.0 / 14 ≈ **58%** |
+| Weighted score | (3×1.0) + (0.7 + 0.95 + 0.5 + 0.75 + 0.85 + 0.55 + 0.85) = 8.15 / 14 ≈ **61%** |
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Appointment/patient staff UI, Google auth, or medical notes
+**Current focus:** Patient directory UI, Google auth, medical notes, or BFF cookie auth
 
 ### All phases at a glance
 
@@ -34,7 +34,7 @@
 | 5 | Patients and clinic-patient registration | Complete | `██████████` 100% |
 | 6 | Staff and doctors | Partial | `████████░░` 75% |
 | 7 | Appointment booking | Partial | `█████████░` 85% |
-| 8 | Staff web application (MudBlazor) | Partial | `████░░░░░░` 40% |
+| 8 | Staff web application (MudBlazor) | Partial | `█████░░░░░` 55% |
 | 9 | Medical notes | Not started | `░░░░░░░░░░` 0% |
 | 10 | Hangfire and notifications | Partial | `█████████░` 85% |
 | 11 | Patient mobile application | Not started | `░░░░░░░░░░` 0% |
@@ -91,7 +91,7 @@ Authoritative design docs:
 | 5 | Patients and clinic-patient registration | Complete (staff search + clinic admin) | 2026-07-23 |
 | 6 | Staff and doctors | Partial (staff-management APIs; UI deferred) | 2026-07-23 |
 | 7 | Appointment booking | Partial (foundation + availability + reschedule) | 2026-07-23 |
-| 8 | Staff web application (MudBlazor) | Partial (login + staff management foundation) | 2026-07-23 |
+| 8 | Staff web application (MudBlazor) | Partial (auth + staff + appointments UI) | 2026-07-23 |
 | 9 | Medical notes | Not started | — |
 | 10 | Hangfire and notifications | Partial (reminders + daily clinic summary) | 2026-07-23 |
 | 11 | Patient mobile application | Not started | — |
@@ -539,7 +539,7 @@ Authoritative design docs:
 
 ## Phase 8 — Staff web application
 
-**Status:** Partial (~40% — auth shell + staff management UI foundation)  
+**Status:** Partial (~55% — auth shell + staff management + appointment queue/calendar)  
 **Updated:** 2026-07-23
 
 ### Already done
@@ -552,29 +552,48 @@ Authoritative design docs:
 - Dashboard (`/` / `/dashboard`) with session context and permission-aware links
 - Staff management page (`/staff`): server-side search/filter/pagination, detail, create, activate/deactivate, role assign
 - **Clinic directory API + picker:** `GET /api/v1/staff-management/clinics` with tenant scope; MudBlazor `ClinicPicker` replaces free-text ClinicId
-- Typed clients: `IAuthApiClient`, `IStaffManagementApiClient`, `IClinicDirectoryApiClient`
+- **Staff appointments workspace:**
+  - Routes: `/appointments` (queue), `/appointments/calendar` (day/week)
+  - Nav: Appointments (when `appointments.read`), Staff Management, Dashboard
+  - Typed clients: `IAppointmentApiClient`, `IStaffPatientApiClient`
+  - Queue: server-side date/status/doctor/clinic/page/sort filters; permission-aware actions
+  - Calendar: lightweight Mud day/week views; clinic timezone display (not browser-local)
+  - Detail / create / cancel / reschedule dialogs with `ExpectedVersion` concurrency
+  - `PatientPicker` (debounced staff patient search); doctor + available-slot selection via API
+  - Centralized status chips (`AppointmentStatusPresentation`) and action visibility (`AppointmentActionRules`)
+  - Problem Details mapping for appointment error codes (slot unavailable, concurrency, etc.)
+  - Optional ~45s queue polling (paused while dialogs open)
+- Typed clients: `IAuthApiClient`, `IStaffManagementApiClient`, `IClinicDirectoryApiClient`, appointment/patient clients above
 - Problem Details mapping to safe UI messages
 - PATIENT accounts blocked from staff UI
 - Config: `Api:BaseUrl`
 
+### API contract enrichment (smallest safe change)
+
+`AppointmentResponse` now includes staff-safe display fields: `PatientDisplayName`, `LocalPatientNumber`, `DoctorDisplayName`, `ClinicName`, `ClinicSlug`, `ClinicTimeZoneId`.  
+`CreateStaffAppointmentRequest.ClinicId` optional for ORGANIZATION_ADMIN / PLATFORM_ADMIN create scope (clinic-scoped staff still use membership clinic).
+
 ### Remaining
 
-- Appointments, patients, notes, settings, audit viewer screens
+- Patient directory screens, notes, settings, audit viewer
 - HttpOnly BFF cookie auth (replace ProtectedSessionStorage MVP)
-- Broader automated UI/component coverage (bUnit package restore may be flaky)
+- Drag-and-drop calendar reschedule / SignalR realtime (explicitly out of this slice)
+- Broader bUnit component coverage (prefer support/view-model tests while bUnit restore is flaky)
 
 ### Known limitations
 
 - Refresh tokens stored in ProtectedSessionStorage (encrypted browser session storage), not HttpOnly cookies
-- PLATFORM_ADMIN clinic picker still needs an OrganizationId scope field (no org directory UI yet)
+- PLATFORM_ADMIN clinic picker still needs an OrganizationId scope field (no org directory UI yet); calendar requires explicit clinic selection
+- List API has no free-text search parameter (queue filters by date/status/doctor/clinic only)
+- Reason for visit / patient notes are not shown in staff appointment UI
 - No invitation email UI (temporary-password create only)
 - API remains the authorization authority
 
 ### Verification
 
-- Build: succeeded (`HealthCare.Web` + solution)
-- Unit / architecture / web support tests: see latest commit notes
-- Integration: clinic directory suite retained (Docker/Testcontainers)
+- Build: see latest commit verification
+- Unit / architecture / web support tests: appointment helpers + Web architecture checks
+- Integration: existing appointment suites retained (Docker/Testcontainers)
 
 ---
 

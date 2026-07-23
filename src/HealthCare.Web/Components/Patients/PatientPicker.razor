@@ -1,0 +1,181 @@
+@namespace HealthCare.Web.Components.Patients
+@implements IDisposable
+@using HealthCare.Contracts.Patients
+@using HealthCare.Web.Appointments
+@inject IStaffPatientApiClient PatientsApi
+@inject IPermissionState Permissions
+@inject ISnackbar Snackbar
+
+@if (!Permissions.Has(WebPermissions.PatientsSearch))
+{
+    <MudAlert Severity="Severity.Warning" Dense="true">Patient search permission is required.</MudAlert>
+}
+else
+{
+    <MudAutocomplete T="StaffPatientSummaryResponse"
+                     Label="@Label"
+                     Value="_selected"
+                     ValueChanged="OnValueChanged"
+                     SearchFunc="SearchPatientsAsync"
+                     ToStringFunc="FormatPatient"
+                     Dense="true"
+                     Clearable="true"
+                     Disabled="@Disabled"
+                     Required="@Required"
+                     RequiredError="Patient is required"
+                     HelperText="@HelperText"
+                     MaxItems="20"
+                     DebounceInterval="400"
+                     ShowProgressIndicator="true"
+                     Variant="Variant.Outlined"
+                     ResetValueOnEmptyText="true" />
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <MudAlert Severity="Severity.Error" Dense="true" Class="mt-1">@_error</MudAlert>
+    }
+}
+
+@code {
+    [Parameter]
+    public Guid? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid?> ValueChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<StaffPatientSummaryResponse?> SelectedPatientChanged { get; set; }
+
+    [Parameter]
+    public string Label { get; set; } = "Patient";
+
+    [Parameter]
+    public string? HelperText { get; set; } = "Search by name or local patient number";
+
+    [Parameter]
+    public bool Required { get; set; }
+
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    [Parameter]
+    public Guid? ClinicId { get; set; }
+
+    [Parameter]
+    public bool PlatformAdminBypass { get; set; }
+
+    private StaffPatientSummaryResponse? _selected;
+    private string? _error;
+    private CancellationTokenSource? _searchCts;
+    private int _searchVersion;
+
+    protected override void OnParametersSet()
+    {
+        if (Value is null)
+        {
+            _selected = null;
+        }
+        else if (_selected?.PatientId != Value)
+        {
+            // Value set externally without picker selection — clear display to avoid stale name.
+            if (_selected is null || _selected.PatientId != Value)
+            {
+                _selected = null;
+            }
+        }
+    }
+
+    private async Task OnValueChanged(StaffPatientSummaryResponse? patient)
+    {
+        _selected = patient;
+        var id = patient?.PatientId;
+        await ValueChanged.InvokeAsync(id);
+        await SelectedPatientChanged.InvokeAsync(patient);
+    }
+
+    private async Task<IEnumerable<StaffPatientSummaryResponse>> SearchPatientsAsync(
+        string? value,
+        CancellationToken token)
+    {
+        _error = null;
+        if (!Permissions.Has(WebPermissions.PatientsSearch))
+        {
+            return [];
+        }
+
+        _searchCts?.Cancel();
+        _searchCts?.Dispose();
+        _searchCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var cts = _searchCts;
+        var version = Interlocked.Increment(ref _searchVersion);
+
+        try
+        {
+            var result = await PatientsApi.SearchAsync(
+                new StaffPatientSearchRequest
+                {
+                    Search = string.IsNullOrWhiteSpace(value) ? null : value.Trim(),
+                    ClinicId = ClinicId,
+                    ClinicPatientStatus = "Active",
+                    PatientIsActive = true,
+                    Page = 1,
+                    PageSize = 20,
+                    SortBy = "lastName",
+                    SortDirection = "asc",
+                },
+                PlatformAdminBypass,
+                cts.Token);
+
+            if (version != _searchVersion)
+            {
+                return [];
+            }
+
+            if (result.Items.Count == 0)
+            {
+                return [];
+            }
+
+            return result.Items;
+        }
+        catch (OperationCanceledException)
+        {
+            return [];
+        }
+        catch (ApiProblemException ex)
+        {
+            if (version == _searchVersion)
+            {
+                _error = AppointmentProblemMessages.ToUserMessage(ex);
+            }
+
+            return [];
+        }
+        catch (Exception)
+        {
+            if (version == _searchVersion)
+            {
+                _error = "Unable to search patients.";
+            }
+
+            return [];
+        }
+    }
+
+    private static string FormatPatient(StaffPatientSummaryResponse? p)
+    {
+        if (p is null)
+        {
+            return string.Empty;
+        }
+
+        var name = $"{p.FirstName} {p.LastName}".Trim();
+        return $"{name} · {p.LocalPatientNumber} · {p.ClinicPatientStatus}";
+    }
+
+    public void Dispose()
+    {
+        _searchCts?.Cancel();
+        _searchCts?.Dispose();
+    }
+}

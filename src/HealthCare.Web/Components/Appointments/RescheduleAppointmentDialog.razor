@@ -1,0 +1,269 @@
+@namespace HealthCare.Web.Components.Appointments
+@using HealthCare.Contracts.Appointments
+@using HealthCare.Web.Appointments
+
+<MudDialog>
+    <DialogContent>
+        @if (Appointment is null)
+        {
+            <MudAlert Severity="Severity.Error">Appointment is required.</MudAlert>
+        }
+        else
+        {
+            <MudStack Spacing="3">
+                <MudText Typo="Typo.caption">
+                    Clinic: @(Appointment.ClinicName ?? Appointment.ClinicId.ToString("D"))
+                    @if (!string.IsNullOrWhiteSpace(Appointment.ClinicTimeZoneId))
+                    {
+                        <span> · @Appointment.ClinicTimeZoneId</span>
+                    }
+                </MudText>
+
+                <MudSelect T="Guid?"
+                           Value="_doctorId"
+                           ValueChanged="OnDoctorChanged"
+                           Label="Doctor"
+                           Required="true"
+                           Disabled="_busy || _doctorsLoading"
+                           Variant="Variant.Outlined">
+                    @foreach (var doctor in _doctors)
+                    {
+                        <MudSelectItem T="Guid?" Value="@doctor.StaffMemberId">@doctor.DisplayName</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudDatePicker Date="_date"
+                               DateChanged="OnDateChanged"
+                               Label="New date"
+                               Editable="true"
+                               Disabled="_busy"
+                               Variant="Variant.Outlined" />
+
+                <MudNumericField T="int"
+                                 Value="_durationMinutes"
+                                 ValueChanged="OnDurationChanged"
+                                 Label="Duration (minutes)"
+                                 Min="5"
+                                 Max="240"
+                                 Disabled="_busy"
+                                 Variant="Variant.Outlined" />
+
+                <MudSelect T="AvailableSlotResponse"
+                           @bind-Value="_selectedSlot"
+                           Label="Available slot"
+                           Required="true"
+                           Disabled="_busy || _slotsLoading || _doctorId is null || _date is null"
+                           Variant="Variant.Outlined"
+                           ToStringFunc="FormatSlot">
+                    @foreach (var slot in _slots)
+                    {
+                        <MudSelectItem T="AvailableSlotResponse" Value="@slot">@FormatSlot(slot)</MudSelectItem>
+                    }
+                </MudSelect>
+                @if (_slotsLoading)
+                {
+                    <MudProgressLinear Indeterminate="true" />
+                }
+                else if (_doctorId is not null && _date is not null && _slots.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">No available slots for this date.</MudAlert>
+                }
+
+                <MudTextField @bind-Value="_reason"
+                              Label="Reason (optional)"
+                              Variant="Variant.Outlined"
+                              Disabled="_busy" />
+
+                @if (!string.IsNullOrWhiteSpace(_error))
+                {
+                    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+                }
+            </MudStack>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close" Disabled="_busy">Back</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync" Disabled="_busy || _selectedSlot is null">
+            @if (_busy)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Reschedule
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public AppointmentResponse Appointment { get; set; } = default!;
+
+    [Parameter]
+    public bool PlatformAdminBypass { get; set; }
+
+    [Inject]
+    private IAppointmentApiClient AppointmentsApi { get; set; } = default!;
+
+    [Inject]
+    private ISnackbar Snackbar { get; set; } = default!;
+
+    private Guid? _doctorId;
+    private DateTime? _date;
+    private int _durationMinutes = 30;
+    private AvailableSlotResponse? _selectedSlot;
+    private string? _reason;
+    private List<ClinicDoctorResponse> _doctors = [];
+    private List<AvailableSlotResponse> _slots = [];
+    private bool _doctorsLoading;
+    private bool _slotsLoading;
+    private bool _busy;
+    private string? _error;
+    private string? _clinicSlug;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Appointment is null)
+        {
+            return;
+        }
+
+        _clinicSlug = Appointment.ClinicSlug;
+        _doctorId = Appointment.DoctorStaffMemberId;
+        _durationMinutes = Appointment.DurationMinutes;
+        _date = ClinicTimeDisplay.ToClinicLocal(Appointment.AppointmentDateUtc, Appointment.ClinicTimeZoneId).DateTime.Date;
+        await LoadDoctorsAsync();
+        await LoadSlotsAsync();
+    }
+
+    private async Task OnDoctorChanged(Guid? doctorId)
+    {
+        _doctorId = doctorId;
+        _selectedSlot = null;
+        await LoadSlotsAsync();
+    }
+
+    private async Task OnDateChanged(DateTime? date)
+    {
+        _date = date;
+        _selectedSlot = null;
+        await LoadSlotsAsync();
+    }
+
+    private async Task OnDurationChanged(int duration)
+    {
+        _durationMinutes = duration;
+        _selectedSlot = null;
+        await LoadSlotsAsync();
+    }
+
+    private async Task LoadDoctorsAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_clinicSlug))
+        {
+            _error = "Clinic timezone/slug is missing for this appointment.";
+            return;
+        }
+
+        _doctorsLoading = true;
+        try
+        {
+            var doctors = await AppointmentsApi.ListClinicDoctorsAsync(_clinicSlug);
+            _doctors = doctors.Where(d => d.AcceptsBookings).ToList();
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = AppointmentProblemMessages.ToUserMessage(ex);
+        }
+        finally
+        {
+            _doctorsLoading = false;
+        }
+    }
+
+    private async Task LoadSlotsAsync()
+    {
+        _slots = [];
+        if (string.IsNullOrWhiteSpace(_clinicSlug) || _doctorId is not Guid doctorId || _date is not DateTime date)
+        {
+            return;
+        }
+
+        _slotsLoading = true;
+        try
+        {
+            var slots = await AppointmentsApi.GetAvailableSlotsAsync(
+                _clinicSlug,
+                doctorId,
+                DateOnly.FromDateTime(date),
+                _durationMinutes);
+            _slots = slots.ToList();
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = AppointmentProblemMessages.ToUserMessage(ex);
+        }
+        finally
+        {
+            _slotsLoading = false;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_busy || Appointment is null || _selectedSlot is null || _doctorId is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var updated = await AppointmentsApi.RescheduleAsync(
+                Appointment.Id,
+                new RescheduleAppointmentRequest
+                {
+                    DoctorStaffMemberId = _doctorId,
+                    AppointmentDateUtc = _selectedSlot.StartUtc,
+                    DurationMinutes = _selectedSlot.DurationMinutes,
+                    ExpectedVersion = Appointment.Version,
+                    Reason = string.IsNullOrWhiteSpace(_reason) ? null : _reason.Trim(),
+                },
+                PlatformAdminBypass);
+            Snackbar.Add("Appointment rescheduled.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(updated));
+        }
+        catch (ApiProblemException ex) when (AppointmentProblemMessages.IsConcurrencyConflict(ex))
+        {
+            _error = AppointmentProblemMessages.ToUserMessage(ex);
+            Snackbar.Add(_error, Severity.Warning);
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = AppointmentProblemMessages.ToUserMessage(ex);
+            Snackbar.Add(_error, Severity.Error);
+            if (string.Equals(ex.ErrorCode, "appointment.slot_unavailable", StringComparison.Ordinal))
+            {
+                await LoadSlotsAsync();
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Close() => MudDialog.Cancel();
+
+    private static string FormatSlot(AvailableSlotResponse? slot)
+    {
+        if (slot is null)
+        {
+            return string.Empty;
+        }
+
+        return $"{slot.StartLocal} – {slot.EndLocal} ({slot.TimeZoneId})";
+    }
+}

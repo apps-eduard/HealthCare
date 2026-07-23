@@ -126,7 +126,7 @@ public sealed class AppointmentService : IAppointmentService
 
         await PersistNewAppointmentAsync(appointment, "appointment_requested", cancellationToken);
         await _reminders.ScheduleAfterAppointmentCreatedAsync(appointment.Id, cancellationToken);
-        return Map(appointment);
+        return await MapAsync(appointment, cancellationToken);
     }
 
     public async Task<AppointmentResponse> CreateForStaffAsync(
@@ -134,7 +134,7 @@ public sealed class AppointmentService : IAppointmentService
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default)
     {
-        var scope = await ResolveStaffClinicScopeAsync(requestClinicId: null, bypass, cancellationToken);
+        var scope = await ResolveStaffClinicScopeAsync(request.ClinicId, bypass, cancellationToken);
         EnsureFutureStart(request.AppointmentDateUtc);
 
         var patient = await _dbContext.Patients
@@ -185,7 +185,7 @@ public sealed class AppointmentService : IAppointmentService
 
         await PersistNewAppointmentAsync(appointment, "appointment_created_by_staff", cancellationToken);
         await _reminders.ScheduleAfterAppointmentCreatedAsync(appointment.Id, cancellationToken);
-        return Map(appointment);
+        return await MapAsync(appointment, cancellationToken);
     }
 
     public async Task<PagedResponse<AppointmentResponse>> ListForCurrentPatientAsync(
@@ -237,7 +237,7 @@ public sealed class AppointmentService : IAppointmentService
         CancellationToken cancellationToken = default)
     {
         var appointment = await LoadAccessibleAsync(appointmentId, asNoTracking: true, bypass, cancellationToken);
-        return Map(appointment);
+        return await MapAsync(appointment, cancellationToken);
     }
 
     public Task<AppointmentResponse> ConfirmAsync(
@@ -504,7 +504,7 @@ public sealed class AppointmentService : IAppointmentService
             "appointment_rescheduled");
 
         await _reminders.ScheduleAfterAppointmentRescheduledAsync(appointment.Id, cancellationToken);
-        return Map(appointment);
+        return await MapAsync(appointment, cancellationToken);
     }
 
     private async Task<AppointmentResponse> TransitionStaffAsync(
@@ -566,7 +566,7 @@ public sealed class AppointmentService : IAppointmentService
             await _reminders.ScheduleAfterAppointmentCancelledAsync(appointment.Id, cancellationToken);
         }
 
-        return Map(appointment);
+        return await MapAsync(appointment, cancellationToken);
     }
 
     private async Task PersistNewAppointmentAsync(
@@ -823,8 +823,20 @@ public sealed class AppointmentService : IAppointmentService
         {
             if (_currentStaff.Role == AppRoles.OrganizationAdmin)
             {
-                // Staff create is clinic-scoped: org admin must supply a clinic in their org via trusted staff clinic
-                // MVP: use their assigned clinic membership ClinicId.
+                if (requestClinicId is Guid clinicId && clinicId != Guid.Empty)
+                {
+                    var clinic = await _dbContext.Clinics
+                        .AsNoTracking()
+                        .SingleOrDefaultAsync(c => c.Id == clinicId, cancellationToken);
+                    if (clinic is null || clinic.OrganizationId != _currentStaff.OrganizationId)
+                    {
+                        throw AuthorizationException.ClinicAccessDenied();
+                    }
+
+                    return StaffScope.ForClinic(_currentStaff.OrganizationId, clinic.Id);
+                }
+
+                // Default to assigned membership clinic when no ClinicId supplied.
                 return StaffScope.ForClinic(_currentStaff.OrganizationId, _currentStaff.ClinicId);
             }
 
@@ -937,7 +949,7 @@ public sealed class AppointmentService : IAppointmentService
         return query;
     }
 
-    private static async Task<PagedResponse<AppointmentResponse>> PageAsync(
+    private async Task<PagedResponse<AppointmentResponse>> PageAsync(
         IQueryable<Appointment> query,
         AppointmentListQuery listQuery,
         CancellationToken cancellationToken)
@@ -967,29 +979,40 @@ public sealed class AppointmentService : IAppointmentService
             ? AppointmentListQueryValidator.DefaultPageSize
             : Math.Min(listQuery.PageSize, AppointmentListQueryValidator.MaxPageSize);
 
-        var items = await query
+        var items = await (
+                from a in query
+                join p in _dbContext.Patients.AsNoTracking() on a.PatientId equals p.Id
+                join cp in _dbContext.ClinicPatients.AsNoTracking() on a.ClinicPatientId equals cp.Id
+                join d in _dbContext.StaffMembers.AsNoTracking() on a.DoctorStaffMemberId equals d.Id
+                join c in _dbContext.Clinics.AsNoTracking() on a.ClinicId equals c.Id
+                select new AppointmentResponse
+                {
+                    Id = a.Id,
+                    OrganizationId = a.OrganizationId,
+                    ClinicId = a.ClinicId,
+                    PatientId = a.PatientId,
+                    ClinicPatientId = a.ClinicPatientId,
+                    DoctorStaffMemberId = a.DoctorStaffMemberId,
+                    AppointmentDateUtc = a.AppointmentDateUtc,
+                    DurationMinutes = a.DurationMinutes,
+                    EndsAtUtc = a.AppointmentDateUtc.AddMinutes(a.DurationMinutes),
+                    Reason = a.Reason,
+                    Status = a.Status.ToString(),
+                    PatientNotes = a.PatientNotes,
+                    CancellationReason = a.CancellationReason,
+                    Source = a.Source.ToString(),
+                    Version = a.Version,
+                    CreatedAtUtc = a.CreatedAtUtc,
+                    UpdatedAtUtc = a.UpdatedAtUtc,
+                    PatientDisplayName = (p.FirstName + " " + p.LastName).Trim(),
+                    LocalPatientNumber = cp.LocalPatientNumber,
+                    DoctorDisplayName = d.DisplayName ?? (d.FirstName + " " + d.LastName),
+                    ClinicName = c.Name,
+                    ClinicSlug = c.Slug,
+                    ClinicTimeZoneId = c.TimeZoneId,
+                })
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(a => new AppointmentResponse
-            {
-                Id = a.Id,
-                OrganizationId = a.OrganizationId,
-                ClinicId = a.ClinicId,
-                PatientId = a.PatientId,
-                ClinicPatientId = a.ClinicPatientId,
-                DoctorStaffMemberId = a.DoctorStaffMemberId,
-                AppointmentDateUtc = a.AppointmentDateUtc,
-                DurationMinutes = a.DurationMinutes,
-                EndsAtUtc = a.AppointmentDateUtc.AddMinutes(a.DurationMinutes),
-                Reason = a.Reason,
-                Status = a.Status.ToString(),
-                PatientNotes = a.PatientNotes,
-                CancellationReason = a.CancellationReason,
-                Source = a.Source.ToString(),
-                Version = a.Version,
-                CreatedAtUtc = a.CreatedAtUtc,
-                UpdatedAtUtc = a.UpdatedAtUtc,
-            })
             .ToListAsync(cancellationToken);
 
         return PagedResponse<AppointmentResponse>.Create(items, page, pageSize, totalCount);
@@ -1015,8 +1038,37 @@ public sealed class AppointmentService : IAppointmentService
         return trimmed.Length == 0 ? null : trimmed;
     }
 
-    private static AppointmentResponse Map(Appointment a) =>
-        new()
+    private async Task<AppointmentResponse> MapAsync(Appointment a, CancellationToken cancellationToken)
+    {
+        var patient = await _dbContext.Patients.AsNoTracking()
+            .Where(p => p.Id == a.PatientId)
+            .Select(p => new { p.FirstName, p.LastName })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        var clinicPatient = await _dbContext.ClinicPatients.AsNoTracking()
+            .Where(cp => cp.Id == a.ClinicPatientId)
+            .Select(cp => cp.LocalPatientNumber)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        var doctor = await _dbContext.StaffMembers.AsNoTracking()
+            .Where(d => d.Id == a.DoctorStaffMemberId)
+            .Select(d => new { d.DisplayName, d.FirstName, d.LastName })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        var clinic = await _dbContext.Clinics.AsNoTracking()
+            .Where(c => c.Id == a.ClinicId)
+            .Select(c => new { c.Name, c.Slug, c.TimeZoneId })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        string? doctorName = null;
+        if (doctor is not null)
+        {
+            doctorName = string.IsNullOrWhiteSpace(doctor.DisplayName)
+                ? $"{doctor.FirstName} {doctor.LastName}".Trim()
+                : doctor.DisplayName;
+        }
+
+        return new AppointmentResponse
         {
             Id = a.Id,
             OrganizationId = a.OrganizationId,
@@ -1035,7 +1087,14 @@ public sealed class AppointmentService : IAppointmentService
             Version = a.Version,
             CreatedAtUtc = a.CreatedAtUtc,
             UpdatedAtUtc = a.UpdatedAtUtc,
+            PatientDisplayName = patient is null ? null : $"{patient.FirstName} {patient.LastName}".Trim(),
+            LocalPatientNumber = clinicPatient,
+            DoctorDisplayName = doctorName,
+            ClinicName = clinic?.Name,
+            ClinicSlug = clinic?.Slug,
+            ClinicTimeZoneId = clinic?.TimeZoneId,
         };
+    }
 
     private enum StaffScopeMode
     {

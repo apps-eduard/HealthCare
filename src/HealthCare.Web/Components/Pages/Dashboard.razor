@@ -30,10 +30,16 @@ else
     </MudPaper>
 
     <MudStack Row="true" Spacing="2">
+        @if (Permissions.Has(WebPermissions.AppointmentsRead))
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/appointments" StartIcon="@Icons.Material.Filled.Event">
+                Appointments
+            </MudButton>
+        }
         @if (Permissions.Has(WebPermissions.StaffRead))
         {
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/staff" StartIcon="@Icons.Material.Filled.Groups">
-                Manage staff
+                Staff Management
             </MudButton>
         }
     </MudStack>

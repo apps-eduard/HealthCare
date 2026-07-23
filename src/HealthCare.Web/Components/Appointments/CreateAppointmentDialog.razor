@@ -1,0 +1,382 @@
+@namespace HealthCare.Web.Components.Appointments
+@using HealthCare.Contracts.Appointments
+@using HealthCare.Contracts.Clinics
+@using HealthCare.Web.Appointments
+@using HealthCare.Web.Components.Clinics
+@using HealthCare.Web.Components.Patients
+
+<MudDialog>
+    <DialogContent>
+        @if (!Permissions.Has(WebPermissions.AppointmentsCreate))
+        {
+            <MudAlert Severity="Severity.Error">You do not have permission to create appointments.</MudAlert>
+        }
+        else
+        {
+            <MudStack Spacing="3">
+                @if (Permissions.CanFilterByClinic || Permissions.IsPlatformAdmin)
+                {
+                    @if (Permissions.IsPlatformAdmin)
+                    {
+                        <MudTextField @bind-Value="_platformOrgIdText"
+                                      Label="Organization ID (platform bypass)"
+                                      HelperText="Required for PLATFORM_ADMIN clinic selection"
+                                      Variant="Variant.Outlined" />
+                    }
+                    <ClinicPicker Value="_clinicId"
+                                  ValueChanged="OnClinicChanged"
+                                  Label="Clinic"
+                                  Required="true"
+                                  AllowClear="false"
+                                  ActiveOnly="true"
+                                  PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
+                                  PlatformOrganizationId="_platformOrganizationId"
+                                  Disabled="_busy" />
+                }
+                else if (Permissions.Has(WebPermissions.ClinicsRead))
+                {
+                    <ClinicPicker Label="Clinic" AllowClear="false" Required="false" Disabled="true" />
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        Appointments are created in your assigned clinic.
+                    </MudText>
+                }
+
+                <PatientPicker Value="_patientId"
+                               ValueChanged="OnPatientChanged"
+                               ClinicId="_clinicId ?? Permissions.CurrentUser?.ClinicId"
+                               PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
+                               Required="true"
+                               Disabled="_busy || (Permissions.CanFilterByClinic && _clinicId is null)" />
+
+                <MudSelect T="Guid?"
+                           Value="_doctorId"
+                           ValueChanged="OnDoctorChanged"
+                           Label="Doctor"
+                           Required="true"
+                           Disabled="_busy || string.IsNullOrWhiteSpace(_clinicSlug) || _doctorsLoading"
+                           Variant="Variant.Outlined">
+                    @foreach (var doctor in _doctors)
+                    {
+                        <MudSelectItem T="Guid?" Value="@doctor.StaffMemberId">@doctor.DisplayName</MudSelectItem>
+                    }
+                </MudSelect>
+                @if (_doctorsLoading)
+                {
+                    <MudProgressLinear Indeterminate="true" />
+                }
+                else if (!string.IsNullOrWhiteSpace(_clinicSlug) && _doctors.Count == 0)
+                {
+                    <MudText Typo="Typo.caption">No bookable doctors for this clinic.</MudText>
+                }
+
+                <MudDatePicker Date="_date"
+                               DateChanged="OnDateChanged"
+                               Label="Date"
+                               Editable="true"
+                               Disabled="_busy || _doctorId is null"
+                               Variant="Variant.Outlined" />
+
+                <MudNumericField T="int"
+                                 Value="_durationMinutes"
+                                 ValueChanged="OnDurationChanged"
+                                 Label="Duration (minutes)"
+                                 Min="5"
+                                 Max="240"
+                                 Disabled="_busy || _doctorId is null"
+                                 Variant="Variant.Outlined" />
+
+                <MudSelect T="AvailableSlotResponse"
+                           @bind-Value="_selectedSlot"
+                           Label="Available slot"
+                           Required="true"
+                           Disabled="_busy || _slotsLoading || _doctorId is null || _date is null"
+                           Variant="Variant.Outlined"
+                           ToStringFunc="FormatSlot">
+                    @foreach (var slot in _slots)
+                    {
+                        <MudSelectItem T="AvailableSlotResponse" Value="@slot">@FormatSlot(slot)</MudSelectItem>
+                    }
+                </MudSelect>
+                @if (_slotsLoading)
+                {
+                    <MudProgressLinear Indeterminate="true" />
+                }
+                else if (_doctorId is not null && _date is not null && _slots.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">No available slots for this date.</MudAlert>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(_error))
+                {
+                    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+                }
+            </MudStack>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close" Disabled="_busy">Cancel</MudButton>
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   OnClick="SubmitAsync"
+                   Disabled="_busy || !CanSubmit">
+            @if (_busy)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Create
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public Guid? InitialClinicId { get; set; }
+
+    [Parameter]
+    public bool PlatformAdminBypass { get; set; }
+
+    [Inject]
+    private IAppointmentApiClient AppointmentsApi { get; set; } = default!;
+
+    [Inject]
+    private IClinicDirectoryApiClient ClinicsApi { get; set; } = default!;
+
+    [Inject]
+    private IClinicDirectoryCache ClinicCache { get; set; } = default!;
+
+    [Inject]
+    private IPermissionState Permissions { get; set; } = default!;
+
+    [Inject]
+    private ISnackbar Snackbar { get; set; } = default!;
+
+    private Guid? _clinicId;
+    private string? _clinicSlug;
+    private string? _clinicTimeZoneId;
+    private Guid? _patientId;
+    private Guid? _doctorId;
+    private DateTime? _date = DateTime.Today;
+    private int _durationMinutes = 30;
+    private AvailableSlotResponse? _selectedSlot;
+    private List<ClinicDoctorResponse> _doctors = [];
+    private List<AvailableSlotResponse> _slots = [];
+    private bool _doctorsLoading;
+    private bool _slotsLoading;
+    private bool _busy;
+    private string? _error;
+    private string? _platformOrgIdText;
+    private Guid? _platformOrganizationId;
+
+    private bool CanSubmit =>
+        Permissions.Has(WebPermissions.AppointmentsCreate)
+        && _patientId is not null
+        && _doctorId is not null
+        && _selectedSlot is not null
+        && (!_busy)
+        && (!Permissions.CanFilterByClinic || _clinicId is not null || !Permissions.IsOrganizationAdmin);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (InitialClinicId is Guid clinicId)
+        {
+            _clinicId = clinicId;
+            await ResolveClinicMetaAsync(clinicId);
+            await LoadDoctorsAsync();
+        }
+        else if (!Permissions.CanFilterByClinic && Permissions.CurrentUser?.ClinicId is Guid membershipClinic)
+        {
+            _clinicId = membershipClinic;
+            await ResolveClinicMetaAsync(membershipClinic);
+            await LoadDoctorsAsync();
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (Guid.TryParse(_platformOrgIdText, out var orgId))
+        {
+            _platformOrganizationId = orgId;
+        }
+        else
+        {
+            _platformOrganizationId = null;
+        }
+    }
+
+    private async Task OnClinicChanged(Guid? clinicId)
+    {
+        _clinicId = clinicId;
+        _doctorId = null;
+        _selectedSlot = null;
+        _doctors = [];
+        _slots = [];
+        _clinicSlug = null;
+        _clinicTimeZoneId = null;
+        if (clinicId is Guid id)
+        {
+            await ResolveClinicMetaAsync(id);
+            await LoadDoctorsAsync();
+        }
+    }
+
+    private Task OnPatientChanged(Guid? patientId)
+    {
+        _patientId = patientId;
+        return Task.CompletedTask;
+    }
+
+    private async Task OnDoctorChanged(Guid? doctorId)
+    {
+        _doctorId = doctorId;
+        _selectedSlot = null;
+        _slots = [];
+        await LoadSlotsAsync();
+    }
+
+    private async Task OnDateChanged(DateTime? date)
+    {
+        _date = date;
+        _selectedSlot = null;
+        await LoadSlotsAsync();
+    }
+
+    private async Task OnDurationChanged(int duration)
+    {
+        _durationMinutes = duration;
+        _selectedSlot = null;
+        await LoadSlotsAsync();
+    }
+
+    private async Task ResolveClinicMetaAsync(Guid clinicId)
+    {
+        try
+        {
+            if (ClinicCache.TryGet(clinicId, out var cached) && cached is not null)
+            {
+                _clinicSlug = cached.Slug;
+                _clinicTimeZoneId = cached.TimeZoneId;
+                return;
+            }
+
+            var detail = await ClinicsApi.GetByIdAsync(clinicId, Permissions.IsPlatformAdmin);
+            ClinicCache.Set(detail);
+            _clinicSlug = detail.Slug;
+            _clinicTimeZoneId = detail.TimeZoneId;
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = AppointmentProblemMessages.ToUserMessage(ex);
+        }
+    }
+
+    private async Task LoadDoctorsAsync()
+    {
+        _doctors = [];
+        if (string.IsNullOrWhiteSpace(_clinicSlug) || !Permissions.Has(WebPermissions.AvailabilityRead))
+        {
+            return;
+        }
+
+        _doctorsLoading = true;
+        try
+        {
+            var doctors = await AppointmentsApi.ListClinicDoctorsAsync(_clinicSlug);
+            _doctors = doctors.Where(d => d.AcceptsBookings).ToList();
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = AppointmentProblemMessages.ToUserMessage(ex);
+        }
+        finally
+        {
+            _doctorsLoading = false;
+        }
+    }
+
+    private async Task LoadSlotsAsync()
+    {
+        _slots = [];
+        if (string.IsNullOrWhiteSpace(_clinicSlug)
+            || _doctorId is not Guid doctorId
+            || _date is not DateTime date
+            || !Permissions.Has(WebPermissions.AvailabilityRead))
+        {
+            return;
+        }
+
+        _slotsLoading = true;
+        try
+        {
+            var slots = await AppointmentsApi.GetAvailableSlotsAsync(
+                _clinicSlug,
+                doctorId,
+                DateOnly.FromDateTime(date),
+                _durationMinutes);
+            _slots = slots.ToList();
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = AppointmentProblemMessages.ToUserMessage(ex);
+        }
+        finally
+        {
+            _slotsLoading = false;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (!CanSubmit || _selectedSlot is null || _patientId is null || _doctorId is null || _busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var created = await AppointmentsApi.CreateStaffAsync(
+                new CreateStaffAppointmentRequest
+                {
+                    PatientId = _patientId.Value,
+                    DoctorStaffMemberId = _doctorId.Value,
+                    AppointmentDateUtc = _selectedSlot.StartUtc,
+                    DurationMinutes = _selectedSlot.DurationMinutes,
+                    ClinicId = Permissions.CanFilterByClinic || Permissions.IsPlatformAdmin ? _clinicId : null,
+                },
+                PlatformAdminBypass || Permissions.IsPlatformAdmin);
+
+            Snackbar.Add("Appointment created.", Severity.Success);
+            await LoadSlotsAsync();
+            MudDialog.Close(DialogResult.Ok(created));
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = AppointmentProblemMessages.ToUserMessage(ex);
+            Snackbar.Add(_error, Severity.Error);
+            if (string.Equals(ex.ErrorCode, "appointment.slot_unavailable", StringComparison.Ordinal))
+            {
+                await LoadSlotsAsync();
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Close() => MudDialog.Cancel();
+
+    private static string FormatSlot(AvailableSlotResponse? slot)
+    {
+        if (slot is null)
+        {
+            return string.Empty;
+        }
+
+        return $"{slot.StartLocal} – {slot.EndLocal} ({slot.TimeZoneId})";
+    }
+}

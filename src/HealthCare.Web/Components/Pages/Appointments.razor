@@ -1,0 +1,471 @@
+@page "/appointments"
+@attribute [Authorize]
+@using HealthCare.Contracts.Appointments
+@using HealthCare.Web.Appointments
+@using HealthCare.Web.Components.Appointments
+@using HealthCare.Web.Components.Clinics
+@implements IDisposable
+@inject IAppointmentApiClient AppointmentsApi
+@inject IPermissionState Permissions
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject IClinicDirectoryCache ClinicCache
+@inject IClinicDirectoryApiClient ClinicsApi
+
+<PageTitle>Appointments</PageTitle>
+
+@if (Permissions.IsPatientOnly)
+{
+    <MudAlert Severity="Severity.Error">Patient accounts cannot use staff appointments.</MudAlert>
+}
+else if (!Permissions.Has(WebPermissions.AppointmentsRead))
+{
+    <MudAlert Severity="Severity.Error">You do not have permission to view appointments.</MudAlert>
+}
+else
+{
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+        <div>
+            <MudText Typo="Typo.h4">Appointments</MudText>
+            @if (!string.IsNullOrWhiteSpace(_timezoneLabel))
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Times shown in @_timezoneLabel</MudText>
+            }
+        </div>
+        <MudStack Row="true" Spacing="2">
+            <MudButton Variant="Variant.Outlined" Href="/appointments/calendar" StartIcon="@Icons.Material.Filled.CalendarMonth">Calendar</MudButton>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="RefreshClicked" Disabled="_loading">Refresh</MudButton>
+            @if (Permissions.Has(WebPermissions.AppointmentsCreate))
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateAsync">Create</MudButton>
+            }
+        </MudStack>
+    </MudStack>
+
+    <MudPaper Class="pa-4 mb-4" Outlined="true">
+        <MudGrid>
+            <MudItem xs="12" md="2">
+                <MudDatePicker @bind-Date="_fromDate" Label="From" Editable="true" Clearable="true" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" md="2">
+                <MudDatePicker @bind-Date="_toDate" Label="To" Editable="true" Clearable="true" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" md="2">
+                <MudSelect T="string" @bind-Value="_status" Label="Status" Clearable="true" Variant="Variant.Outlined">
+                    @foreach (var status in AppointmentStatusPresentation.AllStatuses)
+                    {
+                        <MudSelectItem Value="@status">@status</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="2">
+                <MudSelect T="Guid?" @bind-Value="_doctorId" Label="Doctor" Clearable="true" Variant="Variant.Outlined">
+                    @foreach (var doctor in _doctors)
+                    {
+                        <MudSelectItem T="Guid?" Value="@doctor.StaffMemberId">@doctor.DisplayName</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            @if (Permissions.CanFilterByClinic)
+            {
+                @if (Permissions.IsPlatformAdmin)
+                {
+                    <MudItem xs="12" md="3">
+                        <MudTextField @bind-Value="_platformOrgIdText"
+                                      Label="Organization ID (platform bypass)"
+                                      HelperText="Required with clinic filter for PLATFORM_ADMIN"
+                                      Variant="Variant.Outlined" />
+                    </MudItem>
+                }
+                <MudItem xs="12" md="3">
+                    <ClinicPicker Value="_clinicId"
+                                  ValueChanged="OnClinicFilterChanged"
+                                  Label="Clinic filter"
+                                  HelperText="Leave empty for all clinics in your organization"
+                                  AllowClear="true"
+                                  Required="false"
+                                  ActiveOnly="null"
+                                  PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
+                                  PlatformOrganizationId="_platformOrganizationId" />
+                </MudItem>
+            }
+            <MudItem xs="12" md="2">
+                <MudSelect T="string" @bind-Value="_sortBy" Label="Sort by" Variant="Variant.Outlined">
+                    <MudSelectItem Value="@("appointmentDateUtc")">Appointment time</MudSelectItem>
+                    <MudSelectItem Value="@("createdAtUtc")">Created</MudSelectItem>
+                    <MudSelectItem Value="@("status")">Status</MudSelectItem>
+                    <MudSelectItem Value="@("durationMinutes")">Duration</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="2">
+                <MudSelect T="string" @bind-Value="_sortDirection" Label="Direction" Variant="Variant.Outlined">
+                    <MudSelectItem Value="@("asc")">Ascending</MudSelectItem>
+                    <MudSelectItem Value="@("desc")">Descending</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="2">
+                <MudSelect T="int" @bind-Value="_pageSize" Label="Page size" Variant="Variant.Outlined">
+                    <MudSelectItem Value="10">10</MudSelectItem>
+                    <MudSelectItem Value="20">20</MudSelectItem>
+                    <MudSelectItem Value="50">50</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="2" Class="d-flex align-end">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ApplyFiltersAsync" FullWidth="true">Apply</MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
+    }
+
+    <MudTable Items="_items"
+              Hover="true"
+              Loading="_loading"
+              LoadingProgressColor="Color.Primary"
+              Breakpoint="Breakpoint.Sm"
+              Dense="true"
+              OnRowClick="OnRowClick"
+              T="AppointmentResponse">
+        <HeaderContent>
+            <MudTh>Time</MudTh>
+            <MudTh>Patient</MudTh>
+            <MudTh>Doctor</MudTh>
+            <MudTh>Clinic</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Source</MudTh>
+            <MudTh>Duration</MudTh>
+            <MudTh>Updated</MudTh>
+            <MudTh Style="text-align:right">Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Time">@ClinicTimeDisplay.FormatLocal(context.AppointmentDateUtc, context.ClinicTimeZoneId ?? _timezoneLabel)</MudTd>
+            <MudTd DataLabel="Patient">
+                @(context.PatientDisplayName ?? "—")
+                @if (!string.IsNullOrWhiteSpace(context.LocalPatientNumber))
+                {
+                    <MudText Typo="Typo.caption">@context.LocalPatientNumber</MudText>
+                }
+            </MudTd>
+            <MudTd DataLabel="Doctor">@(context.DoctorDisplayName ?? "—")</MudTd>
+            <MudTd DataLabel="Clinic">@(context.ClinicName ?? "—")</MudTd>
+            <MudTd DataLabel="Status">
+                <MudChip T="string" Size="Size.Small" Color="@AppointmentStatusPresentation.ChipColor(context.Status)">
+                    @AppointmentStatusPresentation.DisplayLabel(context.Status)
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Source">@context.Source</MudTd>
+            <MudTd DataLabel="Duration">@context.DurationMinutes min</MudTd>
+            <MudTd DataLabel="Updated">@ClinicTimeDisplay.FormatLocal(context.UpdatedAtUtc, context.ClinicTimeZoneId ?? _timezoneLabel)</MudTd>
+            <MudTd DataLabel="Actions" Style="text-align:right">
+                <MudIconButton Icon="@Icons.Material.Filled.Visibility" aria-label="Details" OnClick="@(() => OpenDetailAsync(context.Id))" />
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText>No appointments match the current filters.</MudText>
+        </NoRecordsContent>
+        <PagerContent>
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="pa-2">
+                <MudText Typo="Typo.caption">Total: @_totalCount</MudText>
+                <MudPagination Count="@_pageCount" Selected="_page" SelectedChanged="OnPageChanged" />
+            </MudStack>
+        </PagerContent>
+    </MudTable>
+}
+
+@code {
+    private readonly List<AppointmentResponse> _items = [];
+    private List<ClinicDoctorResponse> _doctors = [];
+    private bool _loading;
+    private string? _error;
+    private DateTime? _fromDate = DateTime.Today;
+    private DateTime? _toDate = DateTime.Today.AddDays(7);
+    private string? _status;
+    private Guid? _doctorId;
+    private Guid? _clinicId;
+    private string _sortBy = "appointmentDateUtc";
+    private string _sortDirection = "asc";
+    private int _page = 1;
+    private int _pageSize = 20;
+    private int _totalCount;
+    private int _pageCount = 1;
+    private string? _timezoneLabel;
+    private string? _platformOrgIdText;
+    private Guid? _platformOrganizationId;
+    private PeriodicTimer? _pollTimer;
+    private CancellationTokenSource? _pollCts;
+    private bool _dialogOpen;
+    private bool _loadInFlight;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Permissions.IsPatientOnly || !Permissions.Has(WebPermissions.AppointmentsRead))
+        {
+            return;
+        }
+
+        if (!Permissions.CanFilterByClinic && Permissions.CurrentUser?.ClinicId is Guid clinicId)
+        {
+            _clinicId = clinicId;
+            await ResolveTimezoneAsync(clinicId);
+        }
+
+        await LoadDoctorsForFilterAsync();
+        await LoadAsync();
+        StartPolling();
+    }
+
+    private void StartPolling()
+    {
+        _pollCts = new CancellationTokenSource();
+        _ = PollLoopAsync(_pollCts.Token);
+    }
+
+    private async Task PollLoopAsync(CancellationToken token)
+    {
+        _pollTimer = new PeriodicTimer(TimeSpan.FromSeconds(45));
+        try
+        {
+            while (await _pollTimer.WaitForNextTickAsync(token))
+            {
+                if (_dialogOpen || _loadInFlight || _loading)
+                {
+                    continue;
+                }
+
+                await InvokeAsync(async () => await LoadAsync(silent: true));
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // disposed
+        }
+    }
+
+    public void Dispose()
+    {
+        _pollCts?.Cancel();
+        _pollCts?.Dispose();
+        _pollTimer?.Dispose();
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task RefreshClicked() => await LoadAsync();
+
+    private async Task OnPageChanged(int page)
+    {
+        _page = page;
+        await LoadAsync();
+    }
+
+    private async Task OnClinicFilterChanged(Guid? clinicId)
+    {
+        _clinicId = clinicId;
+        _doctorId = null;
+        await ResolveTimezoneAsync(clinicId);
+        await LoadDoctorsForFilterAsync();
+    }
+
+    private async Task ResolveTimezoneAsync(Guid? clinicId)
+    {
+        _timezoneLabel = null;
+        if (clinicId is not Guid id)
+        {
+            return;
+        }
+
+        try
+        {
+            if (ClinicCache.TryGet(id, out var cached) && cached is not null)
+            {
+                _timezoneLabel = cached.TimeZoneId;
+                return;
+            }
+
+            var detail = await ClinicsApi.GetByIdAsync(id, Permissions.IsPlatformAdmin);
+            ClinicCache.Set(detail);
+            _timezoneLabel = detail.TimeZoneId;
+        }
+        catch
+        {
+            // keep UTC fallback via ClinicTimeDisplay
+        }
+    }
+
+    private async Task LoadDoctorsForFilterAsync()
+    {
+        _doctors = [];
+        if (!Permissions.Has(WebPermissions.AvailabilityRead))
+        {
+            return;
+        }
+
+        string? slug = null;
+        var clinicId = _clinicId ?? Permissions.CurrentUser?.ClinicId;
+        if (clinicId is Guid id)
+        {
+            try
+            {
+                if (ClinicCache.TryGet(id, out var cached) && cached is not null)
+                {
+                    slug = cached.Slug;
+                }
+                else
+                {
+                    var detail = await ClinicsApi.GetByIdAsync(id, Permissions.IsPlatformAdmin);
+                    ClinicCache.Set(detail);
+                    slug = detail.Slug;
+                    _timezoneLabel ??= detail.TimeZoneId;
+                }
+            }
+            catch
+            {
+                return;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(slug))
+        {
+            return;
+        }
+
+        try
+        {
+            _doctors = (await AppointmentsApi.ListClinicDoctorsAsync(slug)).ToList();
+        }
+        catch
+        {
+            _doctors = [];
+        }
+    }
+
+    private async Task LoadAsync(bool silent = false)
+    {
+        if (_loadInFlight)
+        {
+            return;
+        }
+
+        if (Guid.TryParse(_platformOrgIdText, out var orgId))
+        {
+            _platformOrganizationId = orgId;
+        }
+        else
+        {
+            _platformOrganizationId = null;
+        }
+
+        _loadInFlight = true;
+        if (!silent)
+        {
+            _loading = true;
+            _error = null;
+        }
+
+        try
+        {
+            var query = AppointmentListQueryBuilder.Build(
+                _fromDate,
+                _toDate,
+                _status,
+                _doctorId,
+                Permissions.CanFilterByClinic ? _clinicId : null,
+                _page,
+                _pageSize,
+                _sortBy,
+                _sortDirection,
+                _timezoneLabel);
+
+            var result = await AppointmentsApi.ListStaffAsync(query, Permissions.IsPlatformAdmin);
+            _items.Clear();
+            _items.AddRange(result.Items);
+            _totalCount = result.TotalCount;
+            _pageCount = Math.Max(1, (int)Math.Ceiling(_totalCount / (double)_pageSize));
+            if (_items.Count > 0 && string.IsNullOrWhiteSpace(_timezoneLabel))
+            {
+                _timezoneLabel = _items[0].ClinicTimeZoneId;
+            }
+        }
+        catch (ApiProblemException ex)
+        {
+            if (!silent)
+            {
+                _error = AppointmentProblemMessages.ToUserMessage(ex);
+                _items.Clear();
+            }
+        }
+        finally
+        {
+            _loading = false;
+            _loadInFlight = false;
+        }
+    }
+
+    private async Task OnRowClick(TableRowClickEventArgs<AppointmentResponse> args)
+    {
+        if (args.Item is not null)
+        {
+            await OpenDetailAsync(args.Item.Id);
+        }
+    }
+
+    private async Task OpenDetailAsync(Guid appointmentId)
+    {
+        _dialogOpen = true;
+        try
+        {
+            var parameters = new DialogParameters<AppointmentDetailDialog>
+            {
+                { x => x.AppointmentId, appointmentId },
+                { x => x.PlatformAdminBypass, Permissions.IsPlatformAdmin },
+            };
+            var dialog = await DialogService.ShowAsync<AppointmentDetailDialog>(
+                "Appointment",
+                parameters,
+                new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+            var result = await dialog.Result;
+            if (result is { Canceled: false })
+            {
+                await LoadAsync();
+            }
+        }
+        finally
+        {
+            _dialogOpen = false;
+        }
+    }
+
+    private async Task OpenCreateAsync()
+    {
+        _dialogOpen = true;
+        try
+        {
+            var parameters = new DialogParameters<CreateAppointmentDialog>
+            {
+                { x => x.InitialClinicId, _clinicId ?? Permissions.CurrentUser?.ClinicId },
+                { x => x.PlatformAdminBypass, Permissions.IsPlatformAdmin },
+            };
+            var dialog = await DialogService.ShowAsync<CreateAppointmentDialog>(
+                "Create appointment",
+                parameters,
+                new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+            var result = await dialog.Result;
+            if (result is { Canceled: false })
+            {
+                await LoadAsync();
+            }
+        }
+        finally
+        {
+            _dialogOpen = false;
+        }
+    }
+}

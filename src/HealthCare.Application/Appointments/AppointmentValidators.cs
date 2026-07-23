@@ -63,6 +63,10 @@ public sealed class CreateStaffAppointmentRequestValidator : AbstractValidator<C
         RuleFor(x => x.PatientNotes)
             .MaximumLength(CreatePatientAppointmentRequestValidator.MaxNotesLength)
             .When(x => x.PatientNotes is not null);
+
+        RuleFor(x => x.ClinicId)
+            .Must(id => id is null || id != Guid.Empty)
+            .WithMessage("ClinicId must be a valid identifier when provided.");
     }
 }
 

@@ -81,6 +81,7 @@ dotnet run --project src/HealthCare.Web --launch-profile http
 - Configure API base URL via `Api:BaseUrl` in `src/HealthCare.Web/appsettings*.json` (default `http://localhost:5080/`)
 - Sign in with a staff account (for example `clinicadmin@healthcare.local`)
 - Staff clinic filter/create uses the clinic directory API (`/api/v1/staff-management/clinics`) via `ClinicPicker` — not free-text Clinic IDs
+- Appointments: `/appointments` (queue) and `/appointments/calendar` (day/week). Uses `appointments.*` / `availability.read` / `patients.search` permissions from `/auth/me`. Create flow uses `PatientPicker` + clinic doctors + available slots. Times display in the clinic `TimeZoneId` (API UTC). Mutations send `ExpectedVersion`.
 
 MVP token storage uses circuit memory plus ASP.NET Core `ProtectedSessionStorage` (not HttpOnly cookies). Prefer a BFF cookie pattern before production hardening.
 

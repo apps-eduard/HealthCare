@@ -1,0 +1,432 @@
+@page "/appointments/calendar"
+@attribute [Authorize]
+@using HealthCare.Contracts.Appointments
+@using HealthCare.Web.Appointments
+@using HealthCare.Web.Components.Appointments
+@using HealthCare.Web.Components.Clinics
+@inject IAppointmentApiClient AppointmentsApi
+@inject IPermissionState Permissions
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject IClinicDirectoryCache ClinicCache
+@inject IClinicDirectoryApiClient ClinicsApi
+
+<PageTitle>Appointment calendar</PageTitle>
+
+@if (Permissions.IsPatientOnly)
+{
+    <MudAlert Severity="Severity.Error">Patient accounts cannot use staff appointments.</MudAlert>
+}
+else if (!Permissions.Has(WebPermissions.AppointmentsRead))
+{
+    <MudAlert Severity="Severity.Error">You do not have permission to view appointments.</MudAlert>
+}
+else
+{
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+        <div>
+            <MudText Typo="Typo.h4">Calendar</MudText>
+            @if (!string.IsNullOrWhiteSpace(_timezoneLabel))
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Clinic timezone: @_timezoneLabel</MudText>
+            }
+        </div>
+        <MudStack Row="true" Spacing="2">
+            <MudButton Variant="Variant.Outlined" Href="/appointments" StartIcon="@Icons.Material.Filled.List">Queue</MudButton>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync" Disabled="_loading">Refresh</MudButton>
+        </MudStack>
+    </MudStack>
+
+    <MudPaper Class="pa-4 mb-4" Outlined="true">
+        <MudGrid>
+            <MudItem xs="12" md="3">
+                <MudButtonGroup Color="Color.Primary" Variant="Variant.Outlined">
+                    <MudButton OnClick="@(() => SetMode(CalendarMode.Day))" Variant="@(_mode == CalendarMode.Day ? Variant.Filled : Variant.Outlined)">Day</MudButton>
+                    <MudButton OnClick="@(() => SetMode(CalendarMode.Week))" Variant="@(_mode == CalendarMode.Week ? Variant.Filled : Variant.Outlined)">Week</MudButton>
+                </MudButtonGroup>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                    <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" OnClick="PreviousAsync" aria-label="Previous" />
+                    <MudButton Variant="Variant.Text" OnClick="GoTodayAsync">Today</MudButton>
+                    <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" OnClick="NextAsync" aria-label="Next" />
+                    <MudText Typo="Typo.subtitle1">@_rangeLabel</MudText>
+                </MudStack>
+            </MudItem>
+            <MudItem xs="12" md="2">
+                <MudSelect T="string" @bind-Value="_status" Label="Status" Clearable="true" Variant="Variant.Outlined">
+                    @foreach (var status in AppointmentStatusPresentation.AllStatuses)
+                    {
+                        <MudSelectItem Value="@status">@status</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="2">
+                <MudSelect T="Guid?" @bind-Value="_doctorId" Label="Doctor" Clearable="true" Variant="Variant.Outlined">
+                    @foreach (var doctor in _doctors)
+                    {
+                        <MudSelectItem T="Guid?" Value="@doctor.StaffMemberId">@doctor.DisplayName</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            @if (Permissions.CanFilterByClinic)
+            {
+                @if (Permissions.IsPlatformAdmin)
+                {
+                    <MudItem xs="12" md="3">
+                        <MudTextField @bind-Value="_platformOrgIdText"
+                                      Label="Organization ID (platform bypass)"
+                                      HelperText="Required for PLATFORM_ADMIN clinic selection"
+                                      Variant="Variant.Outlined"
+                                      TextChanged="OnPlatformOrgChanged" />
+                    </MudItem>
+                }
+                <MudItem xs="12" md="3">
+                    <ClinicPicker Value="_clinicId"
+                                  ValueChanged="OnClinicFilterChanged"
+                                  Label="Clinic"
+                                  AllowClear="false"
+                                  Required="true"
+                                  HelperText="Select a clinic for calendar scope"
+                                  ActiveOnly="true"
+                                  PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
+                                  PlatformOrganizationId="_platformOrganizationId" />
+                </MudItem>
+            }
+            <MudItem xs="12" md="2" Class="d-flex align-end">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAsync" FullWidth="true">Apply</MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
+    }
+
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+    }
+    else if (_items.Count == 0)
+    {
+        <MudPaper Class="pa-6" Outlined="true">
+            <MudText Align="Align.Center">No appointments in this range.</MudText>
+        </MudPaper>
+    }
+    else if (_mode == CalendarMode.Day)
+    {
+        <MudPaper Class="pa-3" Outlined="true">
+            <MudStack Spacing="2">
+                @foreach (var appt in _items.OrderBy(a => a.AppointmentDateUtc))
+                {
+                    <MudPaper Class="pa-3" Outlined="true" Style="cursor:pointer" @onclick="(() => OpenDetailAsync(appt.Id))">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                            <div>
+                                <MudText Typo="Typo.subtitle2">
+                                    @ClinicTimeDisplay.FormatLocal(appt.AppointmentDateUtc, appt.ClinicTimeZoneId ?? _timezoneLabel, "HH:mm")
+                                    · @(appt.PatientDisplayName ?? "Patient")
+                                    @if (!string.IsNullOrWhiteSpace(appt.LocalPatientNumber))
+                                    {
+                                        <span> (@appt.LocalPatientNumber)</span>
+                                    }
+                                </MudText>
+                                <MudText Typo="Typo.caption">@(appt.DoctorDisplayName ?? "Doctor") · @appt.DurationMinutes min</MudText>
+                            </div>
+                            <MudChip T="string" Size="Size.Small" Color="@AppointmentStatusPresentation.ChipColor(appt.Status)">
+                                @AppointmentStatusPresentation.DisplayLabel(appt.Status)
+                            </MudChip>
+                        </MudStack>
+                    </MudPaper>
+                }
+            </MudStack>
+        </MudPaper>
+    }
+    else
+    {
+        <MudStack Row="true" Spacing="2" Class="flex-wrap">
+            @foreach (var day in _weekDays)
+            {
+                var dayItems = _items
+                    .Where(a => ClinicTimeDisplay.ToClinicDate(a.AppointmentDateUtc, a.ClinicTimeZoneId ?? _timezoneLabel) == day)
+                    .OrderBy(a => a.AppointmentDateUtc)
+                    .ThenBy(a => a.DoctorDisplayName)
+                    .ToList();
+                <MudPaper Class="pa-2 flex-grow-1" Outlined="true" Style="min-width:120px; min-height:220px; max-width:180px">
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">@day.ToString("ddd dd MMM")</MudText>
+                    @if (dayItems.Count == 0)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">—</MudText>
+                    }
+                    else
+                    {
+                        @foreach (var appt in dayItems)
+                        {
+                            <MudPaper Class="pa-2 mb-2" Outlined="true" Style="cursor:pointer" @onclick="(() => OpenDetailAsync(appt.Id))">
+                                <MudText Typo="Typo.caption">
+                                    @ClinicTimeDisplay.FormatLocal(appt.AppointmentDateUtc, appt.ClinicTimeZoneId ?? _timezoneLabel, "HH:mm")
+                                </MudText>
+                                <MudText Typo="Typo.caption">@(appt.DoctorDisplayName ?? "Doctor")</MudText>
+                                <MudChip T="string" Size="Size.Small" Color="@AppointmentStatusPresentation.ChipColor(appt.Status)">
+                                    @AppointmentStatusPresentation.DisplayLabel(appt.Status)
+                                </MudChip>
+                            </MudPaper>
+                        }
+                    }
+                </MudPaper>
+            }
+        </MudStack>
+    }
+}
+
+@code {
+    private enum CalendarMode { Day, Week }
+
+    private CalendarMode _mode = CalendarMode.Week;
+    private DateOnly _anchor = DateOnly.FromDateTime(DateTime.Today);
+    private readonly List<AppointmentResponse> _items = [];
+    private List<ClinicDoctorResponse> _doctors = [];
+    private List<DateOnly> _weekDays = [];
+    private bool _loading;
+    private string? _error;
+    private string? _status;
+    private Guid? _doctorId;
+    private Guid? _clinicId;
+    private string? _timezoneLabel;
+    private string? _rangeLabel;
+    private string? _platformOrgIdText;
+    private Guid? _platformOrganizationId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Permissions.IsPatientOnly || !Permissions.Has(WebPermissions.AppointmentsRead))
+        {
+            return;
+        }
+
+        if (Permissions.IsPlatformAdmin)
+        {
+            // PLATFORM_ADMIN must pick an explicit clinic — do not load a global calendar.
+            _error = "PLATFORM_ADMIN must select an organization ID and clinic before loading the calendar.";
+            return;
+        }
+
+        if (!Permissions.CanFilterByClinic && Permissions.CurrentUser?.ClinicId is Guid clinicId)
+        {
+            _clinicId = clinicId;
+            await ResolveClinicMetaAsync(clinicId);
+        }
+        else if (Permissions.CanFilterByClinic && Permissions.CurrentUser?.ClinicId is Guid membershipClinic)
+        {
+            _clinicId = membershipClinic;
+            await ResolveClinicMetaAsync(membershipClinic);
+        }
+
+        RebuildWeekDays();
+        await LoadDoctorsAsync();
+        await LoadAsync();
+    }
+
+    private async Task SetMode(CalendarMode mode)
+    {
+        _mode = mode;
+        RebuildWeekDays();
+        await LoadAsync();
+    }
+
+    private async Task PreviousAsync()
+    {
+        _anchor = _mode == CalendarMode.Day ? _anchor.AddDays(-1) : _anchor.AddDays(-7);
+        RebuildWeekDays();
+        await LoadAsync();
+    }
+
+    private async Task NextAsync()
+    {
+        _anchor = _mode == CalendarMode.Day ? _anchor.AddDays(1) : _anchor.AddDays(7);
+        RebuildWeekDays();
+        await LoadAsync();
+    }
+
+    private async Task GoTodayAsync()
+    {
+        _anchor = DateOnly.FromDateTime(DateTime.Today);
+        RebuildWeekDays();
+        await LoadAsync();
+    }
+
+    private void RebuildWeekDays()
+    {
+        if (_mode == CalendarMode.Day)
+        {
+            _weekDays = [_anchor];
+            _rangeLabel = _anchor.ToString("ddd, dd MMM yyyy");
+            return;
+        }
+
+        var start = _anchor.AddDays(-(int)_anchor.DayOfWeek);
+        _weekDays = Enumerable.Range(0, 7).Select(i => start.AddDays(i)).ToList();
+        _rangeLabel = $"{_weekDays[0]:dd MMM} – {_weekDays[6]:dd MMM yyyy}";
+    }
+
+    private void OnPlatformOrgChanged(string? value)
+    {
+        _platformOrgIdText = value;
+        _platformOrganizationId = Guid.TryParse(value, out var orgId) ? orgId : null;
+    }
+
+    private async Task OnClinicFilterChanged(Guid? clinicId)
+    {
+        _clinicId = clinicId;
+        _doctorId = null;
+        await ResolveClinicMetaAsync(clinicId);
+        await LoadDoctorsAsync();
+    }
+
+    private async Task ResolveClinicMetaAsync(Guid? clinicId)
+    {
+        _timezoneLabel = null;
+        if (clinicId is not Guid id)
+        {
+            return;
+        }
+
+        try
+        {
+            if (ClinicCache.TryGet(id, out var cached) && cached is not null)
+            {
+                _timezoneLabel = cached.TimeZoneId;
+                return;
+            }
+
+            var detail = await ClinicsApi.GetByIdAsync(id, Permissions.IsPlatformAdmin);
+            ClinicCache.Set(detail);
+            _timezoneLabel = detail.TimeZoneId;
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = AppointmentProblemMessages.ToUserMessage(ex);
+        }
+    }
+
+    private async Task LoadDoctorsAsync()
+    {
+        _doctors = [];
+        if (!Permissions.Has(WebPermissions.AvailabilityRead) || _clinicId is not Guid clinicId)
+        {
+            return;
+        }
+
+        try
+        {
+            string? slug = null;
+            if (ClinicCache.TryGet(clinicId, out var cached) && cached is not null)
+            {
+                slug = cached.Slug;
+            }
+            else
+            {
+                var detail = await ClinicsApi.GetByIdAsync(clinicId, Permissions.IsPlatformAdmin);
+                ClinicCache.Set(detail);
+                slug = detail.Slug;
+                _timezoneLabel ??= detail.TimeZoneId;
+            }
+
+            if (!string.IsNullOrWhiteSpace(slug))
+            {
+                _doctors = (await AppointmentsApi.ListClinicDoctorsAsync(slug)).ToList();
+            }
+        }
+        catch
+        {
+            _doctors = [];
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        if (!Permissions.Has(WebPermissions.AppointmentsRead))
+        {
+            return;
+        }
+
+        if (Permissions.IsPlatformAdmin && _clinicId is null)
+        {
+            _error = "PLATFORM_ADMIN must select an explicit clinic.";
+            _items.Clear();
+            return;
+        }
+
+        if (Permissions.CanFilterByClinic && _clinicId is null)
+        {
+            _error = "Select a clinic to view the calendar.";
+            _items.Clear();
+            return;
+        }
+
+        _loading = true;
+        _error = null;
+        try
+        {
+            DateOnly from;
+            DateOnly to;
+            if (_mode == CalendarMode.Day)
+            {
+                from = _anchor;
+                to = _anchor;
+            }
+            else
+            {
+                from = _weekDays.First();
+                to = _weekDays.Last();
+            }
+
+            var query = AppointmentListQueryBuilder.Build(
+                from.ToDateTime(TimeOnly.MinValue),
+                to.ToDateTime(TimeOnly.MinValue),
+                _status,
+                _doctorId,
+                _clinicId,
+                page: 1,
+                pageSize: 100,
+                sortBy: "appointmentDateUtc",
+                sortDirection: "asc",
+                clinicTimeZoneId: _timezoneLabel);
+
+            var result = await AppointmentsApi.ListStaffAsync(query, Permissions.IsPlatformAdmin);
+            _items.Clear();
+            _items.AddRange(result.Items);
+            if (_items.Count > 0 && string.IsNullOrWhiteSpace(_timezoneLabel))
+            {
+                _timezoneLabel = _items[0].ClinicTimeZoneId;
+            }
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = AppointmentProblemMessages.ToUserMessage(ex);
+            _items.Clear();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenDetailAsync(Guid appointmentId)
+    {
+        var parameters = new DialogParameters<AppointmentDetailDialog>
+        {
+            { x => x.AppointmentId, appointmentId },
+            { x => x.PlatformAdminBypass, Permissions.IsPlatformAdmin },
+        };
+        var dialog = await DialogService.ShowAsync<AppointmentDetailDialog>(
+            "Appointment",
+            parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+    }
+}

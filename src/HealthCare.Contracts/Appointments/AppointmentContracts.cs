@@ -61,6 +61,12 @@ public sealed class CreateStaffAppointmentRequest
     public string? Reason { get; init; }
 
     public string? PatientNotes { get; init; }
+
+    /// <summary>
+    /// Required for ORGANIZATION_ADMIN (in-org clinic) and PLATFORM_ADMIN (with bypass).
+    /// Ignored for clinic-scoped staff (trusted membership clinic is used).
+    /// </summary>
+    public Guid? ClinicId { get; init; }
 }
 
 public sealed class AppointmentListQuery
@@ -126,4 +132,17 @@ public sealed class AppointmentResponse
     public DateTimeOffset CreatedAtUtc { get; init; }
 
     public DateTimeOffset UpdatedAtUtc { get; init; }
+
+    /// <summary>Safe display fields for staff UI (not medical notes).</summary>
+    public string? PatientDisplayName { get; init; }
+
+    public string? LocalPatientNumber { get; init; }
+
+    public string? DoctorDisplayName { get; init; }
+
+    public string? ClinicName { get; init; }
+
+    public string? ClinicSlug { get; init; }
+
+    public string? ClinicTimeZoneId { get; init; }
 }

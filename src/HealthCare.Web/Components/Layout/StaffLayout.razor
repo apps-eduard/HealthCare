@@ -22,9 +22,13 @@
     <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="1" Variant="DrawerVariant.Responsive">
         <MudNavMenu>
             <MudNavLink Href="/dashboard" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Dashboard</MudNavLink>
+            @if (Permissions.Has(WebPermissions.AppointmentsRead))
+            {
+                <MudNavLink Href="/appointments" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Event">Appointments</MudNavLink>
+            }
             @if (Permissions.Has(WebPermissions.StaffRead))
             {
-                <MudNavLink Href="/staff" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Groups">Staff</MudNavLink>
+                <MudNavLink Href="/staff" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Groups">Staff Management</MudNavLink>
             }
         </MudNavMenu>
     </MudDrawer>
