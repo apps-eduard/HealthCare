@@ -2,24 +2,24 @@
 
 ## Progress overview
 
-**Overall completion: 63%**
+**Overall completion: 64%**
 
 ```text
-[████████████████████░░░░░░░░░░░░]  63%
+[████████████████████░░░░░░░░░░░░]  64%
 ```
 
 | Metric | Value |
 |--------|-------|
 | Official phases (0–13) | 14 |
 | Complete | 3 (Phases 0, 1, 5) |
-| Partial | 7 (Phases 2, 3, 4, 6, 7, 8, 10) |
+| Partial | 8 (Phases 2, 3, 4, 6, 7, 8, 9, 10) |
 | In progress | 0 |
-| Not started | 4 |
-| Weighted score | (3×1.0) + (0.7 + 0.95 + 0.5 + 0.75 + 0.85 + 0.7 + 0.85) = 8.3 / 14 ≈ **63%** |
+| Not started | 3 |
+| Weighted score | (3×1.0) + (0.7 + 0.95 + 0.5 + 0.75 + 0.85 + 0.7 + 0.7 + 0.85) = 9.0 / 14 ≈ **64%** |
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Staff availability UI follow-ups, Google auth, medical notes, or BFF cookie auth
+**Current focus:** Medical notes MudBlazor UI, Google auth, or BFF cookie auth
 
 ### All phases at a glance
 
@@ -35,7 +35,7 @@
 | 6 | Staff and doctors | Partial | `████████░░` 75% |
 | 7 | Appointment booking | Partial | `█████████░` 85% |
 | 8 | Staff web application (MudBlazor) | Partial | `███████░░░` 70% |
-| 9 | Medical notes | Not started | `░░░░░░░░░░` 0% |
+| 9 | Medical notes | Partial | `███████░░░` 70% |
 | 10 | Hangfire and notifications | Partial | `█████████░` 85% |
 | 11 | Patient mobile application | Not started | `░░░░░░░░░░` 0% |
 | 12 | Audit and security hardening | Not started | `░░░░░░░░░░` 0% |
@@ -606,14 +606,33 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 ---
 ## Phase 9 — Medical notes
 
-**Status:** Not started
+**Status:** Partial (~70% — secure backend foundation; no staff UI yet)  
+**Updated:** 2026-07-23
 
-### Planned
+### Delivered
 
-- `MedicalNote` entity
-- Clinic-private by default; optional patient visibility
-- Role-restricted access (e.g. receptionist restrictions)
-- Audit on create/view where required
+- Entities: `MedicalNote`, `MedicalNoteAuditEvent` (metadata-only audit)
+- Lifecycle: Draft → Signed; amendments = new Signed rows (`AmendsMedicalNoteId`) created+signed atomically
+- Permissions + matrix: DOCTOR all; NURSE Nursing-scoped create/update/sign + read; CLINIC_ADMIN/ORG_ADMIN/RECEPTIONIST/PATIENT/PLATFORM_ADMIN none for note content
+- Clinical access: `IMedicalNoteAccessService` + `IMedicalNoteService`
+- Endpoints under `/api/v1/appointments/{id}/medical-notes` and `/api/v1/medical-notes/{id}` (draft/sign/amend)
+- Appointment eligibility for create: CheckedIn, InProgress, Completed
+- Optimistic concurrency via `Version` / `ExpectedVersion`
+- Migration: `AddMedicalNotesFoundation` applied to `healthcare_db`
+- Unit + architecture + integration suites (Docker-dependent integration retained)
+
+### Known limitations / remaining
+
+- No MudBlazor medical-notes UI
+- No patient self-access / IsVisibleToPatient
+- No ordinary delete; drafts cannot be abandoned via API yet
+- No field-level encryption (document TLS + encrypted DB/backups)
+- PLATFORM_ADMIN explicit bypass does **not** grant note content
+
+### Verification
+
+- Build succeeded; unit **254**; architecture **18**; integration Docker unavailable
+- Migration applied: `20260723192913_AddMedicalNotesFoundation`
 
 ---
 
@@ -843,6 +862,7 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 | 2026-07-23 | 10 | Configurable Hangfire worker hosting (non-Dev enablement); overall ~52% |
 | 2026-07-23 | 3 | Fine-grained permission catalog + authorization matrix; overall ~53% |
 | 2026-07-23 | 8 | Staff availability management UI + list-exceptions GET; overall ~63% |
+| 2026-07-23 | 9 | Medical notes secure backend foundation + migration; overall ~64% |
 
 ---
 

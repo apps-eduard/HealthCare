@@ -1,6 +1,7 @@
 using HealthCare.Domain.Appointments;
 using HealthCare.Domain.Clinics;
 using HealthCare.Domain.Identity;
+using HealthCare.Domain.MedicalNotes;
 using HealthCare.Domain.Organizations;
 using HealthCare.Domain.Patients;
 using HealthCare.Domain.Staff;
@@ -48,12 +49,16 @@ public sealed class HealthCareDbContext : IdentityDbContext<ApplicationUser, Ide
 
     public DbSet<ClinicAppointmentSummaryRun> ClinicAppointmentSummaryRuns => Set<ClinicAppointmentSummaryRun>();
 
+    public DbSet<MedicalNote> MedicalNotes => Set<MedicalNote>();
+
+    public DbSet<MedicalNoteAuditEvent> MedicalNoteAuditEvents => Set<MedicalNoteAuditEvent>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
         modelBuilder.HasDefaultSchema("public");
-        modelBuilder.HasAnnotation("HealthCare:SchemaVersion", "9");
+        modelBuilder.HasAnnotation("HealthCare:SchemaVersion", "10");
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(HealthCareDbContext).Assembly);
     }
@@ -177,6 +182,21 @@ public sealed class HealthCareDbContext : IdentityDbContext<ApplicationUser, Ide
                     }
 
                     summaryRun.UpdatedAtUtc = utcNow;
+                    break;
+                case MedicalNote medicalNote:
+                    if (entry.State == EntityState.Added)
+                    {
+                        medicalNote.CreatedAtUtc = utcNow;
+                    }
+
+                    medicalNote.UpdatedAtUtc = utcNow;
+                    break;
+                case MedicalNoteAuditEvent auditEvent when entry.State == EntityState.Added:
+                    if (auditEvent.CreatedAtUtc == default)
+                    {
+                        auditEvent.CreatedAtUtc = utcNow;
+                    }
+
                     break;
             }
         }

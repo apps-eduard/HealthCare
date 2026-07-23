@@ -27,6 +27,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\HealthCare.Api\HealthCare.Api.csproj" />
     <ProjectReference Include="..\..\src\HealthCare.Domain\HealthCare.Domain.csproj" />
     <ProjectReference Include="..\..\src\HealthCare.Application\HealthCare.Application.csproj" />
     <ProjectReference Include="..\..\src\HealthCare.Infrastructure\HealthCare.Infrastructure.csproj" />

@@ -4,6 +4,7 @@ using HealthCare.Application.Appointments;
 using HealthCare.Application.Authorization;
 using HealthCare.Application.Clinics;
 using HealthCare.Application.Identity;
+using HealthCare.Application.MedicalNotes;
 using HealthCare.Application.Patients;
 using HealthCare.Application.Staff;
 using HealthCare.Contracts;
@@ -124,6 +125,21 @@ public sealed class LayerDependencyTests
             .GetResult();
 
         result.IsSuccessful.Should().BeTrue(Because(result));
+    }
+
+    [Fact]
+    public void Medical_Notes_Keep_Clinical_Logic_Out_Of_Controllers()
+    {
+        var domainResult = Types.InAssembly(typeof(DomainAssemblyMarker).Assembly)
+            .That()
+            .ResideInNamespace("HealthCare.Domain.MedicalNotes")
+            .ShouldNot()
+            .HaveDependencyOnAny(InfrastructureNamespace, ApiNamespace, ApplicationNamespace)
+            .GetResult();
+
+        domainResult.IsSuccessful.Should().BeTrue(Because(domainResult));
+        typeof(IMedicalNoteService).Namespace.Should().StartWith("HealthCare.Application.MedicalNotes");
+        typeof(IMedicalNoteAccessService).Namespace.Should().StartWith("HealthCare.Application.MedicalNotes");
     }
 
     [Fact]

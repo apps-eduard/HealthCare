@@ -71,6 +71,15 @@ public static class Permissions
         public const string Dashboard = "hangfire.dashboard";
     }
 
+    public static class MedicalNotes
+    {
+        public const string Read = "medical_notes.read";
+        public const string Create = "medical_notes.create";
+        public const string UpdateDraft = "medical_notes.update_draft";
+        public const string Sign = "medical_notes.sign";
+        public const string Amend = "medical_notes.amend";
+    }
+
     /// <summary>Every known permission constant (unique).</summary>
     public static IReadOnlyList<string> All { get; } =
     [
@@ -101,6 +110,11 @@ public static class Permissions
         Roles.Read,
         Roles.Assign,
         Hangfire.Dashboard,
+        MedicalNotes.Read,
+        MedicalNotes.Create,
+        MedicalNotes.UpdateDraft,
+        MedicalNotes.Sign,
+        MedicalNotes.Amend,
     ];
 
     public static bool IsKnown(string permission) =>

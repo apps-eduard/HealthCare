@@ -482,37 +482,34 @@ Build the MVP staff interface using MudBlazor.
 
 ### Objectives
 
-Allow authorized clinical staff to create clinic-private notes.
+Secure clinical-note foundation for appointment-linked SOAP notes with draft → sign → amend lifecycle.
 
-### Tasks
+### Delivered (backend)
 
-- Create `MedicalNote` entity.
-- Support note types.
-- Allow doctor and nurse note creation.
-- Allow optional patient visibility.
-- Prevent receptionist access to note contents unless explicitly permitted.
-- Add audit logging for creation and viewing.
+- `MedicalNote` + `MedicalNoteAuditEvent` entities; migration `AddMedicalNotesFoundation`
+- Permissions: `medical_notes.read|create|update_draft|sign|amend`
+- DOCTOR: all note permissions; NURSE: read/create/update_draft/sign for **Nursing** type only; admins/receptionist/patient/platform: **none**
+- Clinical-role gate via `IMedicalNoteAccessService` (permission alone insufficient)
+- Endpoints:
+  - `GET/POST /api/v1/appointments/{appointmentId}/medical-notes`
+  - `GET /api/v1/medical-notes/{id}`
+  - `PATCH /api/v1/medical-notes/{id}/draft`
+  - `POST /api/v1/medical-notes/{id}/sign`
+  - `POST /api/v1/medical-notes/{id}/amend`
+- Draft create only for CheckedIn / InProgress / Completed
+- Amendments: atomic signed records linked by `AmendsMedicalNoteId`
+- No delete endpoint; no patient UI/API in this phase; no MudBlazor UI yet
 
-### Endpoints
+### Remaining
 
-```text
-GET  /api/v1/staff/patients/{clinicPatientId}/medical-notes
-POST /api/v1/staff/patients/{clinicPatientId}/medical-notes
-GET  /api/v1/patient/records
-```
-
-### Tests
-
-- Clinic A cannot access Clinic B notes.
-- Patient sees only their own notes.
-- Patient sees only notes marked visible.
-- Receptionist cannot read clinical note content.
-- Viewing a note creates an audit event where required.
+- Staff MudBlazor medical-notes UI
+- Patient-visible notes / patient records API (deferred)
+- Field-level encryption evaluation (ops at-rest encryption required)
 
 ### Acceptance criteria
 
-- Clinical notes are isolated and protected.
-- Patient-visible records are grouped by clinic.
+- Clinical notes are tenant-isolated and clinically role-gated.
+- Signed notes remain immutable; amendments preserve originals.
 
 ---
 

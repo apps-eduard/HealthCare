@@ -362,20 +362,22 @@ NoShow
 ```text
 MedicalNote
 ├── Id
-├── ClinicId
-├── ClinicPatientId
-├── AppointmentId
-├── CreatedByStaffMemberId
-├── NoteType
-├── Content
-├── IsVisibleToPatient
-├── CreatedAtUtc
-└── UpdatedAtUtc
+├── OrganizationId / ClinicId / PatientId / ClinicPatientId / AppointmentId
+├── AuthorStaffMemberId / AuthorUserId
+├── NoteType (Progress|Consultation|Nursing|FollowUp|Procedure)
+├── Status (Draft|Signed)
+├── Subjective / Objective / Assessment / Plan / AdditionalText (plain text)
+├── SignedAtUtc / SignedByStaffMemberId
+├── Version (optimistic concurrency)
+├── AmendsMedicalNoteId / AmendmentReason
+├── CreatedAtUtc / UpdatedAtUtc
 ```
 
-Medical notes are clinic-private by default.
-
-A patient can see only notes explicitly marked as visible to the patient.
+Medical notes are clinic-private clinical content. MVP has **no patient self-access** and **no ordinary delete**.
+Signed notes are immutable; corrections create signed amendment rows.
+Access requires clinical role (DOCTOR/NURSE) plus medical_notes.* permissions — administrative roles alone do not read note bodies.
+Audit: `MedicalNoteAuditEvent` stores metadata only (never SOAP content).
+Operational requirement: encrypt database/backups at rest; TLS in transit; no custom field encryption in MVP.
 
 ### 6.7 Audit log model
 

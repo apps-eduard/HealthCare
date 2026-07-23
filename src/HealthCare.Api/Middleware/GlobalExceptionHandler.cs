@@ -3,6 +3,7 @@ using HealthCare.Application.Appointments;
 using HealthCare.Application.Authorization;
 using HealthCare.Application.Clinics;
 using HealthCare.Application.Identity;
+using HealthCare.Application.MedicalNotes;
 using HealthCare.Application.Patients;
 using HealthCare.Application.Staff;
 using Microsoft.AspNetCore.Diagnostics;
@@ -172,6 +173,18 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
                 summaryException.ErrorCode,
                 correlationId,
                 "Appointment summary operation denied",
+                cancellationToken);
+        }
+
+        if (exception is MedicalNoteException medicalNoteException)
+        {
+            return await WriteAuthProblemAsync(
+                httpContext,
+                medicalNoteException.StatusCode,
+                medicalNoteException.Title,
+                medicalNoteException.ErrorCode,
+                correlationId,
+                "Medical note operation denied",
                 cancellationToken);
         }
 

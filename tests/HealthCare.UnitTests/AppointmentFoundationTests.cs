@@ -9,6 +9,7 @@ using HealthCare.Domain.Patients;
 using HealthCare.Domain.Staff;
 using HealthCare.Infrastructure.Appointments;
 using HealthCare.Infrastructure.Clinics;
+using HealthCare.Infrastructure.MedicalNotes;
 using HealthCare.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -708,6 +709,64 @@ internal sealed class AppointmentHarness : IAsyncDisposable
     }
 
     public DoctorDirectoryService CreateDirectory() => new(Db, new ClinicPublicLookup(Db));
+
+    public MedicalNoteService CreateMedicalNoteService(
+        Guid userId,
+        Guid organizationId,
+        Guid clinicId,
+        Guid staffMemberId,
+        string role)
+    {
+        var user = new FakeCurrentUser
+        {
+            IsAuthenticated = true,
+            UserId = userId,
+            Roles = [role],
+        };
+        var staff = new FakeCurrentStaff
+        {
+            HasActiveMembership = true,
+            StaffMemberId = staffMemberId,
+            OrganizationId = organizationId,
+            ClinicId = clinicId,
+            Role = role,
+        };
+        var access = new MedicalNoteAccessService(user, staff, new NoOpAuthorizationAuditLogger());
+        var audit = new MedicalNoteAuditStore(
+            Db, user, staff, Time, NullLogger<MedicalNoteAuditStore>.Instance);
+
+        return new MedicalNoteService(
+            Db, user, staff, access, audit, Time, NullLogger<MedicalNoteService>.Instance);
+    }
+
+    public async Task<Appointment> SeedAppointmentAsync(
+        SeedData data,
+        AppointmentStatus status = AppointmentStatus.CheckedIn)
+    {
+        var appointment = new Appointment
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = data.Org1Id,
+            ClinicId = data.ClinicAId,
+            PatientId = data.PatientId,
+            ClinicPatientId = await Db.ClinicPatients
+                .Where(cp => cp.ClinicId == data.ClinicAId && cp.PatientId == data.PatientId)
+                .Select(cp => cp.Id)
+                .SingleAsync(),
+            DoctorStaffMemberId = data.DoctorAStaffId,
+            AppointmentDateUtc = Now,
+            DurationMinutes = 30,
+            Status = status,
+            Source = AppointmentSource.Staff,
+            CreatedByUserId = data.DoctorAUserId,
+            Version = 0,
+            CreatedAtUtc = Now,
+            UpdatedAtUtc = Now,
+        };
+        Db.Appointments.Add(appointment);
+        await Db.SaveChangesAsync();
+        return appointment;
+    }
 
     public ValueTask DisposeAsync()
     {

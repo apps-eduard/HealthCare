@@ -362,33 +362,40 @@ Do not store:
 
 ### 8.1 Default privacy
 
-Medical notes are clinic-private by default.
+Medical notes are clinic-private clinical content. MVP APIs do **not** expose notes to patients.
 
-A note must not be visible to the patient unless `IsVisibleToPatient` is explicitly true.
+Access requires:
 
-### 8.2 Cross-clinic access
+- Active staff membership in the note’s clinic/organization
+- Clinical role (`DOCTOR` or `NURSE`)
+- Explicit `medical_notes.*` permission
+- Administrative roles alone (clinic/org/platform admin, receptionist) **must not** read note bodies
 
-Cross-clinic sharing is excluded from the MVP.
+### 8.2 Lifecycle and immutability
 
-Do not implement automatic sharing.
+- Drafts: editable only by original author
+- Signed notes: immutable; no ordinary delete
+- Amendments: new signed rows linked via `AmendsMedicalNoteId`; original content preserved
+- Audit events (`MedicalNoteAuditEvent`) and structured logs must never contain SOAP/amendment body text
 
-Do not expose a list of other clinics used by the patient to clinic staff.
+### 8.3 Cross-clinic access
 
-### 8.3 Future consent model
+Clinic A staff must never read Clinic B notes. Out-of-scope requests return safe 404. PLATFORM_ADMIN bypass does **not** grant medical-note content.
 
-Future sharing must require:
+### 8.4 Encryption and operational controls
 
-- Patient consent
-- Source clinic
-- Destination clinic
-- Data category
-- Purpose
-- Granted date
-- Expiration date
-- Revocation support
-- Audit trail
+MVP does not implement application-level field encryption for note bodies.
 
-Do not partially implement this in the MVP.
+Required for production:
+
+- TLS for all API traffic
+- Encrypted PostgreSQL storage/volume and encrypted backups
+- Restricted DB credentials and least-privilege app roles
+- Secrets via secure configuration (not source control)
+
+### 8.5 Future consent / patient visibility
+
+Patient-visible notes and consent-based sharing are deferred. Do not partially implement automatic sharing in the MVP.
 
 ---
 

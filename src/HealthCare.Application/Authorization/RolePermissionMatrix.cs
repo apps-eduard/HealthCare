@@ -108,7 +108,12 @@ public static class RolePermissionMatrix
                 Permissions.Reminders.Read,
                 Permissions.Reminders.Retry,
                 Permissions.Summaries.Read,
-                Permissions.Clinics.Read),
+                Permissions.Clinics.Read,
+                Permissions.MedicalNotes.Read,
+                Permissions.MedicalNotes.Create,
+                Permissions.MedicalNotes.UpdateDraft,
+                Permissions.MedicalNotes.Sign,
+                Permissions.MedicalNotes.Amend),
 
             [AppRoles.Nurse] = Set(
                 Permissions.Patients.Read,
@@ -121,7 +126,11 @@ public static class RolePermissionMatrix
                 Permissions.Appointments.NoShow,
                 Permissions.Availability.Read,
                 Permissions.Reminders.Read,
-                Permissions.Clinics.Read),
+                Permissions.Clinics.Read,
+                Permissions.MedicalNotes.Read,
+                Permissions.MedicalNotes.Create,
+                Permissions.MedicalNotes.UpdateDraft,
+                Permissions.MedicalNotes.Sign),
 
             [AppRoles.Receptionist] = Set(
                 Permissions.Patients.Read,

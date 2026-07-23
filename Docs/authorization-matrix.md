@@ -30,6 +30,11 @@ Resolution uses server-side Identity roles (DB) + active staff membership + pati
 | `staff.read` / `staff.manage` | Staff-management list/detail/create/update/activate |
 | `roles.read` / `roles.assign` | Assignable-role catalog and role assignment |
 | `hangfire.dashboard` | Hangfire dashboard (with PLATFORM_ADMIN) |
+| `medical_notes.read` | Read authorized clinic note summaries/detail |
+| `medical_notes.create` | Create draft notes for eligible appointments |
+| `medical_notes.update_draft` | Update own draft |
+| `medical_notes.sign` | Sign own draft |
+| `medical_notes.amend` | Create signed amendment of a signed note (DOCTOR) |
 
 ## Role mappings (assumptions)
 
@@ -37,7 +42,7 @@ Resolution uses server-side Identity roles (DB) + active staff membership + pati
 - **ORGANIZATION_ADMIN:** org-scoped ops; can assign roles except PLATFORM_ADMIN.
 - **CLINIC_ADMIN:** clinic-scoped ops; cannot assign ORG/PLATFORM admin.
 - **DOCTOR:** clinic appointments + own availability; no clinic administration.
-- **NURSE:** clinical-operational appointment actions (no create/reschedule/availability manage; no medical-notes permissions yet).
+- **NURSE:** clinical-operational appointment actions (no create/reschedule/availability manage); medical notes: `medical_notes.read/create/update_draft/sign` limited to **Nursing** note type in services.
 - **RECEPTIONIST:** scheduling + search + confirm/cancel/check-in/reschedule; **no** complete/no-show; **no** availability admin.
 - **PATIENT:** own profile/appointments + availability read + clinic register; no staff ops.
 

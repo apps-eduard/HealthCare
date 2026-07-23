@@ -69,7 +69,7 @@ dotnet run --project src/HealthCare.Api --launch-profile http
 
 Authorization uses a code-defined permission catalog (`Docs/authorization-matrix.md`). Controllers declare `[AuthorizePermission]`; tenant scope remains enforced in services.
 
-Staff administration (admins only): `/api/v1/staff-management/staff` and `/roles`. Development seed includes `clinicadmin@healthcare.local` (see `DevelopmentSeed:Patient:ClinicAdmin*` in `appsettings.Development.json`).
+- Medical notes: `/api/v1/appointments/{appointmentId}/medical-notes`, `/api/v1/medical-notes/{id}` (+ `/draft`, `/sign`, `/amend`). Requires clinical role + `medical_notes.*`. No MudBlazor UI yet.
 
 ### 5. Run the staff web app
 
