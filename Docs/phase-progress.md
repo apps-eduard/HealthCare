@@ -2,10 +2,10 @@
 
 ## Progress overview
 
-**Overall completion: 53%**
+**Overall completion: 55%**
 
 ```text
-[████████████████░░░░░░░░░░░░░░░░]  53%
+[█████████████████░░░░░░░░░░░░░░░]  55%
 ```
 
 | Metric | Value |
@@ -15,11 +15,11 @@
 | Partial | 6 (Phases 2, 3, 4, 6, 7, 10) |
 | In progress | 0 |
 | Not started | 5 |
-| Weighted score | (3×1.0) + (0.7 + 0.9 + 0.5 + 0.5 + 0.85 + 0.85) = 7.3 / 14 ≈ **53%** |
+| Weighted score | (3×1.0) + (0.7 + 0.95 + 0.5 + 0.75 + 0.85 + 0.85) = 7.6 / 14 ≈ **55%** |
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Staff UI, Google auth, or medical notes
+**Current focus:** Staff UI (MudBlazor), Google auth, or medical notes
 
 ### All phases at a glance
 
@@ -29,10 +29,10 @@
 | 1 | Solution foundation | Complete | `██████████` 100% |
 | 1b | Identity + core entities foundation *(sub-step)* | Complete | `██████████` 100% |
 | 2 | Identity and authentication (JWT / refresh / endpoints) | Partial | `███████░░░` 70% |
-| 3 | Roles and authorization foundation | Partial | `█████████░` 90% |
+| 3 | Roles and authorization foundation | Partial | `█████████░` 95% |
 | 4 | Organizations and clinics | Partial | `█████░░░░░` 50% |
 | 5 | Patients and clinic-patient registration | Complete | `██████████` 100% |
-| 6 | Staff and doctors | Partial | `█████░░░░░` 50% |
+| 6 | Staff and doctors | Partial | `████████░░` 75% |
 | 7 | Appointment booking | Partial | `█████████░` 85% |
 | 8 | Staff web application (MudBlazor) | Not started | `░░░░░░░░░░` 0% |
 | 9 | Medical notes | Not started | `░░░░░░░░░░` 0% |
@@ -86,10 +86,10 @@ Authoritative design docs:
 | 1 | Solution foundation | Complete | 2026-07-23 |
 | 1b | Identity + core entities foundation | Complete | 2026-07-23 |
 | 2 | Identity and authentication (JWT / refresh / endpoints) | Partial (patient register + confirm) | 2026-07-23 |
-| 3 | Roles and authorization foundation | Partial (current-user + policies) | 2026-07-23 |
+| 3 | Roles and authorization foundation | Partial (permissions + role-assignment APIs) | 2026-07-23 |
 | 4 | Organizations and clinics | Partial (entities + schema only) | 2026-07-23 |
 | 5 | Patients and clinic-patient registration | Complete (staff search + clinic admin) | 2026-07-23 |
-| 6 | Staff and doctors | Partial (StaffMember entity + schema only) | 2026-07-23 |
+| 6 | Staff and doctors | Partial (staff-management APIs; UI deferred) | 2026-07-23 |
 | 7 | Appointment booking | Partial (foundation + availability + reschedule) | 2026-07-23 |
 | 8 | Staff web application (MudBlazor) | Not started | — |
 | 9 | Medical notes | Not started | — |
@@ -239,7 +239,7 @@ Authoritative design docs:
 
 ## Phase 3 — Roles and authorization foundation
 
-**Status:** Partial (~90% — fine-grained permission catalog added)  
+**Status:** Partial (~95% — permission catalog + staff role-assignment HTTP)  
 **Updated:** 2026-07-23
 
 ### Already done
@@ -252,14 +252,13 @@ Authoritative design docs:
 - **Fine-grained permission catalog** (`Permissions`) + **role-permission matrix** (`RolePermissionMatrix`) — code-defined, no migration
 - `IPermissionService` + dynamic `perm:` policy provider; controllers use `[AuthorizePermission]` / `[AuthorizeAnyPermission]`
 - `GET /api/v1/auth/me` includes `Permissions`; `GET /api/v1/auth/me/permissions`
-- `IRoleAssignmentAuthorizationService` (rules only; no staff-management API yet)
+- `IRoleAssignmentAuthorizationService` wired into staff-management role APIs
 - Hangfire dashboard requires PLATFORM_ADMIN **and** `hangfire.dashboard`
 - Isolation probe: `GET /api/v1/scope-probe/{organization|clinic|patient}`
 - Docs: [authorization-matrix.md](./authorization-matrix.md)
 
 ### Remaining
 
-- Staff-management CRUD / role-assignment HTTP APIs
 - Docker/Testcontainers integration suite when Docker is available (suite retained)
 - EF global query filters deferred; tenant access enforced in services
 
@@ -348,18 +347,44 @@ Authoritative design docs:
 
 ## Phase 6 — Staff and doctors
 
-**Status:** Partial
+**Status:** Partial (~75% — staff-management APIs; UI / doctor profile screens deferred)  
+**Updated:** 2026-07-23
 
 ### Already done
 
-- `StaffMember` entity with `UserId`, `OrganizationId`, `ClinicId`, `Role`
-- EF configuration and role check constraint
+- `StaffMember` membership model: `UserId` (unique — one membership per user), `OrganizationId`, `ClinicId`, `Role`, profile name fields, `IsActive`, timestamps, optimistic `Version`
+- EF configuration, role check constraint, migration `AddStaffManagementFoundation`
+- Doctor availability APIs (Phase 7 overlap): clinic doctor directory + slots + staff availability CRUD
+- **Staff-management HTTP APIs** (`/api/v1/staff-management/...`):
+  - List/search, detail, create (temporary password), PATCH profile, activate/deactivate
+  - Roles catalog + assign/remove via `IRoleAssignmentAuthorizationService`
+  - Permission + active membership + tenant scope + role hierarchy
+  - `ISecuritySessionInvalidationService` (revoke refresh tokens + security stamp) on security-sensitive changes
+  - Last-administrator protection; out-of-scope staff → safe 404
+  - Development seed: `clinicadmin@healthcare.local`
+- Docs: [authorization-matrix.md](./authorization-matrix.md) staff section; session revocation note in [security.md](./security.md)
 
 ### Remaining
 
-- Staff management APIs and UI
-- Doctor profile / availability
-- Activation rules and permission differences by role
+- Staff MudBlazor UI (Phase 8)
+- Doctor profile presentation beyond availability
+- Invitation / email activation workflow (temporary-password only for now)
+- Force password-change on first login
+- Multi-membership per user (explicitly out of MVP)
+
+### Verification (staff-management APIs)
+- Build: succeeded
+- Migration `AddStaffManagementFoundation` applied to `healthcare_db`
+- Unit tests: staff-management suite + full unit suite green
+- Architecture tests: green (controllers must not query DbContext; session invalidation abstracted)
+- Integration tests: suite retained (`StaffManagementEndpointTests`); Docker may be unavailable locally
+- Manual: `/health` **200**; CLINIC_ADMIN lists own clinic; create RECEPTIONIST; deny ORGANIZATION_ADMIN assign; ORGANIZATION_ADMIN org scope; deactivate blocks access; role change revokes refresh tokens; self-elevation denied; platform bypass audited
+
+### Known limitations
+- Email not editable via staff PATCH
+- No real email provider / invitation tokens
+- Role model remains single membership `Role` string (+ Identity role sync on assign)
+- Access-token TTL still applies until stamp/permission re-resolution on next authenticated request
 
 ---
 

@@ -26,12 +26,27 @@ public sealed class StaffMemberConfiguration : IEntityTypeConfiguration<StaffMem
             .IsRequired()
             .HasMaxLength(64);
 
+        builder.Property(x => x.FirstName)
+            .IsRequired()
+            .HasMaxLength(100);
+
+        builder.Property(x => x.LastName)
+            .IsRequired()
+            .HasMaxLength(100);
+
+        builder.Property(x => x.DisplayName)
+            .HasMaxLength(200);
+
         builder.Property(x => x.JobTitle)
             .HasMaxLength(150);
 
         builder.Property(x => x.IsActive)
             .IsRequired()
             .HasDefaultValue(true);
+
+        builder.Property(x => x.Version)
+            .IsConcurrencyToken()
+            .HasDefaultValue(0);
 
         builder.Property(x => x.CreatedAtUtc)
             .IsRequired();
@@ -63,7 +78,6 @@ public sealed class StaffMemberConfiguration : IEntityTypeConfiguration<StaffMem
             .HasForeignKey(x => x.ClinicId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Defense in depth: staff role must be one of the documented Identity roles (excluding PATIENT for staff profiles).
         builder.ToTable(t => t.HasCheckConstraint(
             "CK_StaffMembers_Role",
             $"\"Role\" IN ('{AppRoles.PlatformAdmin}', '{AppRoles.OrganizationAdmin}', '{AppRoles.ClinicAdmin}', '{AppRoles.Doctor}', '{AppRoles.Nurse}', '{AppRoles.Receptionist}')"));

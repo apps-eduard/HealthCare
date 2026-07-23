@@ -1,0 +1,56 @@
+using HealthCare.Application.Authorization;
+using HealthCare.Contracts.Common;
+using HealthCare.Contracts.Staff;
+
+namespace HealthCare.Application.Staff;
+
+public interface IStaffManagementService
+{
+    Task<PagedResponse<StaffSummaryResponse>> SearchAsync(
+        StaffSearchRequest request,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default);
+
+    Task<StaffDetailResponse> GetByIdAsync(
+        Guid staffMemberId,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default);
+
+    Task<CreateStaffResponse> CreateAsync(
+        CreateStaffRequest request,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default);
+
+    Task<StaffDetailResponse> UpdateAsync(
+        Guid staffMemberId,
+        UpdateStaffRequest request,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default);
+
+    Task<StaffDetailResponse> ActivateAsync(
+        Guid staffMemberId,
+        StaffActivationRequest request,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default);
+
+    Task<StaffDetailResponse> DeactivateAsync(
+        Guid staffMemberId,
+        StaffActivationRequest request,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<StaffRoleInfoResponse>> ListAssignableRolesAsync(
+        CancellationToken cancellationToken = default);
+
+    Task AssignRoleAsync(
+        Guid staffMemberId,
+        string roleName,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default);
+
+    Task RemoveRoleAsync(
+        Guid staffMemberId,
+        string roleName,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default);
+}

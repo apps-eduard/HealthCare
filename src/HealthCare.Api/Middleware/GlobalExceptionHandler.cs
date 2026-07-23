@@ -3,6 +3,7 @@ using HealthCare.Application.Appointments;
 using HealthCare.Application.Authorization;
 using HealthCare.Application.Identity;
 using HealthCare.Application.Patients;
+using HealthCare.Application.Staff;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 
@@ -86,6 +87,18 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
                 clinicPatientConcurrencyException.ErrorCode,
                 correlationId,
                 "Clinic patient concurrency conflict",
+                cancellationToken);
+        }
+
+        if (exception is StaffManagementException staffException)
+        {
+            return await WriteAuthProblemAsync(
+                httpContext,
+                staffException.StatusCode,
+                staffException.Title,
+                staffException.ErrorCode,
+                correlationId,
+                "Staff management denied",
                 cancellationToken);
         }
 

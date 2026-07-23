@@ -203,6 +203,7 @@ Not allowed:
 - Revoke the full family after reuse detection.
 - Revoke tokens on logout.
 - Revoke tokens when an account is disabled.
+- Revoke **all** refresh tokens for a user (and update the Identity security stamp) after staff deactivation, role assignment, or role removal via `ISecuritySessionInvalidationService`. Never log token values or hashes.
 - Record creation, expiration, revocation, IP address, and user agent where appropriate.
 
 ### 5.5 Mobile token storage

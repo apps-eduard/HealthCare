@@ -4,6 +4,7 @@ using HealthCare.Application.Appointments;
 using HealthCare.Application.Authorization;
 using HealthCare.Application.Identity;
 using HealthCare.Application.Patients;
+using HealthCare.Application.Staff;
 using HealthCare.Contracts;
 using HealthCare.Domain;
 using NetArchTest.Rules;
@@ -286,6 +287,8 @@ public sealed class LayerDependencyTests
         typeof(Permissions).Namespace.Should().StartWith("HealthCare.Application");
         typeof(RolePermissionMatrix).Namespace.Should().StartWith("HealthCare.Application");
         typeof(IRoleAssignmentAuthorizationService).Namespace.Should().StartWith("HealthCare.Application");
+        typeof(IStaffManagementService).Namespace.Should().StartWith("HealthCare.Application.Staff");
+        typeof(ISecuritySessionInvalidationService).Namespace.Should().StartWith("HealthCare.Application.Identity");
     }
 
     [Fact]

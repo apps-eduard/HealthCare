@@ -125,6 +125,18 @@ public sealed class DevelopmentPatientSeeder : IDevelopmentPatientSeeder
                 cancellationToken);
         }
 
+        if (!string.IsNullOrWhiteSpace(_options.ClinicAdminEmail)
+            && !string.IsNullOrWhiteSpace(_options.ClinicAdminPassword))
+        {
+            await EnsureStaffAsync(
+                _options.ClinicAdminEmail,
+                _options.ClinicAdminPassword,
+                organization.Id,
+                clinicA.Id,
+                AppRoles.ClinicAdmin,
+                cancellationToken);
+        }
+
         _logger.LogInformation("Development patient seed completed");
     }
 
@@ -327,8 +339,20 @@ public sealed class DevelopmentPatientSeeder : IDevelopmentPatientSeeder
                 OrganizationId = organizationId,
                 ClinicId = clinicId,
                 Role = role,
+                FirstName = role switch
+                {
+                    AppRoles.OrganizationAdmin => "Org",
+                    AppRoles.ClinicAdmin => "Clinic",
+                    AppRoles.Doctor => "Doctor",
+                    _ => "Staff",
+                },
+                LastName = email.Split('@')[0],
+                DisplayName = null,
                 JobTitle = role,
                 IsActive = true,
+                Version = 0,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+                UpdatedAtUtc = DateTimeOffset.UtcNow,
             };
             _dbContext.StaffMembers.Add(membership);
             await _dbContext.SaveChangesAsync(cancellationToken);

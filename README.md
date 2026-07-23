@@ -69,6 +69,8 @@ dotnet run --project src/HealthCare.Api --launch-profile http
 
 Authorization uses a code-defined permission catalog (`Docs/authorization-matrix.md`). Controllers declare `[AuthorizePermission]`; tenant scope remains enforced in services.
 
+Staff administration (admins only): `/api/v1/staff-management/staff` and `/roles`. Development seed includes `clinicadmin@healthcare.local` (see `DevelopmentSeed:Patient:ClinicAdmin*` in `appsettings.Development.json`).
+
 ### 5. Build and test
 
 ```powershell

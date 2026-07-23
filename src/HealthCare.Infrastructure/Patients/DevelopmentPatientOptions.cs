@@ -34,6 +34,10 @@ public sealed class DevelopmentPatientOptions
 
     public string? OrganizationAdminPassword { get; set; }
 
+    public string? ClinicAdminEmail { get; set; }
+
+    public string? ClinicAdminPassword { get; set; }
+
     public string OtherClinicName { get; set; } = "Dev Clinic B";
 
     public string OtherClinicSlug { get; set; } = "dev-clinic-b";
