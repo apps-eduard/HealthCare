@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Security.Claims;
 using HealthCare.Contracts.Identity;
 using HealthCare.Web.Services;
 
@@ -6,6 +7,8 @@ namespace HealthCare.Web.Auth;
 
 /// <summary>
 /// Server-to-server auth operations used by BFF endpoints. Never returns tokens to the browser.
+/// Login is a single antiforgery-protected POST that creates a new session and issues the auth cookie
+/// (no separate establish GET) — login CSRF is blocked by antiforgery binding to the victim browser.
 /// </summary>
 public interface IBffAuthService
 {
@@ -20,9 +23,9 @@ public sealed class BffLoginResult
 
     public string? ErrorCode { get; init; }
 
-    public string? EstablishTicket { get; init; }
+    public CurrentUserResponse? User { get; init; }
 
-    public Guid? UserId { get; init; }
+    public ApiTokenSession? Session { get; init; }
 
     public bool IsPatientOnly { get; init; }
 
@@ -50,79 +53,112 @@ public sealed class BffAuthService : IBffAuthService
         string password,
         CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("BFF auth event. Event=login_initiated");
+
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
         {
+            _logger.LogInformation("BFF auth event. Event=login_failed ReasonCode=invalid_credentials");
             return new BffLoginResult { Succeeded = false, ErrorCode = AuthErrorCodes.InvalidCredentials };
         }
 
         var anonymous = _httpClientFactory.CreateClient("HealthCareApi.Anonymous");
-        using var loginResponse = await anonymous.PostAsJsonAsync(
-            "api/v1/auth/login",
-            new LoginRequest { Email = email.Trim(), Password = password },
-            cancellationToken);
-
-        if (!loginResponse.IsSuccessStatusCode)
+        HttpResponseMessage loginResponse;
+        try
         {
-            var problem = await ApiProblemException.FromResponseAsync(loginResponse, cancellationToken);
-            return new BffLoginResult
+            loginResponse = await anonymous.PostAsJsonAsync(
+                "api/v1/auth/login",
+                new LoginRequest { Email = email.Trim(), Password = password },
+                cancellationToken);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            _logger.LogInformation(ex, "BFF auth event. Event=login_failed ReasonCode=sign_in_failed");
+            return new BffLoginResult { Succeeded = false, ErrorCode = "sign_in_failed" };
+        }
+
+        using (loginResponse)
+        {
+            if (!loginResponse.IsSuccessStatusCode)
             {
-                Succeeded = false,
-                ErrorCode = problem.ErrorCode ?? AuthErrorCodes.InvalidCredentials,
-            };
-        }
+                var problem = await ApiProblemException.FromResponseAsync(loginResponse, cancellationToken);
+                _logger.LogInformation(
+                    "BFF auth event. Event=login_failed ReasonCode={ReasonCode}",
+                    problem.ErrorCode ?? AuthErrorCodes.InvalidCredentials);
+                return new BffLoginResult
+                {
+                    Succeeded = false,
+                    ErrorCode = problem.ErrorCode ?? AuthErrorCodes.InvalidCredentials,
+                };
+            }
 
-        var tokens = await loginResponse.Content.ReadFromJsonAsync<AuthTokenResponse>(cancellationToken);
-        if (tokens is null || string.IsNullOrWhiteSpace(tokens.AccessToken))
-        {
-            return new BffLoginResult { Succeeded = false, ErrorCode = AuthErrorCodes.InvalidCredentials };
-        }
-
-        // Load /me with the new access token (do not use circuit token store — no cookie yet).
-        using var meRequest = new HttpRequestMessage(HttpMethod.Get, "api/v1/auth/me");
-        meRequest.Headers.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", tokens.AccessToken);
-        using var meResponse = await anonymous.SendAsync(meRequest, cancellationToken);
-        if (!meResponse.IsSuccessStatusCode)
-        {
-            _logger.LogInformation("BFF login succeeded but /me failed with {StatusCode}.", (int)meResponse.StatusCode);
-            return new BffLoginResult { Succeeded = false, ErrorCode = AuthErrorCodes.InvalidCredentials };
-        }
-
-        var user = await meResponse.Content.ReadFromJsonAsync<CurrentUserResponse>(cancellationToken);
-        if (user is null)
-        {
-            return new BffLoginResult { Succeeded = false, ErrorCode = AuthErrorCodes.InvalidCredentials };
-        }
-
-        var session = await _sessions.CreateAsync(
-            user.UserId,
-            new StoredAuthTokens
+            var tokens = await loginResponse.Content.ReadFromJsonAsync<AuthTokenResponse>(cancellationToken);
+            if (tokens is null || string.IsNullOrWhiteSpace(tokens.AccessToken))
             {
-                AccessToken = tokens.AccessToken,
-                RefreshToken = tokens.RefreshToken,
-                AccessTokenExpiresAtUtc = tokens.AccessTokenExpiresAtUtc,
-                RefreshTokenExpiresAtUtc = tokens.RefreshTokenExpiresAtUtc,
-            },
-            cancellationToken);
+                _logger.LogInformation("BFF auth event. Event=login_failed ReasonCode=invalid_credentials");
+                return new BffLoginResult { Succeeded = false, ErrorCode = AuthErrorCodes.InvalidCredentials };
+            }
 
-        var ticket = await _sessions.CreateLoginTicketAsync(session.SessionId, user.UserId, cancellationToken);
+            using var meRequest = new HttpRequestMessage(HttpMethod.Get, "api/v1/auth/me");
+            meRequest.Headers.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", tokens.AccessToken);
+            HttpResponseMessage meResponse;
+            try
+            {
+                meResponse = await anonymous.SendAsync(meRequest, cancellationToken);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+                _logger.LogInformation(ex, "BFF auth event. Event=login_failed ReasonCode=sign_in_failed");
+                return new BffLoginResult { Succeeded = false, ErrorCode = "sign_in_failed" };
+            }
 
-        var isPlatform = user.Roles.Contains(WebRoles.PlatformAdmin, StringComparer.Ordinal);
-        var isStaff = user.HasActiveStaffMembership || isPlatform;
-        var isPatientOnly = user.Roles.Contains(WebRoles.Patient, StringComparer.Ordinal)
-                            && !user.HasActiveStaffMembership
-                            && !isPlatform;
+            using (meResponse)
+            {
+                if (!meResponse.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation("BFF auth event. Event=login_failed ReasonCode=profile_unavailable");
+                    return new BffLoginResult { Succeeded = false, ErrorCode = AuthErrorCodes.InvalidCredentials };
+                }
 
-        _logger.LogInformation("BFF login ticket created for user {UserId}.", user.UserId);
+                var user = await meResponse.Content.ReadFromJsonAsync<CurrentUserResponse>(cancellationToken);
+                if (user is null)
+                {
+                    _logger.LogInformation("BFF auth event. Event=login_failed ReasonCode=invalid_credentials");
+                    return new BffLoginResult { Succeeded = false, ErrorCode = AuthErrorCodes.InvalidCredentials };
+                }
 
-        return new BffLoginResult
-        {
-            Succeeded = true,
-            EstablishTicket = ticket,
-            UserId = user.UserId,
-            IsPatientOnly = isPatientOnly,
-            IsStaffUser = isStaff,
-        };
+                // Always create a brand-new high-entropy session (session fixation defense).
+                var session = await _sessions.CreateAsync(
+                    user.UserId,
+                    new StoredAuthTokens
+                    {
+                        AccessToken = tokens.AccessToken,
+                        RefreshToken = tokens.RefreshToken,
+                        AccessTokenExpiresAtUtc = tokens.AccessTokenExpiresAtUtc,
+                        RefreshTokenExpiresAtUtc = tokens.RefreshTokenExpiresAtUtc,
+                    },
+                    cancellationToken);
+
+                var isPlatform = user.Roles.Contains(WebRoles.PlatformAdmin, StringComparer.Ordinal);
+                var isStaff = user.HasActiveStaffMembership || isPlatform;
+                var isPatientOnly = user.Roles.Contains(WebRoles.Patient, StringComparer.Ordinal)
+                                    && !user.HasActiveStaffMembership
+                                    && !isPlatform;
+
+                _logger.LogInformation(
+                    "BFF auth event. Event=login_succeeded UserId={UserId} EventDetail=session_rotated",
+                    user.UserId);
+
+                return new BffLoginResult
+                {
+                    Succeeded = true,
+                    User = user,
+                    Session = session,
+                    IsPatientOnly = isPatientOnly,
+                    IsStaffUser = isStaff,
+                };
+            }
+        }
     }
 
     public async Task LogoutAsync(
@@ -151,8 +187,10 @@ public sealed class BffAuthService : IBffAuthService
             }
             catch (Exception ex)
             {
-                _logger.LogInformation(ex, "Remote API logout failed; local BFF session already cleared.");
+                _logger.LogInformation(ex, "BFF auth event. Event=logout_api_revocation_failed");
             }
         }
+
+        _logger.LogInformation("BFF auth event. Event=logout_completed");
     }
 }

@@ -1,0 +1,27 @@
+@page "/logout"
+@layout EmptyLayout
+@attribute [AllowAnonymous]
+
+<PageTitle>Signing out</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
+    <MudPaper Class="pa-6" Elevation="2">
+        <MudText Typo="Typo.h6" Class="mb-2">Signing out…</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">Please wait while we end your session securely.</MudText>
+        <form id="bff-logout-form" method="post" action="/bff/auth/logout" data-enhance="false">
+            <AntiforgeryToken />
+            <noscript>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true">
+                    Confirm sign out
+                </MudButton>
+            </noscript>
+        </form>
+    </MudPaper>
+</MudContainer>
+
+<script>
+    (function () {
+        var form = document.getElementById('bff-logout-form');
+        if (form) { form.submit(); }
+    })();
+</script>

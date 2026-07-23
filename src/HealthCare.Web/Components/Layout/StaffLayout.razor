@@ -84,6 +84,7 @@
     {
         try
         {
+            // Clear circuit state immediately; cookie/session cleared by antiforgery-protected POST.
             await AuthState.MarkLoggedOutAsync(callRemoteLogout: true);
         }
         catch
@@ -91,7 +92,6 @@
             Snackbar.Add("Signed out locally.", Severity.Info);
         }
 
-        // Full navigation clears the HttpOnly cookie on a real HTTP response.
-        Navigation.NavigateTo("/bff/auth/logout", forceLoad: true);
+        Navigation.NavigateTo("/logout", forceLoad: true);
     }
 }

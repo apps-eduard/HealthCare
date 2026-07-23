@@ -42,19 +42,31 @@ public static class SafeReturnUrl
         }
 
         var candidate = returnUrl.Trim();
-        try
+        // Double-decode to catch double-encoded external URLs.
+        for (var i = 0; i < 2; i++)
         {
-            candidate = Uri.UnescapeDataString(candidate);
-        }
-        catch (UriFormatException)
-        {
-            return false;
+            try
+            {
+                var decoded = Uri.UnescapeDataString(candidate);
+                if (decoded == candidate)
+                {
+                    break;
+                }
+
+                candidate = decoded.Trim();
+            }
+            catch (UriFormatException)
+            {
+                return false;
+            }
         }
 
-        // Reject absolute and protocol-relative URLs.
+        // Reject absolute and protocol-relative URLs (including after decode).
         if (candidate.StartsWith("//", StringComparison.Ordinal)
             || candidate.Contains("://", StringComparison.OrdinalIgnoreCase)
-            || candidate.Contains('\\'))
+            || candidate.Contains('\\')
+            || candidate.Contains("%2f%2f", StringComparison.OrdinalIgnoreCase)
+            || candidate.Contains("%5c", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }

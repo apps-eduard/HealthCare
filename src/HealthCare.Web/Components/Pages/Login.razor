@@ -18,7 +18,11 @@
         }
 
         @* Full browser POST to BFF — Set-Cookie must happen on an HTTP response, not the SignalR circuit. *@
-        <form method="post" action="/bff/auth/login" data-enhance="false">
+        <form id="bff-login-form"
+              method="post"
+              action="/bff/auth/login"
+              data-enhance="false"
+              onsubmit="return window.__hcLoginSubmit ? window.__hcLoginSubmit(this) : true;">
             <AntiforgeryToken />
             <input type="hidden" name="returnUrl" value="@SafeReturnUrl.Resolve(ReturnUrl)" />
 
@@ -47,10 +51,20 @@
                        Variant="Variant.Filled"
                        Color="Color.Primary"
                        FullWidth="true"
-                       Class="mt-2">
+                       Class="mt-2"
+                       id="bff-login-submit">
                 Sign in
             </MudButton>
         </form>
+        <script>
+            window.__hcLoginSubmit = function (form) {
+                if (form.dataset.submitting === '1') { return false; }
+                form.dataset.submitting = '1';
+                var btn = document.getElementById('bff-login-submit');
+                if (btn) { btn.setAttribute('disabled', 'disabled'); }
+                return true;
+            };
+        </script>
     </MudPaper>
 </MudContainer>
 

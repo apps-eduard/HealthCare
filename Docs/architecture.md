@@ -85,6 +85,8 @@ The MVP must follow these principles:
 - C#
 - Responsive desktop-first design
 - Support tablet layouts where practical
+- HttpOnly BFF cookie authentication (`POST /bff/auth/login` / `POST /bff/auth/logout` only; antiforgery required)
+- API access/refresh tokens stored server-side only (never in the browser)
 
 ### 4.2 Patient mobile application
 
@@ -517,14 +519,44 @@ API issues access and refresh tokens
 ### 10.2 Staff login
 
 ```text
-Staff enters email and password
+Staff opens /login (GET — display only)
         |
-ASP.NET Core Identity validates credentials
+Staff submits email/password + antiforgery token
         |
-API loads staff role and clinic assignment
+POST /bff/auth/login (Web BFF)
         |
-API issues access and refresh tokens
+Web validates antiforgery; rejects missing/invalid tokens
+        |
+Web discards any prior BFF session (session fixation defense)
+        |
+Web calls API POST /api/v1/auth/login (server-to-server)
+        |
+API validates Identity credentials and issues access + refresh tokens
+        |
+Web creates a new server token session (opaque bff_sid)
+        |
+Web issues HttpOnly auth cookie (minimal claims + bff_sid)
+        |
+Browser redirects to safe local returnUrl (default /dashboard)
 ```
+
+Patient-only accounts may authenticate but are redirected to `/forbidden` for staff pages.
+
+### 10.2a Staff logout
+
+```text
+Staff chooses Sign out → navigates to /logout
+        |
+/logout page antiforgery-POSTs to /bff/auth/logout
+        |
+Web deletes server token session, clears cookie + tenant/permission state
+        |
+Web best-effort revokes API refresh token
+        |
+Redirect to /login (idempotent)
+```
+
+GET `/bff/auth/logout` and GET `/bff/auth/establish` return 405 and do not mutate authentication.
 
 ### 10.3 Token policy
 

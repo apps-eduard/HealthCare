@@ -16,10 +16,11 @@ public sealed class BffOptions
     /// </summary>
     public string TokenStore { get; set; } = "DistributedCache";
 
+    /// <summary>
+    /// Auth cookie name. Prefer __Host-HealthCare.Staff when HTTPS is required.
+    /// Development over HTTP should use HealthCare.Staff.Auth (__Host- requires Secure).
+    /// </summary>
     public string CookieName { get; set; } = "HealthCare.Staff.Auth";
 
     public bool RequireHttps { get; set; } = true;
-
-    /// <summary>Short-lived pending-login ticket lifetime (seconds).</summary>
-    public int LoginTicketSeconds { get; set; } = 60;
 }

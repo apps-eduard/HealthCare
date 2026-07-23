@@ -5,7 +5,6 @@ using HealthCare.Web.Configuration;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace HealthCare.Web.Tests;
@@ -21,14 +20,21 @@ public sealed class BffTokenSessionStoreTests
 
         session.SessionId.Should().NotBeNullOrWhiteSpace();
         session.UserId.Should().Be(userId);
+        session.Version.Should().Be(1);
 
         var loaded = await sut.GetAsync(session.SessionId);
         loaded.Should().NotBeNull();
         loaded!.Tokens.AccessToken.Should().Be("access-1");
 
-        await sut.UpdateTokensAsync(session.SessionId, SampleTokens("access-2", "refresh-2"));
-        var updated = await sut.GetAsync(session.SessionId);
-        updated!.Tokens.AccessToken.Should().Be("access-2");
+        var updated = await sut.TryUpdateTokensAsync(
+            session.SessionId,
+            session.Version,
+            SampleTokens("access-2", "refresh-2"));
+        updated.Should().BeTrue();
+
+        var after = await sut.GetAsync(session.SessionId);
+        after!.Tokens.AccessToken.Should().Be("access-2");
+        after.Version.Should().Be(2);
 
         await sut.RemoveAsync(session.SessionId);
         (await sut.GetAsync(session.SessionId)).Should().BeNull();
@@ -36,18 +42,47 @@ public sealed class BffTokenSessionStoreTests
     }
 
     [Fact]
-    public async Task Login_Ticket_Is_Single_Use()
+    public async Task TryUpdateTokens_Rejects_Stale_Version_And_Missing_Session()
     {
         var sut = CreateStore();
         var session = await sut.CreateAsync(Guid.NewGuid(), SampleTokens());
-        var ticket = await sut.CreateLoginTicketAsync(session.SessionId, session.UserId);
 
-        var first = await sut.ConsumeLoginTicketAsync(ticket);
-        first.Should().NotBeNull();
-        first!.Value.SessionId.Should().Be(session.SessionId);
+        (await sut.TryUpdateTokensAsync(session.SessionId, expectedVersion: 99, SampleTokens("x", "y")))
+            .Should().BeFalse();
 
-        var second = await sut.ConsumeLoginTicketAsync(ticket);
-        second.Should().BeNull();
+        await sut.RemoveAsync(session.SessionId);
+        (await sut.TryUpdateTokensAsync(session.SessionId, expectedVersion: 1, SampleTokens("x", "y")))
+            .Should().BeFalse();
+        (await sut.GetAsync(session.SessionId)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Late_Refresh_Cannot_Recreate_Logged_Out_Session()
+    {
+        var sut = CreateStore();
+        var session = await sut.CreateAsync(Guid.NewGuid(), SampleTokens());
+        var version = session.Version;
+        await sut.RemoveAsync(session.SessionId);
+
+        var stored = await sut.TryUpdateTokensAsync(
+            session.SessionId,
+            version,
+            SampleTokens("revived-access", "revived-refresh"));
+
+        stored.Should().BeFalse();
+        (await sut.ExistsAsync(session.SessionId)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Successful_Login_Creates_Distinct_Session_Ids()
+    {
+        var sut = CreateStore();
+        var userId = Guid.NewGuid();
+        var first = await sut.CreateAsync(userId, SampleTokens());
+        var second = await sut.CreateAsync(userId, SampleTokens("a2", "r2"));
+
+        first.SessionId.Should().NotBe(second.SessionId);
+        first.UserId.Should().Be(second.UserId);
     }
 
     [Fact]
@@ -132,6 +167,15 @@ public sealed class BffTokenSessionStoreTests
             .NotContain("LoginAsync");
     }
 
+    [Fact]
+    public void Login_Ticket_Apis_Are_Removed_From_Session_Store()
+    {
+        typeof(IApiTokenSessionStore).GetMethods()
+            .Select(m => m.Name)
+            .Should()
+            .NotContain(n => n.Contains("Ticket", StringComparison.OrdinalIgnoreCase));
+    }
+
     private static DistributedCacheApiTokenSessionStore CreateStore(IDistributedCache? cache = null)
     {
         cache ??= new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
@@ -143,7 +187,6 @@ public sealed class BffTokenSessionStoreTests
             {
                 SessionIdleMinutes = 30,
                 AbsoluteSessionHours = 8,
-                LoginTicketSeconds = 60,
             }));
     }
 

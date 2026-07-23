@@ -19,7 +19,7 @@
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Medical notes MudBlazor UI, Google auth, or BFF cookie auth
+**Current focus:** Medical notes MudBlazor UI, Google auth, or remaining BFF multi-instance hardening
 
 ### All phases at a glance
 
@@ -654,7 +654,36 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 
 - Development uses `AddDistributedMemoryCache` — multi-instance production requires Redis/SQL distributed cache
 - Per-session refresh lock is process-local (sufficient for single Web instance)
-- GET logout exists for forceLoad after circuit cleanup (POST also available)
+- Superseded hardening in Phase 8d (POST-only mutations, antiforgery on logout, no establish GET)
+
+### Verification
+
+- See commit verification notes
+
+---
+## Phase 8d — BFF CSRF / session hardening
+
+**Status:** Complete  
+**Updated:** 2026-07-23
+
+### Delivered
+
+- POST-only auth mutations: `POST /bff/auth/login`, `POST /bff/auth/logout`
+- Legacy `GET/POST /bff/auth/establish` and `GET /bff/auth/logout` return **405** (non-mutating)
+- Antiforgery required for login and logout (Development included); missing/invalid → safe redirect
+- One-step login establishes the Web session (no login-ticket / establish redirect) — login CSRF blocked by antiforgery binding
+- Session fixation: prior session removed + new `bff_sid` on every successful login
+- Session binding: cookie user id must match server session user id (`session_mismatch` clears both)
+- Versioned `TryUpdateTokensAsync` prevents late refresh from recreating a logged-out session
+- `/logout` page antiforgery-POSTs to BFF logout (StaffLayout / Forbidden use it)
+- Cookie: `__Host-HealthCare.Staff` when HTTPS required; Dev HTTP uses `HealthCare.Staff.Auth`
+- `SafeReturnUrl` double-decode + encoded external URL rejection
+- Web tests: HTTP methods, antiforgery, session CAS, return URL, architecture checks
+
+### Known limitations
+
+- Development: in-memory distributed cache; process-local refresh lock (document for multi-instance)
+- No separate login-ticket correlation cookie (unnecessary with one-step antiforgery POST)
 
 ### Verification
 

@@ -63,6 +63,17 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
                 return Anonymous();
             }
 
+            var cookieUserId = _httpContextAccessor.HttpContext?.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (Guid.TryParse(cookieUserId, out var principalUserId)
+                && principalUserId != Guid.Empty
+                && principalUserId != session.UserId)
+            {
+                _logger.LogInformation("BFF auth event. Event=session_mismatch");
+                await _sessions.RemoveAsync(sessionId);
+                await ClearLocalCircuitStateAsync();
+                return Anonymous();
+            }
+
             if (_permissionState.CurrentUser is null || !_permissionState.IsReady
                 || _authenticatedUserId != session.UserId)
             {

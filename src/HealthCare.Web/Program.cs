@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using HealthCare.Web.Auth;
 using HealthCare.Web.Components;
 using HealthCare.Web.Configuration;
@@ -16,6 +17,7 @@ builder.Services.Configure<ApiOptions>(builder.Configuration.GetSection(ApiOptio
 builder.Services.Configure<BffOptions>(builder.Configuration.GetSection(BffOptions.SectionName));
 
 var bffOptions = builder.Configuration.GetSection(BffOptions.SectionName).Get<BffOptions>() ?? new BffOptions();
+ValidateBffCookieConfiguration(builder.Environment, bffOptions);
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -29,19 +31,21 @@ builder.Services.AddDataProtection()
 // Development: in-memory distributed cache. Production must use a shared cache (Redis/SQL) for multi-instance.
 builder.Services.AddDistributedMemoryCache();
 
+var cookieName = ResolveAuthCookieName(builder.Environment, bffOptions);
+var requireSecureCookie = !builder.Environment.IsDevelopment() || bffOptions.RequireHttps;
+
 builder.Services
     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
-        options.Cookie.Name = string.IsNullOrWhiteSpace(bffOptions.CookieName)
-            ? "HealthCare.Staff.Auth"
-            : bffOptions.CookieName;
+        options.Cookie.Name = cookieName;
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
-        options.Cookie.SecurePolicy = builder.Environment.IsDevelopment() && !bffOptions.RequireHttps
-            ? CookieSecurePolicy.SameAsRequest
-            : CookieSecurePolicy.Always;
+        options.Cookie.SecurePolicy = requireSecureCookie
+            ? CookieSecurePolicy.Always
+            : CookieSecurePolicy.SameAsRequest;
         options.Cookie.Path = "/";
+        // __Host- cookies must not set Domain.
         options.LoginPath = "/login";
         options.AccessDeniedPath = "/forbidden";
         options.ReturnUrlParameter = "returnUrl";
@@ -61,7 +65,10 @@ builder.Services
         options.Events.OnValidatePrincipal = async context =>
         {
             var sid = context.Principal?.FindFirst(BffClaimTypes.SessionId)?.Value;
-            if (string.IsNullOrWhiteSpace(sid))
+            var userIdClaim = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrWhiteSpace(sid)
+                || !Guid.TryParse(userIdClaim, out var cookieUserId)
+                || cookieUserId == Guid.Empty)
             {
                 context.RejectPrincipal();
                 await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
@@ -69,8 +76,19 @@ builder.Services
             }
 
             var store = context.HttpContext.RequestServices.GetRequiredService<IApiTokenSessionStore>();
-            if (!await store.ExistsAsync(sid, context.HttpContext.RequestAborted))
+            var session = await store.GetAsync(sid, context.HttpContext.RequestAborted);
+            if (session is null || session.UserId != cookieUserId)
             {
+                if (session is not null)
+                {
+                    await store.RemoveAsync(sid, context.HttpContext.RequestAborted);
+                }
+
+                var logger = context.HttpContext.RequestServices
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("HealthCare.Web.BffAuth");
+                logger.LogInformation("BFF auth event. Event=session_mismatch");
+
                 context.RejectPrincipal();
                 await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             }
@@ -121,6 +139,29 @@ app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages:
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Reject legacy state-changing auth routes before antiforgery runs (avoids misleading AF 400).
+app.Use(async (context, next) =>
+{
+    var path = context.Request.Path;
+    if (path.Equals("/bff/auth/establish", StringComparison.OrdinalIgnoreCase)
+        || (HttpMethods.IsGet(context.Request.Method)
+            && path.Equals("/bff/auth/logout", StringComparison.OrdinalIgnoreCase)))
+    {
+        // Prevent StatusCodePagesWithReExecute from turning 405 into a POST /not-found antiforgery 400.
+        var statusCodePages = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IStatusCodePagesFeature>();
+        if (statusCodePages is not null)
+        {
+            statusCodePages.Enabled = false;
+        }
+
+        context.Response.StatusCode = StatusCodes.Status405MethodNotAllowed;
+        return;
+    }
+
+    await next();
+});
+
 app.UseAntiforgery();
 
 app.MapBffAuthEndpoints();
@@ -129,6 +170,29 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
+
+static string ResolveAuthCookieName(IHostEnvironment env, BffOptions options)
+{
+    if (!string.IsNullOrWhiteSpace(options.CookieName))
+    {
+        return options.CookieName;
+    }
+
+    return env.IsDevelopment() && !options.RequireHttps
+        ? BffCookieNames.AuthDevelopment
+        : BffCookieNames.AuthProduction;
+}
+
+static void ValidateBffCookieConfiguration(IHostEnvironment env, BffOptions options)
+{
+    var name = ResolveAuthCookieName(env, options);
+    var requireSecure = !env.IsDevelopment() || options.RequireHttps;
+    if (name.StartsWith("__Host-", StringComparison.Ordinal) && !requireSecure)
+    {
+        throw new InvalidOperationException(
+            "Bff cookie name uses the __Host- prefix, which requires Secure cookies. Set Bff:RequireHttps=true or use HealthCare.Staff.Auth in Development.");
+    }
+}
 
 static void ConfigureApiClient(IServiceProvider services, HttpClient client)
 {
@@ -145,5 +209,4 @@ static void ConfigureApiClient(IServiceProvider services, HttpClient client)
     client.Timeout = TimeSpan.FromSeconds(60);
 }
 
-// Expose Program for WebApplicationFactory-style tests if added later.
 public partial class Program;

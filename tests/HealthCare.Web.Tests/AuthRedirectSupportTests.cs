@@ -28,10 +28,22 @@ public sealed class AuthRedirectSupportTests
     [InlineData(null)]
     [InlineData("/login")]
     [InlineData("/login?x=1")]
+    [InlineData("%2F%2Fevil.example%2Fphish")]
+    [InlineData("%252F%252Fevil.example")]
+    [InlineData("/appointments%5c@evil.example")]
+    [InlineData("\\\\evil.example")]
     public void Absolute_protocol_relative_or_login_return_url_rejected(string? input)
     {
         SafeReturnUrl.TryValidate(input, out _).Should().BeFalse();
         SafeReturnUrl.Resolve(input).Should().Be(SafeReturnUrl.DefaultPath);
+    }
+
+    [Fact]
+    public void Encoded_and_double_encoded_external_urls_fall_back_to_dashboard()
+    {
+        SafeReturnUrl.Resolve("%2F%2Fevil.example").Should().Be("/dashboard");
+        SafeReturnUrl.Resolve("%252F%252Fevil.example%252Fphish").Should().Be("/dashboard");
+        SafeReturnUrl.Resolve("%2Fappointments").Should().Be("/appointments");
     }
 
     [Fact]

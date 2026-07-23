@@ -1,4 +1,3 @@
-using System.Net.Http.Json;
 using System.Security.Claims;
 using HealthCare.Contracts.Identity;
 using HealthCare.Web.Auth;
@@ -10,27 +9,46 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace HealthCare.Web.Endpoints;
 
+/// <summary>
+/// BFF authentication mutations are POST-only and antiforgery-protected.
+/// Login establishes the session in a single POST (no GET establish) so login CSRF relies on antiforgery
+/// bound to the initiating browser rather than a redirectable establish step.
+/// </summary>
 public static class BffAuthEndpoints
 {
     public static IEndpointRouteBuilder MapBffAuthEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var group = endpoints.MapGroup("/bff/auth");
 
+        // Manual antiforgery validation with safe redirects — disable automatic 400 so UX stays form-friendly.
         group.MapPost("/login", LoginAsync)
             .AllowAnonymous()
-            .DisableAntiforgery(); // form posts use explicit ValidateAntiforgery below
-
-        group.MapGet("/establish", EstablishAsync)
-            .AllowAnonymous();
+            .DisableAntiforgery();
 
         group.MapPost("/logout", LogoutAsync)
-            .AllowAnonymous();
+            .AllowAnonymous()
+            .DisableAntiforgery();
 
-        group.MapGet("/logout", LogoutGetAsync)
-            .AllowAnonymous();
+        // Legacy establish/GET logout also short-circuited in Program middleware (before antiforgery).
+        group.MapMethods(
+                "/establish",
+                ["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH"],
+                EstablishRejectedAsync)
+            .AllowAnonymous()
+            .DisableAntiforgery();
+
+        group.MapGet("/logout", LogoutGetRejectedAsync)
+            .AllowAnonymous()
+            .DisableAntiforgery();
 
         return endpoints;
     }
+
+    private static IResult EstablishRejectedAsync() =>
+        Results.StatusCode(StatusCodes.Status405MethodNotAllowed);
+
+    private static IResult LogoutGetRejectedAsync() =>
+        Results.StatusCode(StatusCodes.Status405MethodNotAllowed);
 
     private static async Task<IResult> LoginAsync(
         HttpContext httpContext,
@@ -38,6 +56,8 @@ public static class BffAuthEndpoints
         [FromForm] string? password,
         [FromForm] string? returnUrl,
         IBffAuthService bffAuth,
+        IApiTokenSessionStore sessions,
+        IStaffWebAuthCookie webAuthCookie,
         IAntiforgery antiforgery,
         ILoggerFactory loggerFactory)
     {
@@ -49,103 +69,42 @@ public static class BffAuthEndpoints
         }
         catch (AntiforgeryValidationException)
         {
-            logger.LogInformation("BFF login rejected: invalid antiforgery token.");
+            logger.LogInformation("BFF auth event. Event=antiforgery_rejected Operation=login");
             return Results.Redirect(BuildLoginErrorUrl(returnUrl, "antiforgery"));
         }
 
-        // Session fixation: clear any prior cookie before establishing a new login ticket.
-        await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        // Session fixation: discard any prior auth cookie/session before issuing a new one.
+        var priorSessionId = httpContext.User.FindFirstValue(BffClaimTypes.SessionId);
+        if (!string.IsNullOrWhiteSpace(priorSessionId))
+        {
+            await sessions.RemoveAsync(priorSessionId, httpContext.RequestAborted);
+        }
 
-        var result = await bffAuth.LoginAsync(email ?? string.Empty, password ?? string.Empty, httpContext.RequestAborted);
-        if (!result.Succeeded || string.IsNullOrWhiteSpace(result.EstablishTicket))
+        await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        DeleteLegacyLoginCookies(httpContext);
+
+        BffLoginResult result;
+        try
+        {
+            result = await bffAuth.LoginAsync(email ?? string.Empty, password ?? string.Empty, httpContext.RequestAborted);
+        }
+        catch (Exception ex)
+        {
+            logger.LogInformation(ex, "BFF auth event. Event=login_failed ReasonCode=sign_in_failed");
+            return Results.Redirect(BuildLoginErrorUrl(returnUrl, "sign_in_failed"));
+        }
+
+        if (!result.Succeeded || result.User is null || result.Session is null)
         {
             return Results.Redirect(BuildLoginErrorUrl(returnUrl, MapError(result.ErrorCode)));
         }
 
-        httpContext.Response.Cookies.Append(
-            LoginTicketCookieName,
-            result.EstablishTicket,
-            new CookieOptions
-            {
-                HttpOnly = true,
-                Secure = httpContext.Request.IsHttps,
-                SameSite = SameSiteMode.Lax,
-                IsEssential = true,
-                MaxAge = TimeSpan.FromSeconds(60),
-                Path = "/bff/auth",
-            });
+        await webAuthCookie.SignInAsync(result.User, result.Session.SessionId, httpContext.RequestAborted);
+        logger.LogInformation(
+            "BFF auth event. Event=session_rotated UserId={UserId}",
+            result.User.UserId);
 
-        var establishUrl = "/bff/auth/establish"
-            + $"?returnUrl={Uri.EscapeDataString(SafeReturnUrl.Resolve(returnUrl))}";
         if (result.IsPatientOnly || !result.IsStaffUser)
-        {
-            establishUrl += "&staff=0";
-        }
-
-        return Results.Redirect(establishUrl);
-    }
-
-    private const string LoginTicketCookieName = "HealthCare.Staff.LoginTicket";
-
-    private static async Task<IResult> EstablishAsync(
-        HttpContext httpContext,
-        [FromQuery] string? returnUrl,
-        [FromQuery] string? staff,
-        IApiTokenSessionStore sessions,
-        IHttpClientFactory httpClientFactory,
-        IStaffWebAuthCookie webAuthCookie,
-        ILoggerFactory loggerFactory)
-    {
-        var logger = loggerFactory.CreateLogger("HealthCare.Web.BffAuth");
-
-        await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-
-        httpContext.Request.Cookies.TryGetValue(LoginTicketCookieName, out var ticket);
-        httpContext.Response.Cookies.Delete(LoginTicketCookieName, new CookieOptions
-        {
-            Path = "/bff/auth",
-            Secure = httpContext.Request.IsHttps,
-            HttpOnly = true,
-            SameSite = SameSiteMode.Lax,
-        });
-
-        var consumed = await sessions.ConsumeLoginTicketAsync(ticket ?? string.Empty, httpContext.RequestAborted);
-        if (consumed is null)
-        {
-            logger.LogInformation("BFF establish failed: missing or expired login ticket.");
-            return Results.Redirect("/login?error=session");
-        }
-
-        var (sessionId, userId) = consumed.Value;
-        var session = await sessions.GetAsync(sessionId, httpContext.RequestAborted);
-        if (session is null || session.UserId != userId)
-        {
-            await sessions.RemoveAsync(sessionId, httpContext.RequestAborted);
-            return Results.Redirect("/login?error=session");
-        }
-
-        var anonymous = httpClientFactory.CreateClient("HealthCareApi.Anonymous");
-        using var meRequest = new HttpRequestMessage(HttpMethod.Get, "api/v1/auth/me");
-        meRequest.Headers.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", session.Tokens.AccessToken);
-        using var meResponse = await anonymous.SendAsync(meRequest, httpContext.RequestAborted);
-        if (!meResponse.IsSuccessStatusCode)
-        {
-            await sessions.RemoveAsync(sessionId, httpContext.RequestAborted);
-            return Results.Redirect("/login?error=session");
-        }
-
-        var user = await meResponse.Content.ReadFromJsonAsync<CurrentUserResponse>(httpContext.RequestAborted);
-        if (user is null || user.UserId != userId)
-        {
-            await sessions.RemoveAsync(sessionId, httpContext.RequestAborted);
-            return Results.Redirect("/login?error=session");
-        }
-
-        // Bind HttpContext accessor for cookie helper.
-        await webAuthCookie.SignInAsync(user, sessionId, httpContext.RequestAborted);
-
-        if (string.Equals(staff, "0", StringComparison.Ordinal))
         {
             return Results.Redirect("/forbidden");
         }
@@ -169,22 +128,11 @@ public static class BffAuthEndpoints
         }
         catch (AntiforgeryValidationException)
         {
-            logger.LogInformation("BFF logout antiforgery failed; continuing local sign-out.");
+            // CSRF logout must not succeed without a valid antiforgery token.
+            logger.LogInformation("BFF auth event. Event=antiforgery_rejected Operation=logout");
+            return Results.Redirect("/login?error=antiforgery");
         }
 
-        await CompleteLogoutAsync(httpContext, bffAuth, platformTenant, permissions, clinicCache);
-        return Results.Redirect("/login");
-    }
-
-    private static async Task<IResult> LogoutGetAsync(
-        HttpContext httpContext,
-        IBffAuthService bffAuth,
-        IPlatformTenantContext platformTenant,
-        IPermissionState permissions,
-        IClinicDirectoryCache clinicCache)
-    {
-        // GET logout is used after circuit-local cleanup + forceLoad. Session should already be cleared;
-        // still clear cookie and any residual server session.
         await CompleteLogoutAsync(httpContext, bffAuth, platformTenant, permissions, clinicCache);
         return Results.Redirect("/login");
     }
@@ -201,7 +149,30 @@ public static class BffAuthEndpoints
         await permissions.ClearAsync();
         platformTenant.Clear();
         clinicCache.Clear();
+        DeleteLegacyLoginCookies(httpContext);
         await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+    }
+
+    private static void DeleteLegacyLoginCookies(HttpContext httpContext)
+    {
+        var secure = httpContext.Request.IsHttps;
+        foreach (var name in new[] { BffCookieNames.LegacyLoginTicket, BffCookieNames.LegacyLoginCorrelation })
+        {
+            httpContext.Response.Cookies.Delete(name, new CookieOptions
+            {
+                Path = "/bff/auth",
+                Secure = secure,
+                HttpOnly = true,
+                SameSite = SameSiteMode.Lax,
+            });
+            httpContext.Response.Cookies.Delete(name, new CookieOptions
+            {
+                Path = "/",
+                Secure = secure,
+                HttpOnly = true,
+                SameSite = SameSiteMode.Lax,
+            });
+        }
     }
 
     private static string BuildLoginErrorUrl(string? returnUrl, string errorCode)

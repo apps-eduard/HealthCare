@@ -209,6 +209,39 @@ Not allowed:
 - Revoke tokens when an account is disabled.
 - Revoke **all** refresh tokens for a user (and update the Identity security stamp) after staff deactivation, role assignment, or role removal via `ISecuritySessionInvalidationService`. Never log token values or hashes.
 - Staff web uses an HttpOnly BFF cookie plus server-side API token sessions (distributed cache). Access/refresh tokens are never stored in browser storage or returned to the browser.
+
+### 5.4a Staff Web BFF authentication (hardened)
+
+Staff UI authentication mutations are POST-only and antiforgery-protected:
+
+| Endpoint | Method | Behavior |
+|----------|--------|----------|
+| `/bff/auth/login` | `POST` | Validates antiforgery, authenticates via API, creates a **new** server token session, issues auth cookie, redirects |
+| `/bff/auth/logout` | `POST` | Validates antiforgery, revokes API refresh token (best effort), deletes server session, expires cookies |
+| `/bff/auth/establish` | any | `405` — removed; login establishes the session in one step |
+| `/bff/auth/logout` | `GET` | `405` — must not mutate auth state |
+
+**Login CSRF:** There is no separate establish redirect or login-ticket cookie. Login is a single antiforgery-protected form POST from the victim browser; an attacker site cannot forge a valid antiforgery token for that browser. SameSite alone is not relied upon.
+
+**Session fixation:** Before issuing a new session, any prior `bff_sid` session is removed and the auth cookie is signed out. A new high-entropy session id is always created on successful login.
+
+**Session binding:** Cookie `NameIdentifier` must match the server session `UserId`. Mismatch deletes the session, clears the cookie, and logs `session_mismatch`.
+
+**Cookies:**
+
+- Production prefers `__Host-HealthCare.Staff` (Secure, Path=`/`, no Domain).
+- Development over HTTP uses `HealthCare.Staff.Auth` with `Bff:RequireHttps=false`.
+- Cookie is HttpOnly, SameSite=Lax, holds minimal claims + opaque `bff_sid` only (never API tokens).
+- Legacy login-ticket / correlation cookies are deleted on login/logout if present.
+
+**Logout UX:** UI navigates to `/logout`, which antiforgery-POSTs to `/bff/auth/logout` (no GET logout).
+
+**Refresh / logout races:** Token refresh re-checks the session under a process-local lock and uses versioned `TryUpdateTokensAsync` so a late refresh cannot recreate a deleted session. Multi-instance deployments need a shared distributed cache and distributed refresh locks.
+
+**Return URLs:** `SafeReturnUrl` accepts local paths only; rejects absolute, protocol-relative, backslash, encoded, and double-encoded external URLs (fallback `/dashboard`).
+
+**Logging:** Auth events use safe reason codes. Never log passwords, tokens, cookies, session ids, tickets, or antiforgery values.
+
 - Record creation, expiration, revocation, IP address, and user agent where appropriate.
 
 ### 5.5 Mobile token storage

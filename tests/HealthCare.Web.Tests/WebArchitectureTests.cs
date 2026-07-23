@@ -118,6 +118,59 @@ public sealed class WebArchitectureTests
     }
 
     [Fact]
+    public void Bff_Auth_Mutations_Are_Centralized_And_Post_Only()
+    {
+        typeof(HealthCare.Web.Endpoints.BffAuthEndpoints).Namespace.Should().Be("HealthCare.Web.Endpoints");
+        typeof(IBffAuthService).Namespace.Should().Be("HealthCare.Web.Auth");
+        typeof(IApiTokenSessionStore).GetMethod(nameof(IApiTokenSessionStore.TryUpdateTokensAsync))
+            .Should().NotBeNull();
+
+        var endpointsSource = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "HealthCare.Web", "Endpoints", "BffAuthEndpoints.cs"));
+        var text = File.ReadAllText(endpointsSource);
+        text.Should().Contain("MapPost(\"/login\"");
+        text.Should().Contain("MapPost(\"/logout\"");
+        text.Should().Contain("\"/establish\"");
+        text.Should().Contain("EstablishRejectedAsync");
+        text.Should().Contain("LogoutGetRejectedAsync");
+        text.Should().Contain("ValidateRequestAsync");
+        text.Should().Contain("Status405MethodNotAllowed");
+        text.Should().NotContain("CreateLoginTicket");
+        text.Should().NotContain("ConsumeLoginTicket");
+        File.ReadAllText(Path.GetFullPath(Path.Combine(
+                AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "HealthCare.Web", "Program.cs")))
+            .Should().Contain("/bff/auth/establish");
+    }
+
+    [Fact]
+    public void Session_Rotation_And_Logout_Are_Centralized()
+    {
+        typeof(IBffAuthService).GetMethod(nameof(IBffAuthService.LoginAsync)).Should().NotBeNull();
+        typeof(IBffAuthService).GetMethod(nameof(IBffAuthService.LogoutAsync)).Should().NotBeNull();
+        typeof(IApiTokenSessionStore).GetMethods()
+            .Select(m => m.Name)
+            .Should()
+            .NotContain(n => n.Contains("Ticket", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Razor_Pages_Do_Not_Reference_AuthTokenResponse()
+    {
+        var webRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "HealthCare.Web"));
+        var razorFiles = Directory.GetFiles(webRoot, "*.razor", SearchOption.AllDirectories);
+        foreach (var file in razorFiles)
+        {
+            var text = File.ReadAllText(file);
+            text.Should().NotContain(
+                "AuthTokenResponse",
+                because: $"{Path.GetFileName(file)} must not access API token DTOs");
+            text.Should().NotContain(
+                "AccessToken",
+                because: $"{Path.GetFileName(file)} must not handle access tokens");
+        }
+    }
+
+    [Fact]
     public void Web_Auth_Cookie_Does_Not_Store_Api_Tokens()
     {
         var source = typeof(StaffWebAuthCookie).Assembly.Location;

@@ -90,16 +90,17 @@ public sealed class AuthDelegatingHandler : DelegatingHandler
         await gate.WaitAsync(cancellationToken);
         try
         {
-            // Another request may have refreshed while we waited.
-            var tokens = await _tokenStore.GetAsync(cancellationToken);
-            if (tokens is null || string.IsNullOrWhiteSpace(tokens.RefreshToken))
+            // Re-check session after acquiring the lock (logout may have won the race).
+            var current = await _tokenStore.GetWithVersionAsync(cancellationToken);
+            if (current is null || string.IsNullOrWhiteSpace(current.Value.Tokens.RefreshToken))
             {
+                _logger.LogInformation("BFF auth event. Event=refresh_suppressed ReasonCode=session_missing");
                 return false;
             }
 
+            var (tokens, version) = current.Value;
             if (tokens.AccessTokenExpiresAtUtc > DateTimeOffset.UtcNow.AddSeconds(30))
             {
-                // Likely refreshed by a concurrent waiter.
                 return true;
             }
 
@@ -123,7 +124,8 @@ public sealed class AuthDelegatingHandler : DelegatingHandler
                 return false;
             }
 
-            await _tokenStore.SetAsync(
+            // Final CAS write — must not recreate a logged-out session.
+            var stored = await _tokenStore.TrySetAsync(
                 new StoredAuthTokens
                 {
                     AccessToken = body.AccessToken,
@@ -131,9 +133,15 @@ public sealed class AuthDelegatingHandler : DelegatingHandler
                     AccessTokenExpiresAtUtc = body.AccessTokenExpiresAtUtc,
                     RefreshTokenExpiresAtUtc = body.RefreshTokenExpiresAtUtc,
                 },
+                version,
                 cancellationToken);
 
-            return true;
+            if (!stored)
+            {
+                _logger.LogInformation("BFF auth event. Event=refresh_suppressed ReasonCode=session_revoked");
+            }
+
+            return stored;
         }
         catch (Exception ex)
         {

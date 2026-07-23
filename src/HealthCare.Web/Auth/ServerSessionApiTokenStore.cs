@@ -36,6 +36,13 @@ public sealed class ServerSessionApiTokenStore : IApiTokenStore
 
     public async Task<StoredAuthTokens?> GetAsync(CancellationToken cancellationToken = default)
     {
+        var withVersion = await GetWithVersionAsync(cancellationToken);
+        return withVersion?.Tokens;
+    }
+
+    public async Task<(StoredAuthTokens Tokens, long Version)?> GetWithVersionAsync(
+        CancellationToken cancellationToken = default)
+    {
         var sessionId = GetCurrentSessionId();
         if (sessionId is null)
         {
@@ -49,15 +56,29 @@ public sealed class ServerSessionApiTokenStore : IApiTokenStore
         }
 
         await _sessions.TouchAsync(sessionId, cancellationToken);
-        return session.Tokens;
+        return (session.Tokens, session.Version);
     }
 
-    public async Task SetAsync(StoredAuthTokens tokens, CancellationToken cancellationToken = default)
+    public async Task<bool> TrySetAsync(
+        StoredAuthTokens tokens,
+        long expectedVersion,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(tokens);
-        var sessionId = GetCurrentSessionId()
-                        ?? throw new InvalidOperationException("No BFF session is associated with the current request.");
-        await _sessions.UpdateTokensAsync(sessionId, tokens, cancellationToken);
+        var sessionId = GetCurrentSessionId();
+        if (sessionId is null)
+        {
+            return false;
+        }
+
+        var updated = await _sessions.TryUpdateTokensAsync(sessionId, expectedVersion, tokens, cancellationToken);
+        if (!updated)
+        {
+            _logger.LogInformation(
+                "BFF token refresh suppressed because session was revoked or version mismatch. Event=refresh_suppressed");
+        }
+
+        return updated;
     }
 
     public async Task ClearAsync(CancellationToken cancellationToken = default)
@@ -69,6 +90,6 @@ public sealed class ServerSessionApiTokenStore : IApiTokenStore
         }
 
         await _sessions.RemoveAsync(sessionId, cancellationToken);
-        _logger.LogInformation("Cleared BFF token session.");
+        _logger.LogInformation("Cleared BFF token session. Event=session_cleared");
     }
 }

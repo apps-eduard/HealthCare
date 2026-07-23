@@ -10,12 +10,12 @@ namespace HealthCare.Web.Auth;
 
 /// <summary>
 /// Distributed-cache backed token sessions. Values are data-protected (encrypted) at rest in cache.
-/// Development typically uses AddDistributedMemoryCache; production requires a shared cache for multi-instance.
+/// Development uses AddDistributedMemoryCache; production requires a shared cache for multi-instance.
+/// Refresh serialization is process-local — multi-instance deployments need a distributed lock.
 /// </summary>
 public sealed class DistributedCacheApiTokenSessionStore : IApiTokenSessionStore
 {
     private const string SessionKeyPrefix = "bff:session:";
-    private const string TicketKeyPrefix = "bff:ticket:";
     private const string ProtectorPurpose = "HealthCare.Web.Bff.TokenSession.v1";
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -65,6 +65,7 @@ public sealed class DistributedCacheApiTokenSessionStore : IApiTokenSessionStore
             CreatedAtUtc = now,
             AbsoluteExpiresAtUtc = absolute,
             LastAccessedAtUtc = now,
+            Version = 1,
         };
 
         await SaveAsync(session, cancellationToken);
@@ -104,22 +105,38 @@ public sealed class DistributedCacheApiTokenSessionStore : IApiTokenSessionStore
     public async Task<bool> ExistsAsync(string sessionId, CancellationToken cancellationToken = default) =>
         await GetAsync(sessionId, cancellationToken) is not null;
 
-    public async Task UpdateTokensAsync(
+    public async Task<bool> TryUpdateTokensAsync(
         string sessionId,
+        long expectedVersion,
         StoredAuthTokens tokens,
         CancellationToken cancellationToken = default)
     {
-        var session = await GetAsync(sessionId, cancellationToken)
-                      ?? throw new InvalidOperationException("Token session was not found.");
+        ArgumentNullException.ThrowIfNull(tokens);
+
+        // Re-check after refresh lock: logout may have deleted the session.
+        var session = await GetAsync(sessionId, cancellationToken);
+        if (session is null)
+        {
+            return false;
+        }
+
+        if (session.Version != expectedVersion)
+        {
+            // Concurrent update or logout/recreate — do not overwrite.
+            return false;
+        }
 
         session.Tokens = tokens;
         session.LastAccessedAtUtc = DateTimeOffset.UtcNow;
+        session.Version++;
         if (tokens.RefreshTokenExpiresAtUtc < session.AbsoluteExpiresAtUtc)
         {
             session.AbsoluteExpiresAtUtc = tokens.RefreshTokenExpiresAtUtc;
         }
 
+        // Absolute lifetime must not be extended by refresh.
         await SaveAsync(session, cancellationToken);
+        return true;
     }
 
     public async Task TouchAsync(string sessionId, CancellationToken cancellationToken = default)
@@ -145,59 +162,6 @@ public sealed class DistributedCacheApiTokenSessionStore : IApiTokenSessionStore
         if (_refreshLocks.TryRemove(sessionId, out var gate))
         {
             gate.Dispose();
-        }
-    }
-
-    public async Task<string> CreateLoginTicketAsync(
-        string sessionId,
-        Guid userId,
-        CancellationToken cancellationToken = default)
-    {
-        var ticket = CreateOpaqueId();
-        var payload = _protector.Protect(JsonSerializer.Serialize(new TicketPayload(sessionId, userId), JsonOptions));
-        var seconds = Math.Clamp(_options.LoginTicketSeconds, 15, 300);
-        await _cache.SetStringAsync(
-            TicketKeyPrefix + ticket,
-            payload,
-            new DistributedCacheEntryOptions
-            {
-                AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(seconds),
-            },
-            cancellationToken);
-        return ticket;
-    }
-
-    public async Task<(string SessionId, Guid UserId)?> ConsumeLoginTicketAsync(
-        string ticket,
-        CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(ticket))
-        {
-            return null;
-        }
-
-        var key = TicketKeyPrefix + ticket;
-        var protectedPayload = await _cache.GetStringAsync(key, cancellationToken);
-        await _cache.RemoveAsync(key, cancellationToken);
-        if (string.IsNullOrWhiteSpace(protectedPayload))
-        {
-            return null;
-        }
-
-        try
-        {
-            var json = _protector.Unprotect(protectedPayload);
-            var payload = JsonSerializer.Deserialize<TicketPayload>(json, JsonOptions);
-            if (payload is null || string.IsNullOrWhiteSpace(payload.SessionId) || payload.UserId == Guid.Empty)
-            {
-                return null;
-            }
-
-            return (payload.SessionId, payload.UserId);
-        }
-        catch (CryptographicException)
-        {
-            return null;
         }
     }
 
@@ -252,6 +216,4 @@ public sealed class DistributedCacheApiTokenSessionStore : IApiTokenSessionStore
             .Replace('+', '-')
             .Replace('/', '_');
     }
-
-    private sealed record TicketPayload(string SessionId, Guid UserId);
 }
