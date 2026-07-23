@@ -7,33 +7,40 @@ using Microsoft.Extensions.Logging;
 
 namespace HealthCare.Web.Auth;
 
+/// <summary>
+/// Authentication state is derived from the HttpOnly Web cookie + server-side BFF token session.
+/// Browser storage is never consulted for API tokens.
+/// </summary>
 public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvider
 {
     private readonly IApiTokenStore _tokenStore;
+    private readonly IApiTokenSessionStore _sessions;
     private readonly IPermissionState _permissionState;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IClinicDirectoryCache _clinicCache;
     private readonly IPlatformTenantContext _platformTenant;
-    private readonly IStaffWebAuthCookie _webAuthCookie;
+    private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<StaffAuthenticationStateProvider> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private Guid? _authenticatedUserId;
 
     public StaffAuthenticationStateProvider(
         IApiTokenStore tokenStore,
+        IApiTokenSessionStore sessions,
         IPermissionState permissionState,
         IHttpClientFactory httpClientFactory,
         IClinicDirectoryCache clinicCache,
         IPlatformTenantContext platformTenant,
-        IStaffWebAuthCookie webAuthCookie,
+        IHttpContextAccessor httpContextAccessor,
         ILogger<StaffAuthenticationStateProvider> logger)
     {
         _tokenStore = tokenStore;
+        _sessions = sessions;
         _permissionState = permissionState;
         _httpClientFactory = httpClientFactory;
         _clinicCache = clinicCache;
         _platformTenant = platformTenant;
-        _webAuthCookie = webAuthCookie;
+        _httpContextAccessor = httpContextAccessor;
         _logger = logger;
     }
 
@@ -42,22 +49,28 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
         await _gate.WaitAsync();
         try
         {
-            var tokens = await _tokenStore.GetAsync();
-            if (tokens is null || string.IsNullOrWhiteSpace(tokens.AccessToken))
+            var sessionId = ResolveSessionId();
+            if (string.IsNullOrWhiteSpace(sessionId))
             {
-                await _permissionState.ClearAsync();
-                await ClearStaleWebCookieAsync();
+                await ClearLocalCircuitStateAsync();
                 return Anonymous();
             }
 
-            if (_permissionState.CurrentUser is null || !_permissionState.IsReady)
+            var session = await _sessions.GetAsync(sessionId);
+            if (session is null)
+            {
+                await ClearLocalCircuitStateAsync();
+                return Anonymous();
+            }
+
+            if (_permissionState.CurrentUser is null || !_permissionState.IsReady
+                || _authenticatedUserId != session.UserId)
             {
                 var loaded = await TryLoadCurrentUserAsync();
                 if (!loaded)
                 {
-                    await _tokenStore.ClearAsync();
-                    await _permissionState.ClearAsync();
-                    await _webAuthCookie.SignOutAsync();
+                    await _sessions.RemoveAsync(sessionId);
+                    await ClearLocalCircuitStateAsync();
                     return Anonymous();
                 }
             }
@@ -70,54 +83,30 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
         }
     }
 
-    private async Task ClearStaleWebCookieAsync()
-    {
-        // Only clear when a cookie principal is present to avoid unnecessary SignOut noise.
-        // IHttpContextAccessor is used inside StaffWebAuthCookie; SignOut is safe when no cookie.
-        await _webAuthCookie.SignOutAsync();
-    }
-
-    public async Task SignInAsync(AuthTokenResponse tokens, CancellationToken cancellationToken = default)
-    {
-        await _tokenStore.SetAsync(
-            new StoredAuthTokens
-            {
-                AccessToken = tokens.AccessToken,
-                RefreshToken = tokens.RefreshToken,
-                AccessTokenExpiresAtUtc = tokens.AccessTokenExpiresAtUtc,
-                RefreshTokenExpiresAtUtc = tokens.RefreshTokenExpiresAtUtc,
-            },
-            cancellationToken);
-
-        var loaded = await TryLoadCurrentUserAsync(cancellationToken);
-        if (!loaded)
-        {
-            await _tokenStore.ClearAsync(cancellationToken);
-            await _permissionState.ClearAsync(cancellationToken);
-            await _webAuthCookie.SignOutAsync(cancellationToken);
-            throw new InvalidOperationException("Unable to load the current user after login.");
-        }
-
-        await _webAuthCookie.SignInAsync(_permissionState.CurrentUser!, cancellationToken);
-        NotifyAuthenticationStateChanged(Task.FromResult(Authenticated(_permissionState.CurrentUser!)));
-    }
-
+    /// <summary>
+    /// Clears circuit permission/tenant state and server token session. Cookie is cleared via BFF logout redirect.
+    /// </summary>
     public async Task MarkLoggedOutAsync(bool callRemoteLogout = true)
     {
-        if (callRemoteLogout)
+        var sessionId = ResolveSessionId();
+        string? refreshToken = null;
+
+        if (!string.IsNullOrWhiteSpace(sessionId))
+        {
+            var session = await _sessions.GetAsync(sessionId);
+            refreshToken = session?.Tokens.RefreshToken;
+            await _sessions.RemoveAsync(sessionId);
+        }
+
+        if (callRemoteLogout && !string.IsNullOrWhiteSpace(refreshToken))
         {
             try
             {
-                var tokens = await _tokenStore.GetAsync();
-                if (tokens is not null && !string.IsNullOrWhiteSpace(tokens.RefreshToken))
-                {
-                    var client = _httpClientFactory.CreateClient("HealthCareApi.Anonymous");
-                    using var response = await client.PostAsJsonAsync(
-                        "api/v1/auth/logout",
-                        new LogoutRequest { RefreshToken = tokens.RefreshToken });
-                    // Local clear proceeds regardless of remote result.
-                    _ = response;
-                }
+                var client = _httpClientFactory.CreateClient("HealthCareApi.Anonymous");
+                using var response = await client.PostAsJsonAsync(
+                    "api/v1/auth/logout",
+                    new LogoutRequest { RefreshToken = refreshToken });
+                _ = response;
             }
             catch (Exception ex)
             {
@@ -125,12 +114,7 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
             }
         }
 
-        await _tokenStore.ClearAsync();
-        await _permissionState.ClearAsync();
-        _clinicCache.Clear();
-        _platformTenant.Clear();
-        _authenticatedUserId = null;
-        await _webAuthCookie.SignOutAsync();
+        await ClearLocalCircuitStateAsync();
         NotifyAuthenticationStateChanged(Task.FromResult(Anonymous()));
     }
 
@@ -143,8 +127,26 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
             return;
         }
 
-        await _webAuthCookie.SignInAsync(_permissionState.CurrentUser!, cancellationToken);
         NotifyAuthenticationStateChanged(Task.FromResult(Authenticated(_permissionState.CurrentUser!)));
+    }
+
+    private string? ResolveSessionId()
+    {
+        var fromStore = _tokenStore.GetCurrentSessionId();
+        if (!string.IsNullOrWhiteSpace(fromStore))
+        {
+            return fromStore;
+        }
+
+        return _httpContextAccessor.HttpContext?.User?.FindFirstValue(BffClaimTypes.SessionId);
+    }
+
+    private async Task ClearLocalCircuitStateAsync()
+    {
+        await _permissionState.ClearAsync();
+        _clinicCache.Clear();
+        _platformTenant.Clear();
+        _authenticatedUserId = null;
     }
 
     private async Task<bool> TryLoadCurrentUserAsync(CancellationToken cancellationToken = default)

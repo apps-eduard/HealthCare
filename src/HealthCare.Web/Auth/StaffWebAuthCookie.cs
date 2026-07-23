@@ -1,16 +1,18 @@
 using System.Security.Claims;
 using HealthCare.Contracts.Identity;
+using HealthCare.Web.Configuration;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.Extensions.Options;
 
 namespace HealthCare.Web.Auth;
 
 /// <summary>
-/// Issues/clears the staff Web auth cookie. Cookie holds minimal identity claims only — never API tokens.
+/// Issues/clears the staff Web auth cookie. Cookie holds minimal identity + opaque session id — never API tokens.
 /// </summary>
 public interface IStaffWebAuthCookie
 {
-    Task SignInAsync(CurrentUserResponse user, CancellationToken cancellationToken = default);
+    Task SignInAsync(CurrentUserResponse user, string sessionId, CancellationToken cancellationToken = default);
 
     Task SignOutAsync(CancellationToken cancellationToken = default);
 }
@@ -20,18 +22,26 @@ public sealed class StaffWebAuthCookie : IStaffWebAuthCookie
     public const string AuthenticationType = "HealthCareStaffCookie";
 
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly BffOptions _options;
     private readonly ILogger<StaffWebAuthCookie> _logger;
 
     public StaffWebAuthCookie(
         IHttpContextAccessor httpContextAccessor,
+        IOptions<BffOptions> options,
         ILogger<StaffWebAuthCookie> logger)
     {
         _httpContextAccessor = httpContextAccessor;
+        _options = options.Value;
         _logger = logger;
     }
 
-    public async Task SignInAsync(CurrentUserResponse user, CancellationToken cancellationToken = default)
+    public async Task SignInAsync(
+        CurrentUserResponse user,
+        string sessionId,
+        CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
         var httpContext = _httpContextAccessor.HttpContext;
         if (httpContext is null)
         {
@@ -39,13 +49,14 @@ public sealed class StaffWebAuthCookie : IStaffWebAuthCookie
             return;
         }
 
-        var principal = CreatePrincipal(user);
+        var principal = CreatePrincipal(user, sessionId);
+        var lifetime = TimeSpan.FromHours(Math.Max(1, _options.AbsoluteSessionHours));
         var properties = new AuthenticationProperties
         {
             IsPersistent = false,
             AllowRefresh = true,
             IssuedUtc = DateTimeOffset.UtcNow,
-            ExpiresUtc = DateTimeOffset.UtcNow.AddHours(8),
+            ExpiresUtc = DateTimeOffset.UtcNow.Add(lifetime),
         };
 
         await httpContext.SignInAsync(
@@ -74,7 +85,7 @@ public sealed class StaffWebAuthCookie : IStaffWebAuthCookie
         }
     }
 
-    public static ClaimsPrincipal CreatePrincipal(CurrentUserResponse user)
+    public static ClaimsPrincipal CreatePrincipal(CurrentUserResponse user, string? sessionId = null)
     {
         var claims = new List<Claim>
         {
@@ -90,6 +101,11 @@ public sealed class StaffWebAuthCookie : IStaffWebAuthCookie
         foreach (var role in user.Roles)
         {
             claims.Add(new Claim(ClaimTypes.Role, role));
+        }
+
+        if (!string.IsNullOrWhiteSpace(sessionId))
+        {
+            claims.Add(new Claim(BffClaimTypes.SessionId, sessionId));
         }
 
         // Intentionally omit API access/refresh tokens and permission catalog from the cookie.

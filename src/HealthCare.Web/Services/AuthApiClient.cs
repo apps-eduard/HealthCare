@@ -4,10 +4,11 @@ using HealthCare.Web.Auth;
 
 namespace HealthCare.Web.Services;
 
+/// <summary>
+/// Typed auth client for authenticated profile calls. Login/logout/refresh are BFF-owned and must not return tokens to UI.
+/// </summary>
 public interface IAuthApiClient
 {
-    Task<AuthTokenResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default);
-
     Task<CurrentUserResponse> GetMeAsync(CancellationToken cancellationToken = default);
 
     Task<CurrentUserPermissionsResponse> GetPermissionsAsync(CancellationToken cancellationToken = default);
@@ -20,19 +21,6 @@ public sealed class AuthApiClient : IAuthApiClient
     public AuthApiClient(IHttpClientFactory httpClientFactory)
     {
         _httpClientFactory = httpClientFactory;
-    }
-
-    public async Task<AuthTokenResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
-    {
-        var client = _httpClientFactory.CreateClient("HealthCareApi.Anonymous");
-        using var response = await client.PostAsJsonAsync("api/v1/auth/login", request, cancellationToken);
-        if (!response.IsSuccessStatusCode)
-        {
-            throw await ApiProblemException.FromResponseAsync(response, cancellationToken);
-        }
-
-        var tokens = await response.Content.ReadFromJsonAsync<AuthTokenResponse>(cancellationToken);
-        return tokens ?? throw new ApiProblemException(500, "Invalid login response", null, null);
     }
 
     public async Task<CurrentUserResponse> GetMeAsync(CancellationToken cancellationToken = default)

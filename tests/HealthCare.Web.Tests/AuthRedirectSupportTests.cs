@@ -67,8 +67,9 @@ public sealed class AuthRedirectSupportTests
             HasActiveStaffMembership = true,
         };
 
-        var principal = StaffWebAuthCookie.CreatePrincipal(user);
+        var principal = StaffWebAuthCookie.CreatePrincipal(user, "test-session");
         principal.Identity!.IsAuthenticated.Should().BeTrue();
+        principal.FindFirst(BffClaimTypes.SessionId)!.Value.Should().Be("test-session");
         principal.Claims.Should().NotContain(c =>
             c.Type.Contains("token", StringComparison.OrdinalIgnoreCase)
             || c.Type.Contains("access", StringComparison.OrdinalIgnoreCase)

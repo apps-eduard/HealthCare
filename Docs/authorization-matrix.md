@@ -193,7 +193,7 @@ Tenant behavior:
 - PLATFORM_ADMIN: select organization via platform banner/picker, then `platformAdminBypass=true` **and** `OrganizationId` required for listing; ClinicPicker disabled until organization selected
 - PATIENT: denied on staff clinic directory
 
-Staff UI uses `ClinicPicker` / `OrganizationPicker` (no free-text ClinicId or OrganizationId). MVP token storage: circuit memory + `ProtectedSessionStorage`.
+Staff UI uses `ClinicPicker` / `OrganizationPicker` (no free-text ClinicId or OrganizationId). Staff Web auth is BFF-based: HttpOnly cookie + server-side token session (no browser token storage).
 
 ## Securing new endpoints
 

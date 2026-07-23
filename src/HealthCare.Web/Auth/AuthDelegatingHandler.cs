@@ -7,24 +7,26 @@ using Microsoft.Extensions.Logging;
 namespace HealthCare.Web.Auth;
 
 /// <summary>
-/// Adds bearer access token and performs a single coordinated refresh on 401.
-/// Never logs Authorization headers or token values.
+/// Adds bearer access token from the server BFF session and performs a single coordinated refresh on 401.
+/// Never logs Authorization headers or token values. Never exposes tokens to the browser.
 /// </summary>
 public sealed class AuthDelegatingHandler : DelegatingHandler
 {
     private readonly IApiTokenStore _tokenStore;
+    private readonly IApiTokenSessionStore _sessions;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IServiceProvider _services;
     private readonly ILogger<AuthDelegatingHandler> _logger;
-    private readonly SemaphoreSlim _refreshLock = new(1, 1);
 
     public AuthDelegatingHandler(
         IApiTokenStore tokenStore,
+        IApiTokenSessionStore sessions,
         IHttpClientFactory httpClientFactory,
         IServiceProvider services,
         ILogger<AuthDelegatingHandler> logger)
     {
         _tokenStore = tokenStore;
+        _sessions = sessions;
         _httpClientFactory = httpClientFactory;
         _services = services;
         _logger = logger;
@@ -78,13 +80,27 @@ public sealed class AuthDelegatingHandler : DelegatingHandler
 
     private async Task<bool> TryRefreshAsync(CancellationToken cancellationToken)
     {
-        await _refreshLock.WaitAsync(cancellationToken);
+        var sessionId = _tokenStore.GetCurrentSessionId();
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return false;
+        }
+
+        var gate = _sessions.GetRefreshLock(sessionId);
+        await gate.WaitAsync(cancellationToken);
         try
         {
+            // Another request may have refreshed while we waited.
             var tokens = await _tokenStore.GetAsync(cancellationToken);
             if (tokens is null || string.IsNullOrWhiteSpace(tokens.RefreshToken))
             {
                 return false;
+            }
+
+            if (tokens.AccessTokenExpiresAtUtc > DateTimeOffset.UtcNow.AddSeconds(30))
+            {
+                // Likely refreshed by a concurrent waiter.
+                return true;
             }
 
             var client = _httpClientFactory.CreateClient("HealthCareApi.Anonymous");
@@ -126,7 +142,7 @@ public sealed class AuthDelegatingHandler : DelegatingHandler
         }
         finally
         {
-            _refreshLock.Release();
+            gate.Release();
         }
     }
 

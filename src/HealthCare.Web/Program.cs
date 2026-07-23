@@ -1,40 +1,54 @@
 using HealthCare.Web.Auth;
 using HealthCare.Web.Components;
 using HealthCare.Web.Configuration;
+using HealthCare.Web.Endpoints;
 using HealthCare.Web.Services;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using MudBlazor;
 using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<ApiOptions>(builder.Configuration.GetSection(ApiOptions.SectionName));
+builder.Services.Configure<BffOptions>(builder.Configuration.GetSection(BffOptions.SectionName));
+
+var bffOptions = builder.Configuration.GetSection(BffOptions.SectionName).Get<BffOptions>() ?? new BffOptions();
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddCascadingAuthenticationState();
+builder.Services.AddAntiforgery();
+builder.Services.AddDataProtection()
+    .SetApplicationName("HealthCare.Web");
+
+// Development: in-memory distributed cache. Production must use a shared cache (Redis/SQL) for multi-instance.
+builder.Services.AddDistributedMemoryCache();
 
 builder.Services
     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
-        options.Cookie.Name = "HealthCare.Staff.Auth";
+        options.Cookie.Name = string.IsNullOrWhiteSpace(bffOptions.CookieName)
+            ? "HealthCare.Staff.Auth"
+            : bffOptions.CookieName;
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
-        options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+        options.Cookie.SecurePolicy = builder.Environment.IsDevelopment() && !bffOptions.RequireHttps
             ? CookieSecurePolicy.SameAsRequest
             : CookieSecurePolicy.Always;
+        options.Cookie.Path = "/";
         options.LoginPath = "/login";
         options.AccessDeniedPath = "/forbidden";
         options.ReturnUrlParameter = "returnUrl";
         options.SlidingExpiration = true;
-        options.ExpireTimeSpan = TimeSpan.FromHours(8);
+        options.ExpireTimeSpan = TimeSpan.FromHours(Math.Max(1, bffOptions.AbsoluteSessionHours));
         options.Events.OnRedirectToLogin = context =>
         {
-            // Staff Web is HTML-only; always challenge to login with a safe local return URL.
             var returnUrl = context.Request.Path + context.Request.QueryString;
             context.Response.Redirect(SafeReturnUrl.BuildLoginUrl(returnUrl));
             return Task.CompletedTask;
@@ -44,10 +58,29 @@ builder.Services
             context.Response.Redirect("/forbidden");
             return Task.CompletedTask;
         };
+        options.Events.OnValidatePrincipal = async context =>
+        {
+            var sid = context.Principal?.FindFirst(BffClaimTypes.SessionId)?.Value;
+            if (string.IsNullOrWhiteSpace(sid))
+            {
+                context.RejectPrincipal();
+                await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                return;
+            }
+
+            var store = context.HttpContext.RequestServices.GetRequiredService<IApiTokenSessionStore>();
+            if (!await store.ExistsAsync(sid, context.HttpContext.RequestAborted))
+            {
+                context.RejectPrincipal();
+                await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            }
+        };
     });
 
 builder.Services.AddAuthorization();
-builder.Services.AddScoped<IApiTokenStore, ProtectedSessionApiTokenStore>();
+builder.Services.AddSingleton<IApiTokenSessionStore, DistributedCacheApiTokenSessionStore>();
+builder.Services.AddScoped<IApiTokenStore, ServerSessionApiTokenStore>();
+builder.Services.AddScoped<IBffAuthService, BffAuthService>();
 builder.Services.AddScoped<IPermissionState, PermissionState>();
 builder.Services.AddScoped<IPlatformTenantContext, PlatformTenantContext>();
 builder.Services.AddScoped<IStaffWebAuthCookie, StaffWebAuthCookie>();
@@ -90,6 +123,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
 
+app.MapBffAuthEndpoints();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
@@ -110,3 +144,6 @@ static void ConfigureApiClient(IServiceProvider services, HttpClient client)
     client.BaseAddress = new Uri(baseUrl);
     client.Timeout = TimeSpan.FromSeconds(60);
 }
+
+// Expose Program for WebApplicationFactory-style tests if added later.
+public partial class Program;

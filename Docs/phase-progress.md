@@ -546,9 +546,10 @@ Authoritative design docs:
 
 - MudBlazor 9 on `HealthCare.Web` (Interactive Server)
 - Staff login (`/login`) against `POST /api/v1/auth/login`
-- Token handling via `IApiTokenStore` (circuit memory + `ProtectedSessionStorage`) and refresh via `AuthDelegatingHandler`
+- Token handling via server-side BFF session store (`IApiTokenSessionStore` / `IApiTokenStore`) and refresh via `AuthDelegatingHandler`
+- Cookie authentication scheme (`HealthCare.Staff.Auth`) registers default authenticate/challenge/forbid schemes; `UseAuthentication`/`UseAuthorization` ordered correctly. Anonymous GET to `/appointments` etc. challenges to `/login?returnUrl=...` (no HTTP 500). Cookie is HttpOnly, SameSite=Lax, Secure outside Development, holds minimal claims + opaque `bff_sid` only (never access/refresh tokens). API bearer tokens live only in the server session store. `SafeReturnUrl` rejects absolute/protocol-relative/open redirects. PATIENT may authenticate but sees forbidden UI (not login loop). Logout/refresh-failure clear server sessions, permissions, platform tenant, and cookie.
 - Custom `StaffAuthenticationStateProvider` + `IPermissionState` from `/api/v1/auth/me`
-- **Anonymous protected-route fix:** Cookie authentication scheme (`HealthCare.Staff.Auth`) registers `IAuthenticationService` with default authenticate/challenge/forbid schemes; `UseAuthentication`/`UseAuthorization` ordered correctly. Anonymous GET to `/appointments` etc. challenges to `/login?returnUrl=...` (no HTTP 500). Cookie is HttpOnly, SameSite=Lax, Secure outside Development, holds minimal claims only (never access/refresh tokens). API bearer tokens remain in ProtectedSessionStorage. `SafeReturnUrl` rejects absolute/protocol-relative/open redirects. `RedirectToLogin` waits for confirmed anonymous state. PATIENT may authenticate but sees forbidden UI (not login loop). Logout/refresh-failure clear tokens, permissions, and cookie.
+- **Anonymous protected-route fix:** Cookie authentication scheme (`HealthCare.Staff.Auth`) registers `IAuthenticationService` with default authenticate/challenge/forbid schemes; `UseAuthentication`/`UseAuthorization` ordered correctly. Anonymous GET to `/appointments` etc. challenges to `/login?returnUrl=...` (no HTTP 500). Cookie is HttpOnly, SameSite=Lax, Secure outside Development, holds minimal claims + opaque `bff_sid` only (never access/refresh tokens). API bearer tokens live only in the server BFF session store. `SafeReturnUrl` rejects absolute/protocol-relative/open redirects. `RedirectToLogin` waits for confirmed anonymous state. PATIENT may authenticate but sees forbidden UI (not login loop). Logout/refresh-failure clear server sessions, permissions, platform tenant, and cookie.
 - **Staff patient directory:** `/patients` (+ optional `/patients/{patientId}`). Nav when `patients.search`. Server-side search/pagination/filters; detail dialog via `patients.read`; ClinicPatient status update via `patients.update_clinic_status` with `ExpectedVersion`. Reuses `PatientPicker` display helpers. Typed `IStaffPatientApiClient` (search/detail/clinic-profile).
 - **Staff availability management:** `/availability`. Nav when any of `availability.manage_self` / `availability.manage_clinic` / `availability.manage_organization` (not `availability.read` alone). Clinic/doctor selection: doctor self fixed; clinic admin fixed clinic + doctor picker; org admin `ClinicPicker` then doctors; PLATFORM_ADMIN requires org + clinic bypass. Weekly windows (Mon–Sun), create/edit/delete with `ExpectedVersion`, date exceptions create/delete (no exception edit), clinic timezone label, optional available-slots preview. Typed `IDoctorAvailabilityApiClient`. Helpers in `HealthCare.Web.Availability`. Smallest API add: `GET .../availability-exceptions`.
 - Authenticated MudBlazor shell (app bar, drawer, logout)
@@ -580,14 +581,14 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 ### Remaining
 
 - Notes, settings, audit viewer screens
-- Full BFF pattern (HttpOnly cookie session that replaces browser token storage)
+- Full BFF pattern delivered (Phase 8c) — HttpOnly cookie + server-side token session
 - Drag-and-drop calendar reschedule / SignalR realtime (explicitly out of this slice)
 - Exception edit UI (blocked until API supports PATCH)
 - Broader bUnit component coverage (prefer support/view-model tests while bUnit restore is flaky)
 
 ### Known limitations
 
-- API access/refresh tokens still stored in ProtectedSessionStorage (encrypted browser session storage). The new staff Web cookie authenticates the Blazor host only and does **not** replace API bearer auth.
+- API access/refresh tokens are stored server-side in the BFF session store (Development: in-memory distributed cache; production requires a shared distributed cache). The staff Web cookie authenticates the Blazor host and carries only an opaque session id.
 - PLATFORM_ADMIN uses organization directory + tenant banner (no free-text OrganizationId); calendar/availability still require explicit clinic selection
 - Patient directory list masks mobile numbers; detail shows full mobile when returned by API. Address/emergency contact shown in detail only when present on the safe contract.
 - List API has no free-text search parameter (queue filters by date/status/doctor/clinic only)
@@ -626,6 +627,34 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 - No organization create/update/suspend UI or API in this slice
 - No medical-notes UI
 - bUnit component tests still limited; support/architecture Web tests cover free-text removal and tenant state
+
+### Verification
+
+- See commit verification notes
+
+---
+## Phase 8c — HttpOnly BFF authentication
+
+**Status:** Complete  
+**Updated:** 2026-07-23
+
+### Delivered
+
+- Server-side `IApiTokenSessionStore` (distributed cache + data protection)
+- Scoped `ServerSessionApiTokenStore` replacing ProtectedSessionStorage token store
+- BFF endpoints: `POST /bff/auth/login`, `GET /bff/auth/establish`, `GET|POST /bff/auth/logout`
+- Login ticket via short-lived HttpOnly cookie (not URL, not API tokens)
+- Cookie `OnValidatePrincipal` rejects missing/expired server sessions
+- Server-side refresh with per-session lock; refresh failure clears session + circuit state
+- Antiforgery validated on BFF login
+- Typed clients unchanged; bearer attached only server-side
+- Docs/config: `Bff` options section
+
+### Known limitations
+
+- Development uses `AddDistributedMemoryCache` — multi-instance production requires Redis/SQL distributed cache
+- Per-session refresh lock is process-local (sufficient for single Web instance)
+- GET logout exists for forceLoad after circuit cleanup (POST also available)
 
 ### Verification
 

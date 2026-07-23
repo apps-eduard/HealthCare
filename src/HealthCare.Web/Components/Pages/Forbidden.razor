@@ -34,6 +34,6 @@
     private async Task SignOutAsync()
     {
         await AuthState.MarkLoggedOutAsync(callRemoteLogout: true);
-        Navigation.NavigateTo("/login", forceLoad: true);
+        Navigation.NavigateTo("/bff/auth/logout", forceLoad: true);
     }
 }

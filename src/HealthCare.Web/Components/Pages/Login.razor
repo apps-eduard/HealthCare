@@ -1,13 +1,9 @@
 @page "/login"
 @layout EmptyLayout
 @attribute [AllowAnonymous]
-@inject IAuthApiClient AuthApi
-@inject StaffAuthenticationStateProvider AuthState
 @inject IPermissionState Permissions
 @inject NavigationManager Navigation
-@inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthenticationStateProvider
-@inject ILogger<Login> Logger
 
 <PageTitle>Staff sign in</PageTitle>
 
@@ -16,53 +12,61 @@
         <MudText Typo="Typo.h4" GutterBottom="true">HealthCare Staff</MudText>
         <MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">Sign in with your staff account</MudText>
 
-        <EditForm Model="_model" OnValidSubmit="OnSubmitAsync">
-            <DataAnnotationsValidator />
-            <MudTextField @bind-Value="_model.Email"
-                          Label="Email"
-                          InputType="InputType.Email"
-                          Required="true"
-                          RequiredError="Email is required"
-                          Disabled="_busy"
-                          Class="mb-3" />
-            <MudTextField @bind-Value="_model.Password"
-                          Label="Password"
-                          InputType="InputType.Password"
-                          Required="true"
-                          RequiredError="Password is required"
-                          Disabled="_busy"
-                          Class="mb-3" />
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-3" Dense="true">@_error</MudAlert>
+        }
 
-            @if (!string.IsNullOrWhiteSpace(_error))
-            {
-                <MudAlert Severity="Severity.Error" Class="mb-3" Dense="true">@_error</MudAlert>
-            }
+        @* Full browser POST to BFF — Set-Cookie must happen on an HTTP response, not the SignalR circuit. *@
+        <form method="post" action="/bff/auth/login" data-enhance="false">
+            <AntiforgeryToken />
+            <input type="hidden" name="returnUrl" value="@SafeReturnUrl.Resolve(ReturnUrl)" />
+
+            <div class="mb-3">
+                <label class="mud-input-label mud-input-label-inputbased mud-input-label-text" for="bff-email">Email</label>
+                <input id="bff-email"
+                       name="email"
+                       type="email"
+                       required
+                       autocomplete="username"
+                       class="mud-input-slot mud-input-root mud-input-root-outlined mud-input-root-margin-dense pa-2"
+                       style="width:100%;border:1px solid var(--mud-palette-lines-inputs);border-radius:4px;background:transparent;color:inherit;" />
+            </div>
+            <div class="mb-3">
+                <label class="mud-input-label mud-input-label-inputbased mud-input-label-text" for="bff-password">Password</label>
+                <input id="bff-password"
+                       name="password"
+                       type="password"
+                       required
+                       autocomplete="current-password"
+                       class="mud-input-slot mud-input-root mud-input-root-outlined mud-input-root-margin-dense pa-2"
+                       style="width:100%;border:1px solid var(--mud-palette-lines-inputs);border-radius:4px;background:transparent;color:inherit;" />
+            </div>
 
             <MudButton ButtonType="ButtonType.Submit"
                        Variant="Variant.Filled"
                        Color="Color.Primary"
                        FullWidth="true"
-                       Disabled="_busy">
-                @if (_busy)
-                {
-                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                }
+                       Class="mt-2">
                 Sign in
             </MudButton>
-        </EditForm>
+        </form>
     </MudPaper>
 </MudContainer>
 
 @code {
-    private readonly LoginFormModel _model = new();
-    private bool _busy;
     private string? _error;
 
     [SupplyParameterFromQuery(Name = "returnUrl")]
     public string? ReturnUrl { get; set; }
 
+    [SupplyParameterFromQuery(Name = "error")]
+    public string? Error { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
+        _error = MapQueryError(Error);
+
         var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         if (state.User.Identity?.IsAuthenticated != true)
         {
@@ -71,77 +75,28 @@
 
         if (Permissions.IsPatientOnly)
         {
-            Navigation.NavigateTo("/forbidden", forceLoad: false);
+            Navigation.NavigateTo("/forbidden", forceLoad: true);
             return;
         }
 
         if (Permissions.IsStaffUser)
         {
-            Navigation.NavigateTo(SafeReturnUrl.Resolve(ReturnUrl), forceLoad: false);
+            Navigation.NavigateTo(SafeReturnUrl.Resolve(ReturnUrl), forceLoad: true);
         }
     }
 
-    private async Task OnSubmitAsync()
-    {
-        _busy = true;
-        _error = null;
-        try
+    private static string? MapQueryError(string? code) =>
+        code switch
         {
-            var tokens = await AuthApi.LoginAsync(new LoginRequest
-            {
-                Email = _model.Email.Trim(),
-                Password = _model.Password,
-            });
-
-            await AuthState.SignInAsync(tokens);
-            _model.Password = string.Empty;
-
-            // PATIENT accounts may authenticate, but staff pages remain forbidden.
-            if (Permissions.IsPatientOnly || !Permissions.IsStaffUser)
-            {
-                Logger.LogInformation("Non-staff account signed in; redirecting to forbidden.");
-                Navigation.NavigateTo("/forbidden", forceLoad: false);
-                return;
-            }
-
-            Navigation.NavigateTo(SafeReturnUrl.Resolve(ReturnUrl), forceLoad: false);
-        }
-        catch (ApiProblemException ex)
-        {
-            _error = MapLoginError(ex);
-            _model.Password = string.Empty;
-        }
-        catch (HttpRequestException)
-        {
-            _error = "Unable to reach the API. Check that the API is running and Api:BaseUrl is configured.";
-            _model.Password = string.Empty;
-        }
-        catch (TaskCanceledException)
-        {
-            _error = "The sign-in request timed out. Please try again.";
-            _model.Password = string.Empty;
-        }
-        finally
-        {
-            _busy = false;
-        }
-    }
-
-    private static string MapLoginError(ApiProblemException ex) =>
-        ex.ErrorCode switch
-        {
-            HealthCare.Contracts.Identity.AuthErrorCodes.InvalidCredentials => "Invalid email or password.",
-            HealthCare.Contracts.Identity.AuthErrorCodes.AccountDisabled => "This account is disabled.",
-            HealthCare.Contracts.Identity.AuthErrorCodes.AccountLocked => "This account is temporarily locked.",
-            HealthCare.Contracts.Identity.AuthErrorCodes.EmailNotConfirmed => "Email confirmation is required before signing in.",
-            HealthCare.Contracts.Identity.AuthErrorCodes.OrganizationInactive => "The organization for this account is inactive.",
-            HealthCare.Contracts.Identity.AuthErrorCodes.ClinicInactive => "The clinic for this account is inactive.",
+            null or "" => null,
+            "invalid_credentials" => "Invalid email or password.",
+            "account_disabled" => "This account is disabled.",
+            "account_locked" => "This account is temporarily locked.",
+            "email_not_confirmed" => "Email confirmation is required before signing in.",
+            "organization_inactive" => "The organization for this account is inactive.",
+            "clinic_inactive" => "The clinic for this account is inactive.",
+            "antiforgery" => "The sign-in form expired. Please try again.",
+            "session" => "Your sign-in session expired. Please try again.",
             _ => "Unable to sign in. Please try again.",
         };
-
-    private sealed class LoginFormModel
-    {
-        public string Email { get; set; } = string.Empty;
-        public string Password { get; set; } = string.Empty;
-    }
 }

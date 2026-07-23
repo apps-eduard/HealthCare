@@ -91,6 +91,7 @@
             Snackbar.Add("Signed out locally.", Severity.Info);
         }
 
-        Navigation.NavigateTo("/login", forceLoad: true);
+        // Full navigation clears the HttpOnly cookie on a real HTTP response.
+        Navigation.NavigateTo("/bff/auth/logout", forceLoad: true);
     }
 }
