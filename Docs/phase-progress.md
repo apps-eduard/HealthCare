@@ -2,10 +2,10 @@
 
 ## Progress overview
 
-**Overall completion: 61%**
+**Overall completion: 62%**
 
 ```text
-[███████████████████░░░░░░░░░░░░░]  61%
+[███████████████████░░░░░░░░░░░░░]  62%
 ```
 
 | Metric | Value |
@@ -15,7 +15,7 @@
 | Partial | 7 (Phases 2, 3, 4, 6, 7, 8, 10) |
 | In progress | 0 |
 | Not started | 4 |
-| Weighted score | (3×1.0) + (0.7 + 0.95 + 0.5 + 0.75 + 0.85 + 0.55 + 0.85) = 8.15 / 14 ≈ **61%** |
+| Weighted score | (3×1.0) + (0.7 + 0.95 + 0.5 + 0.75 + 0.85 + 0.6 + 0.85) = 8.2 / 14 ≈ **62%** |
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
@@ -34,7 +34,7 @@
 | 5 | Patients and clinic-patient registration | Complete | `██████████` 100% |
 | 6 | Staff and doctors | Partial | `████████░░` 75% |
 | 7 | Appointment booking | Partial | `█████████░` 85% |
-| 8 | Staff web application (MudBlazor) | Partial | `█████░░░░░` 55% |
+| 8 | Staff web application (MudBlazor) | Partial | `██████░░░░` 60% |
 | 9 | Medical notes | Not started | `░░░░░░░░░░` 0% |
 | 10 | Hangfire and notifications | Partial | `█████████░` 85% |
 | 11 | Patient mobile application | Not started | `░░░░░░░░░░` 0% |
@@ -549,6 +549,7 @@ Authoritative design docs:
 - Token handling via `IApiTokenStore` (circuit memory + `ProtectedSessionStorage`) and refresh via `AuthDelegatingHandler`
 - Custom `StaffAuthenticationStateProvider` + `IPermissionState` from `/api/v1/auth/me`
 - **Anonymous protected-route fix:** Cookie authentication scheme (`HealthCare.Staff.Auth`) registers `IAuthenticationService` with default authenticate/challenge/forbid schemes; `UseAuthentication`/`UseAuthorization` ordered correctly. Anonymous GET to `/appointments` etc. challenges to `/login?returnUrl=...` (no HTTP 500). Cookie is HttpOnly, SameSite=Lax, Secure outside Development, holds minimal claims only (never access/refresh tokens). API bearer tokens remain in ProtectedSessionStorage. `SafeReturnUrl` rejects absolute/protocol-relative/open redirects. `RedirectToLogin` waits for confirmed anonymous state. PATIENT may authenticate but sees forbidden UI (not login loop). Logout/refresh-failure clear tokens, permissions, and cookie.
+- **Staff patient directory:** `/patients` (+ optional `/patients/{patientId}`). Nav when `patients.search`. Server-side search/pagination/filters; detail dialog via `patients.read`; ClinicPatient status update via `patients.update_clinic_status` with `ExpectedVersion`. Reuses `PatientPicker` display helpers. Typed `IStaffPatientApiClient` (search/detail/clinic-profile).
 - Authenticated MudBlazor shell (app bar, drawer, logout)
 - Dashboard (`/` / `/dashboard`) with session context and permission-aware links
 - Staff management page (`/staff`): server-side search/filter/pagination, detail, create, activate/deactivate, role assign
@@ -576,7 +577,7 @@ Authoritative design docs:
 
 ### Remaining
 
-- Patient directory screens, notes, settings, audit viewer
+- Notes, settings, audit viewer screens
 - Full BFF pattern (HttpOnly cookie session that replaces browser token storage)
 - Drag-and-drop calendar reschedule / SignalR realtime (explicitly out of this slice)
 - Broader bUnit component coverage (prefer support/view-model tests while bUnit restore is flaky)
@@ -585,6 +586,7 @@ Authoritative design docs:
 
 - API access/refresh tokens still stored in ProtectedSessionStorage (encrypted browser session storage). The new staff Web cookie authenticates the Blazor host only and does **not** replace API bearer auth.
 - PLATFORM_ADMIN clinic picker still needs an OrganizationId scope field (no org directory UI yet); calendar requires explicit clinic selection
+- Patient directory list masks mobile numbers; detail shows full mobile when returned by API. Address/emergency contact shown in detail only when present on the safe contract.
 - List API has no free-text search parameter (queue filters by date/status/doctor/clinic only)
 - Reason for visit / patient notes are not shown in staff appointment UI
 - No invitation email UI (temporary-password create only)

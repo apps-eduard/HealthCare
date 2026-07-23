@@ -22,6 +22,8 @@ public static class WebPermissions
 
     public const string AvailabilityRead = "availability.read";
     public const string PatientsSearch = "patients.search";
+    public const string PatientsRead = "patients.read";
+    public const string PatientsUpdateClinicStatus = "patients.update_clinic_status";
 }
 
 public static class WebRoles

@@ -1,0 +1,254 @@
+@namespace HealthCare.Web.Components.Patients
+@using HealthCare.Contracts.Patients
+@using HealthCare.Web.Patients
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Patient details</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-3" />
+        }
+        else if (_patient is null)
+        {
+            <MudAlert Severity="Severity.Error">@(_error ?? "Patient was not found or you do not have access.")</MudAlert>
+        }
+        else
+        {
+            @if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <MudAlert Severity="Severity.Error" Class="mb-3">@_error</MudAlert>
+            }
+
+            <MudStack Spacing="2">
+                <MudText><strong>Local number:</strong> @_patient.LocalPatientNumber</MudText>
+                <MudText><strong>Name:</strong> @PatientDisplay.FullName(_patient)</MudText>
+                <MudText><strong>Date of birth:</strong> @(_patient.DateOfBirth?.ToString("yyyy-MM-dd") ?? "—")</MudText>
+                <MudText><strong>Gender:</strong> @(_patient.Gender ?? "—")</MudText>
+                <MudText><strong>Mobile:</strong> @(_patient.MobileNumber ?? "—")</MudText>
+                <MudText><strong>Preferred language:</strong> @(_patient.PreferredLanguage ?? "—")</MudText>
+                <MudText>
+                    <strong>Patient status:</strong>
+                    <MudChip T="string" Size="Size.Small" Color="@PatientStatusPresentation.PatientActiveColor(_patient.PatientIsActive)">
+                        @PatientStatusPresentation.PatientActiveLabel(_patient.PatientIsActive)
+                    </MudChip>
+                </MudText>
+                <MudText>
+                    <strong>Clinic enrollment:</strong>
+                    <MudChip T="string" Size="Size.Small" Color="@PatientStatusPresentation.ClinicPatientColor(_patient.ClinicPatientStatus)">
+                        @PatientStatusPresentation.ClinicPatientLabel(_patient.ClinicPatientStatus)
+                    </MudChip>
+                </MudText>
+                <MudText><strong>Clinic:</strong> @(_clinicLabel ?? _patient.ClinicId.ToString("D"))</MudText>
+                <MudText><strong>Enrolled:</strong> @_patient.RegisteredAtUtc.UtcDateTime.ToString("yyyy-MM-dd HH:mm") UTC</MudText>
+                <MudText><strong>Version:</strong> @_patient.Version</MudText>
+                @if (!string.IsNullOrWhiteSpace(_patient.Address))
+                {
+                    <MudText><strong>Address:</strong> @_patient.Address</MudText>
+                }
+                @if (!string.IsNullOrWhiteSpace(_patient.EmergencyContact))
+                {
+                    <MudText><strong>Emergency contact:</strong> @_patient.EmergencyContact</MudText>
+                }
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Patient ID: @_patient.PatientId</MudText>
+            </MudStack>
+
+            @if (Permissions.Has(WebPermissions.PatientsUpdateClinicStatus))
+            {
+                <MudDivider Class="my-4" />
+                <MudText Typo="Typo.subtitle2" GutterBottom="true">Update clinic enrollment status</MudText>
+                <MudSelect T="string" @bind-Value="_newStatus" Label="ClinicPatient status" Variant="Variant.Outlined" Disabled="_busy">
+                    @foreach (var status in PatientStatusPresentation.ClinicPatientStatuses)
+                    {
+                        <MudSelectItem Value="@status">@status</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close" Disabled="_busy">Close</MudButton>
+        @if (_patient is not null && Permissions.Has(WebPermissions.PatientsUpdateClinicStatus))
+        {
+            <MudButton Color="Color.Primary"
+                       Variant="Variant.Filled"
+                       Disabled="_busy || string.IsNullOrWhiteSpace(_newStatus) || _newStatus == _patient.ClinicPatientStatus"
+                       OnClick="ConfirmUpdateAsync">
+                @if (_busy)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                Update status
+            </MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public Guid PatientId { get; set; }
+
+    [Parameter]
+    public bool PlatformAdminBypass { get; set; }
+
+    [Inject]
+    private IStaffPatientApiClient PatientsApi { get; set; } = default!;
+
+    [Inject]
+    private IPermissionState Permissions { get; set; } = default!;
+
+    [Inject]
+    private IClinicDirectoryApiClient ClinicsApi { get; set; } = default!;
+
+    [Inject]
+    private IClinicDirectoryCache ClinicCache { get; set; } = default!;
+
+    [Inject]
+    private IDialogService DialogService { get; set; } = default!;
+
+    [Inject]
+    private ISnackbar Snackbar { get; set; } = default!;
+
+    private StaffPatientDetailResponse? _patient;
+    private string? _clinicLabel;
+    private string? _newStatus;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+    private bool _changed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Permissions.Has(WebPermissions.PatientsRead))
+        {
+            _loading = false;
+            _error = "You do not have permission to view patient details.";
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _patient = await PatientsApi.GetByIdAsync(PatientId, PlatformAdminBypass);
+            _newStatus = _patient.ClinicPatientStatus;
+            await ResolveClinicLabelAsync(_patient.ClinicId);
+        }
+        catch (ApiProblemException ex) when (PatientProblemMessages.IsNotFound(ex))
+        {
+            _patient = null;
+            _error = PatientProblemMessages.ToUserMessage(ex);
+        }
+        catch (ApiProblemException ex)
+        {
+            _patient = null;
+            _error = PatientProblemMessages.ToUserMessage(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ResolveClinicLabelAsync(Guid clinicId)
+    {
+        try
+        {
+            if (ClinicCache.TryGet(clinicId, out var cached) && cached is not null)
+            {
+                _clinicLabel = $"{cached.Name} ({cached.Slug})";
+                return;
+            }
+
+            var detail = await ClinicsApi.GetByIdAsync(clinicId, PlatformAdminBypass);
+            ClinicCache.Set(detail);
+            _clinicLabel = $"{detail.Name} ({detail.Slug})";
+        }
+        catch
+        {
+            _clinicLabel = null;
+        }
+    }
+
+    private async Task ConfirmUpdateAsync()
+    {
+        if (_patient is null || _busy || string.IsNullOrWhiteSpace(_newStatus))
+        {
+            return;
+        }
+
+        var confirm = await DialogService.ShowMessageBoxAsync(
+            "Update clinic enrollment",
+            $"Change clinic enrollment status to '{_newStatus}'?",
+            yesText: "Update",
+            cancelText: "Cancel");
+        if (confirm != true)
+        {
+            return;
+        }
+
+        await SubmitUpdateAsync();
+    }
+
+    private async Task SubmitUpdateAsync()
+    {
+        if (_patient is null || _busy || string.IsNullOrWhiteSpace(_newStatus))
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            _patient = await PatientsApi.UpdateClinicProfileAsync(
+                _patient.PatientId,
+                new UpdateClinicPatientRequest
+                {
+                    ExpectedVersion = _patient.Version,
+                    Status = _newStatus,
+                },
+                PlatformAdminBypass);
+            _newStatus = _patient.ClinicPatientStatus;
+            _changed = true;
+            Snackbar.Add("Clinic enrollment status updated.", Severity.Success);
+        }
+        catch (ApiProblemException ex) when (PatientProblemMessages.IsConcurrencyConflict(ex))
+        {
+            var reload = await DialogService.ShowMessageBoxAsync(
+                "Record changed",
+                "This clinic patient record was updated elsewhere. Reload the latest version?",
+                yesText: "Reload",
+                cancelText: "Close");
+            if (reload == true)
+            {
+                await LoadAsync();
+            }
+            else
+            {
+                _error = PatientProblemMessages.ToUserMessage(ex);
+            }
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = PatientProblemMessages.ToUserMessage(ex);
+            Snackbar.Add(_error, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Close() => MudDialog.Close(_changed ? DialogResult.Ok(true) : DialogResult.Cancel());
+}

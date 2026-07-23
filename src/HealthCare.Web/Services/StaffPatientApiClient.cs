@@ -10,6 +10,17 @@ public interface IStaffPatientApiClient
         StaffPatientSearchRequest request,
         bool platformAdminBypass = false,
         CancellationToken cancellationToken = default);
+
+    Task<StaffPatientDetailResponse> GetByIdAsync(
+        Guid patientId,
+        bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default);
+
+    Task<StaffPatientDetailResponse> UpdateClinicProfileAsync(
+        Guid patientId,
+        UpdateClinicPatientRequest request,
+        bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class StaffPatientApiClient : IStaffPatientApiClient
@@ -37,6 +48,44 @@ public sealed class StaffPatientApiClient : IStaffPatientApiClient
         return (await response.Content.ReadFromJsonAsync<PagedResponse<StaffPatientSummaryResponse>>(cancellationToken))
                ?? PagedResponse<StaffPatientSummaryResponse>.Create([], request.Page, request.PageSize, 0);
     }
+
+    public async Task<StaffPatientDetailResponse> GetByIdAsync(
+        Guid patientId,
+        bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default)
+    {
+        var client = _httpClientFactory.CreateClient("HealthCareApi");
+        var url = AppendBypass($"api/v1/staff/patients/{patientId:D}", platformAdminBypass);
+        using var response = await client.GetAsync(url, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await ApiProblemException.FromResponseAsync(response, cancellationToken);
+        }
+
+        return (await response.Content.ReadFromJsonAsync<StaffPatientDetailResponse>(cancellationToken))
+               ?? throw new ApiProblemException(500, "Invalid patient detail response", null, null);
+    }
+
+    public async Task<StaffPatientDetailResponse> UpdateClinicProfileAsync(
+        Guid patientId,
+        UpdateClinicPatientRequest request,
+        bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default)
+    {
+        var client = _httpClientFactory.CreateClient("HealthCareApi");
+        var url = AppendBypass($"api/v1/staff/patients/{patientId:D}/clinic-profile", platformAdminBypass);
+        using var response = await client.PatchAsJsonAsync(url, request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await ApiProblemException.FromResponseAsync(response, cancellationToken);
+        }
+
+        return (await response.Content.ReadFromJsonAsync<StaffPatientDetailResponse>(cancellationToken))
+               ?? throw new ApiProblemException(500, "Invalid clinic-profile update response", null, null);
+    }
+
+    private static string AppendBypass(string path, bool platformAdminBypass) =>
+        platformAdminBypass ? $"{path}?platformAdminBypass=true" : path;
 
     private static string BuildQuery(string path, StaffPatientSearchRequest request, bool platformAdminBypass)
     {

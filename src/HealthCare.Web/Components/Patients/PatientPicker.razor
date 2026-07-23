@@ -1,7 +1,7 @@
 @namespace HealthCare.Web.Components.Patients
 @implements IDisposable
 @using HealthCare.Contracts.Patients
-@using HealthCare.Web.Appointments
+@using HealthCare.Web.Patients
 @inject IStaffPatientApiClient PatientsApi
 @inject IPermissionState Permissions
 @inject ISnackbar Snackbar
@@ -146,7 +146,7 @@ else
         {
             if (version == _searchVersion)
             {
-                _error = AppointmentProblemMessages.ToUserMessage(ex);
+                _error = PatientProblemMessages.ToUserMessage(ex);
             }
 
             return [];
@@ -162,16 +162,8 @@ else
         }
     }
 
-    private static string FormatPatient(StaffPatientSummaryResponse? p)
-    {
-        if (p is null)
-        {
-            return string.Empty;
-        }
-
-        var name = $"{p.FirstName} {p.LastName}".Trim();
-        return $"{name} · {p.LocalPatientNumber} · {p.ClinicPatientStatus}";
-    }
+    private static string FormatPatient(StaffPatientSummaryResponse? p) =>
+        p is null ? string.Empty : PatientDisplay.PickerLabel(p);
 
     public void Dispose()
     {

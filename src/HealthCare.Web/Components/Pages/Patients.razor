@@ -1,0 +1,435 @@
+@page "/patients"
+@page "/patients/{PatientId:guid}"
+@attribute [Authorize]
+@using HealthCare.Contracts.Patients
+@using HealthCare.Web.Patients
+@using HealthCare.Web.Components.Patients
+@using HealthCare.Web.Components.Clinics
+@implements IDisposable
+@inject IStaffPatientApiClient PatientsApi
+@inject IPermissionState Permissions
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject IClinicDirectoryCache ClinicCache
+@inject IClinicDirectoryApiClient ClinicsApi
+@inject NavigationManager Navigation
+
+<PageTitle>Patients</PageTitle>
+
+@if (Permissions.IsPatientOnly)
+{
+    <MudAlert Severity="Severity.Error">Patient accounts cannot use the staff patient directory.</MudAlert>
+}
+else if (!Permissions.Has(WebPermissions.PatientsSearch))
+{
+    <MudAlert Severity="Severity.Error">You do not have permission to search patients.</MudAlert>
+}
+else
+{
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+        <MudText Typo="Typo.h4">Patient directory</MudText>
+        <MudStack Row="true" Spacing="2">
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FilterAltOff" OnClick="ResetFiltersAsync" Disabled="_loading">Clear filters</MudButton>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="RefreshClicked" Disabled="_loading">Refresh</MudButton>
+        </MudStack>
+    </MudStack>
+
+    <MudPaper Class="pa-4 mb-4" Outlined="true">
+        <MudGrid>
+            <MudItem xs="12" md="3">
+                <MudTextField @bind-Value="_search"
+                              Label="Search"
+                              Immediate="true"
+                              DebounceInterval="400"
+                              OnDebounceIntervalElapsed="OnSearchDebounced"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" md="2">
+                <MudTextField @bind-Value="_localNumber"
+                              Label="Local patient number"
+                              Immediate="true"
+                              DebounceInterval="400"
+                              OnDebounceIntervalElapsed="OnSearchDebounced"
+                              Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" md="2">
+                <MudSelect T="string" Value="_clinicPatientStatus" ValueChanged="OnClinicStatusChanged" Label="Enrollment status" Clearable="true" Variant="Variant.Outlined">
+                    @foreach (var status in PatientStatusPresentation.ClinicPatientStatuses)
+                    {
+                        <MudSelectItem Value="@status">@status</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="2">
+                <MudSelect T="string" Value="_patientActiveFilter" ValueChanged="OnPatientActiveChanged" Label="Patient status" Clearable="true" Variant="Variant.Outlined">
+                    <MudSelectItem Value="@("active")">Active</MudSelectItem>
+                    <MudSelectItem Value="@("inactive")">Inactive</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            @if (Permissions.CanFilterByClinic)
+            {
+                @if (Permissions.IsPlatformAdmin)
+                {
+                    <MudItem xs="12" md="3">
+                        <MudTextField @bind-Value="_platformOrgIdText"
+                                      Label="Organization ID (platform bypass)"
+                                      HelperText="Required with clinic filter for PLATFORM_ADMIN"
+                                      Variant="Variant.Outlined" />
+                    </MudItem>
+                }
+                <MudItem xs="12" md="3">
+                    <ClinicPicker Value="_clinicId"
+                                  ValueChanged="OnClinicFilterChanged"
+                                  Label="Clinic filter"
+                                  HelperText="Leave empty for all clinics in your organization"
+                                  AllowClear="true"
+                                  Required="false"
+                                  ActiveOnly="null"
+                                  PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
+                                  PlatformOrganizationId="_platformOrganizationId" />
+                </MudItem>
+            }
+            else if (Permissions.Has(WebPermissions.ClinicsRead))
+            {
+                <MudItem xs="12" md="3">
+                    <ClinicPicker Label="Clinic" AllowClear="false" Required="false" Disabled="true" />
+                </MudItem>
+            }
+            <MudItem xs="12" md="2">
+                <MudSelect T="string" @bind-Value="_sortBy" Label="Sort by" Variant="Variant.Outlined">
+                    <MudSelectItem Value="@("registeredAtUtc")">Enrollment date</MudSelectItem>
+                    <MudSelectItem Value="@("localPatientNumber")">Local number</MudSelectItem>
+                    <MudSelectItem Value="@("lastName")">Last name</MudSelectItem>
+                    <MudSelectItem Value="@("firstName")">First name</MudSelectItem>
+                    <MudSelectItem Value="@("clinicPatientStatus")">Enrollment status</MudSelectItem>
+                    <MudSelectItem Value="@("patientIsActive")">Patient status</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="2">
+                <MudSelect T="string" @bind-Value="_sortDirection" Label="Direction" Variant="Variant.Outlined">
+                    <MudSelectItem Value="@("desc")">Descending</MudSelectItem>
+                    <MudSelectItem Value="@("asc")">Ascending</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="2">
+                <MudSelect T="int" @bind-Value="_pageSize" Label="Page size" Variant="Variant.Outlined">
+                    <MudSelectItem Value="10">10</MudSelectItem>
+                    <MudSelectItem Value="20">20</MudSelectItem>
+                    <MudSelectItem Value="50">50</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="2" Class="d-flex align-end">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ApplyFiltersAsync" FullWidth="true">Apply</MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
+    }
+
+    <MudTable Items="_items"
+              Hover="true"
+              Loading="_loading"
+              LoadingProgressColor="Color.Primary"
+              Breakpoint="Breakpoint.Sm"
+              Dense="true"
+              T="StaffPatientSummaryResponse">
+        <HeaderContent>
+            <MudTh>Local #</MudTh>
+            <MudTh>Name</MudTh>
+            <MudTh>Gender</MudTh>
+            <MudTh>DOB</MudTh>
+            <MudTh>Mobile</MudTh>
+            <MudTh>Enrollment</MudTh>
+            <MudTh>Patient</MudTh>
+            <MudTh>Clinic</MudTh>
+            <MudTh>Enrolled</MudTh>
+            <MudTh Style="text-align:right">Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Local #">@context.LocalPatientNumber</MudTd>
+            <MudTd DataLabel="Name">@PatientDisplay.FullName(context)</MudTd>
+            <MudTd DataLabel="Gender">@(context.Gender ?? "—")</MudTd>
+            <MudTd DataLabel="DOB">@(context.DateOfBirth?.ToString("yyyy-MM-dd") ?? "—")</MudTd>
+            <MudTd DataLabel="Mobile">@PatientDisplay.MaskMobile(context.MobileNumber)</MudTd>
+            <MudTd DataLabel="Enrollment">
+                <MudChip T="string" Size="Size.Small" Color="@PatientStatusPresentation.ClinicPatientColor(context.ClinicPatientStatus)">
+                    @PatientStatusPresentation.ClinicPatientLabel(context.ClinicPatientStatus)
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Patient">
+                <MudChip T="string" Size="Size.Small" Color="@PatientStatusPresentation.PatientActiveColor(context.PatientIsActive)">
+                    @PatientStatusPresentation.PatientActiveLabel(context.PatientIsActive)
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Clinic">@ClinicLabel(context.ClinicId)</MudTd>
+            <MudTd DataLabel="Enrolled">@context.RegisteredAtUtc.UtcDateTime.ToString("yyyy-MM-dd")</MudTd>
+            <MudTd DataLabel="Actions" Style="text-align:right">
+                @if (Permissions.Has(WebPermissions.PatientsRead))
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Visibility" aria-label="Details" OnClick="@(() => OpenDetailAsync(context.PatientId))" />
+                }
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText>No patients match the current filters.</MudText>
+        </NoRecordsContent>
+        <PagerContent>
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="pa-2">
+                <MudText Typo="Typo.caption">Total: @_totalCount</MudText>
+                <MudPagination Count="@_pageCount" Selected="_page" SelectedChanged="OnPageChanged" />
+            </MudStack>
+        </PagerContent>
+    </MudTable>
+}
+
+@code {
+    [Parameter]
+    public Guid? PatientId { get; set; }
+
+    private readonly List<StaffPatientSummaryResponse> _items = [];
+    private readonly Dictionary<Guid, string> _clinicLabels = new();
+    private CancellationTokenSource? _loadCts;
+    private int _loadVersion;
+    private bool _loading;
+    private string? _error;
+    private string? _search;
+    private string? _localNumber;
+    private string? _clinicPatientStatus;
+    private string? _patientActiveFilter;
+    private Guid? _clinicId;
+    private string _sortBy = "registeredAtUtc";
+    private string _sortDirection = "desc";
+    private int _page = 1;
+    private int _pageSize = 20;
+    private int _totalCount;
+    private int _pageCount = 1;
+    private string? _platformOrgIdText;
+    private Guid? _platformOrganizationId;
+    private bool _disposed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Permissions.IsPatientOnly || !Permissions.Has(WebPermissions.PatientsSearch))
+        {
+            return;
+        }
+
+        await LoadAsync();
+
+        if (PatientId is Guid id && Permissions.Has(WebPermissions.PatientsRead))
+        {
+            await OpenDetailAsync(id);
+        }
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        _loadCts?.Cancel();
+        _loadCts?.Dispose();
+        _items.Clear();
+        _clinicLabels.Clear();
+    }
+
+    private async Task OnSearchDebounced(string _)
+    {
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task OnClinicStatusChanged(string? value)
+    {
+        _clinicPatientStatus = value;
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task OnPatientActiveChanged(string? value)
+    {
+        _patientActiveFilter = value;
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task OnClinicFilterChanged(Guid? clinicId)
+    {
+        _clinicId = clinicId;
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task ResetFiltersAsync()
+    {
+        _search = null;
+        _localNumber = null;
+        _clinicPatientStatus = null;
+        _patientActiveFilter = null;
+        if (Permissions.CanFilterByClinic)
+        {
+            _clinicId = null;
+        }
+
+        _sortBy = "registeredAtUtc";
+        _sortDirection = "desc";
+        _page = 1;
+        _pageSize = 20;
+        await LoadAsync();
+    }
+
+    private async Task RefreshClicked() => await LoadAsync();
+
+    private async Task OnPageChanged(int page)
+    {
+        _page = page;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_disposed || !Permissions.Has(WebPermissions.PatientsSearch))
+        {
+            return;
+        }
+
+        if (Guid.TryParse(_platformOrgIdText, out var orgId))
+        {
+            _platformOrganizationId = orgId;
+        }
+        else
+        {
+            _platformOrganizationId = null;
+        }
+
+        _loadCts?.Cancel();
+        _loadCts?.Dispose();
+        _loadCts = new CancellationTokenSource();
+        var cts = _loadCts;
+        var version = Interlocked.Increment(ref _loadVersion);
+
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            bool? patientActive = _patientActiveFilter switch
+            {
+                "active" => true,
+                "inactive" => false,
+                _ => null,
+            };
+
+            var query = StaffPatientSearchQueryBuilder.Build(
+                _search,
+                _localNumber,
+                patientActive,
+                _clinicPatientStatus,
+                Permissions.CanFilterByClinic ? _clinicId : null,
+                _page,
+                _pageSize,
+                _sortBy,
+                _sortDirection);
+
+            var result = await PatientsApi.SearchAsync(query, Permissions.IsPlatformAdmin, cts.Token);
+            if (version != _loadVersion || _disposed)
+            {
+                return;
+            }
+
+            _items.Clear();
+            _items.AddRange(result.Items);
+            _totalCount = result.TotalCount;
+            _pageCount = Math.Max(1, (int)Math.Ceiling(_totalCount / (double)_pageSize));
+            await PrefetchClinicLabelsAsync(_items.Select(i => i.ClinicId).Distinct(), cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // stale
+        }
+        catch (ApiProblemException ex)
+        {
+            if (version == _loadVersion && !_disposed)
+            {
+                _error = PatientProblemMessages.ToUserMessage(ex);
+                _items.Clear();
+            }
+        }
+        finally
+        {
+            if (version == _loadVersion)
+            {
+                _loading = false;
+            }
+        }
+    }
+
+    private async Task PrefetchClinicLabelsAsync(IEnumerable<Guid> clinicIds, CancellationToken token)
+    {
+        foreach (var clinicId in clinicIds)
+        {
+            if (_clinicLabels.ContainsKey(clinicId))
+            {
+                continue;
+            }
+
+            try
+            {
+                if (ClinicCache.TryGet(clinicId, out var cached) && cached is not null)
+                {
+                    _clinicLabels[clinicId] = cached.Name;
+                    continue;
+                }
+
+                var detail = await ClinicsApi.GetByIdAsync(clinicId, Permissions.IsPlatformAdmin, token);
+                ClinicCache.Set(detail);
+                _clinicLabels[clinicId] = detail.Name;
+            }
+            catch
+            {
+                _clinicLabels[clinicId] = clinicId.ToString("D")[..8] + "…";
+            }
+        }
+    }
+
+    private string ClinicLabel(Guid clinicId) =>
+        _clinicLabels.TryGetValue(clinicId, out var name) ? name : "—";
+
+    private async Task OpenDetailAsync(Guid patientId)
+    {
+        if (!Permissions.Has(WebPermissions.PatientsRead))
+        {
+            Snackbar.Add("You do not have permission to view patient details.", Severity.Warning);
+            return;
+        }
+
+        var parameters = new DialogParameters<PatientDetailDialog>
+        {
+            { x => x.PatientId, patientId },
+            { x => x.PlatformAdminBypass, Permissions.IsPlatformAdmin },
+        };
+        var dialog = await DialogService.ShowAsync<PatientDetailDialog>(
+            "Patient",
+            parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+
+        if (PatientId is not null)
+        {
+            Navigation.NavigateTo("/patients", replace: true);
+        }
+    }
+}

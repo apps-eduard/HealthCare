@@ -84,6 +84,7 @@ dotnet run --project src/HealthCare.Web --launch-profile http
 - Appointments: `/appointments` (queue) and `/appointments/calendar` (day/week). Uses `appointments.*` / `availability.read` / `patients.search` permissions from `/auth/me`. Create flow uses `PatientPicker` + clinic doctors + available slots. Times display in the clinic `TimeZoneId` (API UTC). Mutations send `ExpectedVersion`.
 - Auth: anonymous requests to protected pages challenge to `/login?returnUrl=...` (no 500). Staff Web uses an HttpOnly session cookie for host authentication (minimal claims; no API tokens). API access/refresh tokens remain in `ProtectedSessionStorage` (MVP). Prefer a full BFF cookie session before production hardening.
 - Return URLs are validated as local paths only (`SafeReturnUrl`); external/`//` URLs fall back to `/dashboard`.
+- Patients: `/patients` directory (requires `patients.search`). Detail and ClinicPatient status update require `patients.read` / `patients.update_clinic_status`. Uses typed `IStaffPatientApiClient`.
 
 ### 6. Build and test
 

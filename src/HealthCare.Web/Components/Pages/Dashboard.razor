@@ -36,6 +36,12 @@ else
                 Appointments
             </MudButton>
         }
+        @if (Permissions.Has(WebPermissions.PatientsSearch))
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/patients" StartIcon="@Icons.Material.Filled.People">
+                Patients
+            </MudButton>
+        }
         @if (Permissions.Has(WebPermissions.StaffRead))
         {
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/staff" StartIcon="@Icons.Material.Filled.Groups">

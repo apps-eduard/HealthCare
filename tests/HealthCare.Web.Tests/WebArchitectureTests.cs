@@ -3,6 +3,7 @@ using FluentAssertions;
 using HealthCare.Contracts.Identity;
 using HealthCare.Web.Appointments;
 using HealthCare.Web.Auth;
+using HealthCare.Web.Patients;
 using HealthCare.Web.Services;
 
 namespace HealthCare.Web.Tests;
@@ -55,6 +56,16 @@ public sealed class WebArchitectureTests
         typeof(IAppointmentApiClient).GetMethod(nameof(IAppointmentApiClient.RescheduleAsync)).Should().NotBeNull();
         typeof(IAppointmentApiClient).GetMethod(nameof(IAppointmentApiClient.GetAvailableSlotsAsync)).Should().NotBeNull();
         typeof(IStaffPatientApiClient).GetMethod(nameof(IStaffPatientApiClient.SearchAsync)).Should().NotBeNull();
+        typeof(IStaffPatientApiClient).GetMethod(nameof(IStaffPatientApiClient.GetByIdAsync)).Should().NotBeNull();
+        typeof(IStaffPatientApiClient).GetMethod(nameof(IStaffPatientApiClient.UpdateClinicProfileAsync)).Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Patient_Status_Presentation_Is_Centralized()
+    {
+        typeof(PatientStatusPresentation).Namespace.Should().Be("HealthCare.Web.Patients");
+        typeof(PatientDisplay).Namespace.Should().Be("HealthCare.Web.Patients");
+        typeof(StaffPatientSearchQueryBuilder).Namespace.Should().Be("HealthCare.Web.Patients");
     }
 
     [Fact]

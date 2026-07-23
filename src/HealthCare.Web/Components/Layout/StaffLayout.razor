@@ -26,6 +26,10 @@
             {
                 <MudNavLink Href="/appointments" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Event">Appointments</MudNavLink>
             }
+            @if (Permissions.Has(WebPermissions.PatientsSearch))
+            {
+                <MudNavLink Href="/patients" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.People">Patients</MudNavLink>
+            }
             @if (Permissions.Has(WebPermissions.StaffRead))
             {
                 <MudNavLink Href="/staff" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Groups">Staff Management</MudNavLink>
