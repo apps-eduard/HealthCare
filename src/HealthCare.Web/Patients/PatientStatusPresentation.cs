@@ -1,6 +1,6 @@
 using HealthCare.Contracts.Patients;
+using HealthCare.Web.Design;
 using HealthCare.Web.Services;
-using MudBlazor;
 
 namespace HealthCare.Web.Patients;
 
@@ -14,19 +14,19 @@ public static class PatientStatusPresentation
     public static string ClinicPatientLabel(string? status) =>
         string.IsNullOrWhiteSpace(status) ? "Unknown" : status.Trim();
 
-    public static Color ClinicPatientColor(string? status) =>
+    public static StatusTone ClinicPatientTone(string? status) =>
         status switch
         {
-            "Active" => Color.Success,
-            "Inactive" => Color.Default,
-            _ => Color.Warning,
+            "Active" => StatusTone.Success,
+            "Inactive" => StatusTone.Default,
+            _ => StatusTone.Warning,
         };
 
     public static string PatientActiveLabel(bool isActive) =>
         isActive ? "Active" : "Inactive";
 
-    public static Color PatientActiveColor(bool isActive) =>
-        isActive ? Color.Success : Color.Default;
+    public static StatusTone PatientActiveTone(bool isActive) =>
+        isActive ? StatusTone.Success : StatusTone.Default;
 }
 
 /// <summary>

@@ -3,8 +3,8 @@ using HealthCare.Contracts.Appointments;
 using HealthCare.Contracts.Identity;
 using HealthCare.Web.Appointments;
 using HealthCare.Web.Auth;
+using HealthCare.Web.Design;
 using HealthCare.Web.Services;
-using MudBlazor;
 
 namespace HealthCare.Web.Tests;
 
@@ -104,16 +104,16 @@ public sealed class AppointmentSupportTests
     }
 
     [Theory]
-    [InlineData("Requested", nameof(Color.Warning))]
-    [InlineData("Confirmed", nameof(Color.Info))]
-    [InlineData("CheckedIn", nameof(Color.Primary))]
-    [InlineData("Completed", nameof(Color.Success))]
-    [InlineData("NoShow", nameof(Color.Dark))]
-    [InlineData("CancelledByClinic", nameof(Color.Default))]
-    public void Status_Chips_Map_Correctly(string status, string expectedColorName)
+    [InlineData("Requested", nameof(StatusTone.Warning))]
+    [InlineData("Confirmed", nameof(StatusTone.Info))]
+    [InlineData("CheckedIn", nameof(StatusTone.Primary))]
+    [InlineData("Completed", nameof(StatusTone.Success))]
+    [InlineData("NoShow", nameof(StatusTone.Neutral))]
+    [InlineData("CancelledByClinic", nameof(StatusTone.Default))]
+    public void Status_Chips_Map_Correctly(string status, string expectedToneName)
     {
         AppointmentStatusPresentation.DisplayLabel(status).Should().Be(status);
-        AppointmentStatusPresentation.ChipColor(status).ToString().Should().Be(expectedColorName);
+        AppointmentStatusPresentation.ChipTone(status).ToString().Should().Be(expectedToneName);
     }
 
     [Fact]

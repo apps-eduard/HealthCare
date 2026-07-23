@@ -6,42 +6,40 @@
 
 @if (Permissions.IsPlatformAdmin)
 {
-    <MudAlert Severity="Severity.Warning" Variant="Variant.Filled" Dense="true" Class="mb-4" Elevation="0">
-        <MudStack Spacing="1">
-            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-                <MudText Typo="Typo.subtitle2">
-                    Platform context:
-                    @(PlatformTenant.HasOrganization
-                        ? $"{PlatformTenant.SelectedOrganizationName}{(PlatformTenant.HasClinic ? $" / {PlatformTenant.SelectedClinicName ?? PlatformTenant.SelectedClinicId.ToString()}" : string.Empty)}"
-                        : "(none selected)")
-                </MudText>
-                <MudStack Row="true" Spacing="1">
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Inherit" OnClick="OpenSelectOrganizationAsync">
-                        @(PlatformTenant.HasOrganization ? "Change organization" : "Select organization")
-                    </MudButton>
-                    @if (PlatformTenant.HasOrganization)
+    <div class="hc-banner">
+        <div class="hc-banner-row">
+            <strong>
+                Platform context:
+                @(PlatformTenant.HasOrganization
+                    ? $"{PlatformTenant.SelectedOrganizationName}{(PlatformTenant.HasClinic ? $" / {PlatformTenant.SelectedClinicName ?? PlatformTenant.SelectedClinicId.ToString()}" : string.Empty)}"
+                    : "(none selected)")
+            </strong>
+            <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="4" Wrap="true">
+                <FluentButton Appearance="Appearance.Outline" OnClick="OpenSelectOrganizationAsync">
+                    @(PlatformTenant.HasOrganization ? "Change organization" : "Select organization")
+                </FluentButton>
+                @if (PlatformTenant.HasOrganization)
+                {
+                    <FluentButton Appearance="Appearance.Outline" OnClick="OpenSelectClinicAsync">
+                        @(PlatformTenant.HasClinic ? "Change clinic" : "Select clinic")
+                    </FluentButton>
+                    @if (PlatformTenant.HasClinic)
                     {
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Inherit" OnClick="OpenSelectClinicAsync">
-                            @(PlatformTenant.HasClinic ? "Change clinic" : "Select clinic")
-                        </MudButton>
-                        @if (PlatformTenant.HasClinic)
-                        {
-                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Inherit" OnClick="ClearClinic">Clear clinic</MudButton>
-                        }
-                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Inherit" OnClick="ClearOrganization">Clear organization</MudButton>
+                        <FluentButton Appearance="Appearance.Lightweight" OnClick="ClearClinic">Clear clinic</FluentButton>
                     }
-                </MudStack>
-            </MudStack>
-            <MudText Typo="Typo.caption">
-                Elevated platform access. Selection is a usability aid only — API authorization and explicit bypass remain required.
-                Medical notes stay denied for PLATFORM_ADMIN.
-            </MudText>
-            @if (!PlatformTenant.HasOrganization)
-            {
-                <MudText Typo="Typo.caption">Select an organization before using staff, appointments, patients, or availability pages.</MudText>
-            }
-        </MudStack>
-    </MudAlert>
+                    <FluentButton Appearance="Appearance.Lightweight" OnClick="ClearOrganization">Clear organization</FluentButton>
+                }
+            </FluentStack>
+        </div>
+        <p class="hc-caption" style="margin:0.5rem 0 0;">
+            Elevated platform access. Selection is a usability aid only — API authorization and explicit bypass remain required.
+            Medical notes stay denied for PLATFORM_ADMIN.
+        </p>
+        @if (!PlatformTenant.HasOrganization)
+        {
+            <p class="hc-caption" style="margin:0.35rem 0 0;">Select an organization before using staff, appointments, patients, or availability pages.</p>
+        }
+    </div>
 }
 
 @code {
@@ -65,8 +63,13 @@
 
     private async Task OpenSelectOrganizationAsync()
     {
-        var parameters = new DialogParameters<PlatformOrganizationSelectDialog>();
-        await DialogService.ShowAsync<PlatformOrganizationSelectDialog>("Select organization", parameters);
+        await DialogService.ShowDialogAsync<PlatformOrganizationSelectDialog>(new DialogParameters
+        {
+            Title = "Select organization",
+            Width = "480px",
+            PrimaryAction = null,
+            SecondaryAction = null,
+        });
     }
 
     private async Task OpenSelectClinicAsync()
@@ -76,7 +79,12 @@
             return;
         }
 
-        var parameters = new DialogParameters<PlatformClinicSelectDialog>();
-        await DialogService.ShowAsync<PlatformClinicSelectDialog>("Select clinic", parameters);
+        await DialogService.ShowDialogAsync<PlatformClinicSelectDialog>(new DialogParameters
+        {
+            Title = "Select clinic",
+            Width = "480px",
+            PrimaryAction = null,
+            SecondaryAction = null,
+        });
     }
 }

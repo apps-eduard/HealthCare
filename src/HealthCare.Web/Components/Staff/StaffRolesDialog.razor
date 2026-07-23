@@ -1,60 +1,60 @@
+@implements IDialogContentComponent<StaffRolesDialog.Args>
 @inject IStaffManagementApiClient StaffApi
 @inject IPermissionState Permissions
 
-<MudDialog>
-    <DialogContent>
-        <MudText Class="mb-2">Update role for <b>@DisplayName</b></MudText>
-        <MudText Typo="Typo.caption" Class="mb-3">Current role: @CurrentRole</MudText>
+<p style="margin-top:0">Update role for <b>@Content.DisplayName</b></p>
+<div class="hc-caption" style="margin-bottom:0.75rem;">Current role: @Content.CurrentRole</div>
 
-        @if (_loading)
+@if (_loading)
+{
+    <PageLoading />
+}
+else
+{
+    <FluentSelect TOption="string"
+                  Label="Assignable role"
+                  @bind-Value="_selectedRole"
+                  Disabled="_busy"
+                  Style="width:100%;">
+        @foreach (var role in _roles.Where(r => r.AssignableByCurrentUser))
         {
-            <MudProgressCircular Indeterminate="true" />
+            <FluentOption Value="@role.Name">@role.DisplayLabel</FluentOption>
         }
-        else
-        {
-            <MudSelect T="string" @bind-Value="_selectedRole" Label="Assignable role" Disabled="_busy">
-                @foreach (var role in _roles.Where(r => r.AssignableByCurrentUser))
-                {
-                    <MudSelectItem Value="@role.Name">@role.DisplayLabel</MudSelectItem>
-                }
-            </MudSelect>
+    </FluentSelect>
 
-            @if (_roles.Any(r => !r.AssignableByCurrentUser))
-            {
-                <MudText Typo="Typo.caption" Class="mt-2 mud-text-secondary">
-                    Not assignable: @string.Join(", ", _roles.Where(r => !r.AssignableByCurrentUser).Select(r => r.DisplayLabel))
-                </MudText>
-            }
-        }
+    @if (_roles.Any(r => !r.AssignableByCurrentUser))
+    {
+        <div class="hc-caption" style="margin-top:0.5rem;">
+            Not assignable: @string.Join(", ", _roles.Where(r => !r.AssignableByCurrentUser).Select(r => r.DisplayLabel))
+        </div>
+    }
+}
 
-        @if (!string.IsNullOrWhiteSpace(_error))
-        {
-            <MudAlert Severity="Severity.Error" Class="mt-3" Dense="true">@_error</MudAlert>
-        }
-    </DialogContent>
-    <DialogActions>
-        <MudButton OnClick="Cancel" Disabled="_busy">Cancel</MudButton>
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync" Disabled="_busy || string.IsNullOrWhiteSpace(_selectedRole)">
-            Assign role
-        </MudButton>
-    </DialogActions>
-</MudDialog>
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false" Style="margin-top:0.75rem;">@_error</FluentMessageBar>
+}
+<FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Style="margin-top:1rem;justify-content:flex-end;">
+    <FluentButton Appearance="Appearance.Outline" OnClick="CancelAsync" Disabled="_busy">Cancel</FluentButton>
+    <FluentButton Appearance="Appearance.Accent" OnClick="SubmitAsync" Disabled="_busy || string.IsNullOrWhiteSpace(_selectedRole)">
+        Assign role
+    </FluentButton>
+</FluentStack>
 
 @code {
+    public sealed class Args
+    {
+        public Guid StaffMemberId { get; init; }
+        public Guid TargetUserId { get; init; }
+        public string CurrentRole { get; init; } = string.Empty;
+        public string DisplayName { get; init; } = string.Empty;
+    }
+
+    [Parameter]
+    public Args Content { get; set; } = default!;
+
     [CascadingParameter]
-    private IMudDialogInstance MudDialog { get; set; } = default!;
-
-    [Parameter]
-    public Guid StaffMemberId { get; set; }
-
-    [Parameter]
-    public Guid TargetUserId { get; set; }
-
-    [Parameter]
-    public string CurrentRole { get; set; } = string.Empty;
-
-    [Parameter]
-    public string DisplayName { get; set; } = string.Empty;
+    private FluentDialog Dialog { get; set; } = default!;
 
     private List<StaffRoleInfoResponse> _roles = [];
     private string? _selectedRole;
@@ -74,7 +74,7 @@
         try
         {
             _roles = (await StaffApi.ListRolesAsync()).ToList();
-            _selectedRole = _roles.FirstOrDefault(r => r.AssignableByCurrentUser && r.Name != CurrentRole)?.Name
+            _selectedRole = _roles.FirstOrDefault(r => r.AssignableByCurrentUser && r.Name != Content.CurrentRole)?.Name
                             ?? _roles.FirstOrDefault(r => r.AssignableByCurrentUser)?.Name;
         }
         catch (ApiProblemException ex)
@@ -87,7 +87,7 @@
         }
     }
 
-    private void Cancel() => MudDialog.Cancel();
+    private async Task CancelAsync() => await Dialog.CancelAsync();
 
     private async Task SubmitAsync()
     {
@@ -97,9 +97,9 @@
             return;
         }
 
-        if (string.Equals(_selectedRole, CurrentRole, StringComparison.Ordinal))
+        if (string.Equals(_selectedRole, Content.CurrentRole, StringComparison.Ordinal))
         {
-            MudDialog.Close(DialogResult.Ok(true));
+            await Dialog.CloseAsync(DialogResult.Ok(true));
             return;
         }
 
@@ -108,8 +108,8 @@
         try
         {
             var bypass = Permissions.CurrentUser?.Roles.Contains(WebRoles.PlatformAdmin, StringComparer.Ordinal) == true;
-            await StaffApi.AssignRoleAsync(StaffMemberId, _selectedRole, bypass);
-            MudDialog.Close(DialogResult.Ok(true));
+            await StaffApi.AssignRoleAsync(Content.StaffMemberId, _selectedRole, bypass);
+            await Dialog.CloseAsync(DialogResult.Ok(true));
         }
         catch (ApiProblemException ex)
         {

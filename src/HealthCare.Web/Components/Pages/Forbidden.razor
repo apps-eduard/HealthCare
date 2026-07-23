@@ -3,23 +3,23 @@
 
 <PageTitle>Access denied</PageTitle>
 
-<MudPaper Class="pa-8 ma-4" Elevation="0">
-    <MudText Typo="Typo.h4" GutterBottom="true">Access denied</MudText>
-    <MudText Typo="Typo.body1" Class="mb-4">
+<FluentCard Class="hc-card" Style="margin:1rem;padding:2rem;">
+    <h1 class="hc-page-title">Access denied</h1>
+    <p class="hc-page-subtitle" style="margin-bottom:1rem;">
         You do not have permission to view this page.
-    </MudText>
+    </p>
     @if (Permissions.IsPatientOnly)
     {
-        <MudAlert Severity="Severity.Warning" Class="mb-4">
+        <FluentMessageBar Intent="MessageIntent.Warning" AllowDismiss="false" Class="mb-4">
             Patient accounts cannot use the staff application.
-        </MudAlert>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SignOutAsync">Sign out</MudButton>
+        </FluentMessageBar>
+        <FluentButton Appearance="Appearance.Accent" OnClick="SignOutAsync">Sign out</FluentButton>
     }
     else
     {
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/dashboard">Back to dashboard</MudButton>
+        <FluentButton Appearance="Appearance.Accent" Href="/dashboard">Back to dashboard</FluentButton>
     }
-</MudPaper>
+</FluentCard>
 
 @code {
     [Inject]

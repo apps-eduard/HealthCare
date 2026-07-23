@@ -1,49 +1,42 @@
+@implements IDialogContentComponent<StaffActivationDialog.Args>
 @inject IStaffManagementApiClient StaffApi
 @inject IPermissionState Permissions
 
-<MudDialog>
-    <DialogContent>
-        <MudText Class="mb-3">
-            @(Activate ? "Activate" : "Deactivate") <b>@DisplayName</b>?
-        </MudText>
-        <MudTextField @bind-Value="_reason" Label="Administrative reason (optional)" Disabled="_busy" />
-        @if (!string.IsNullOrWhiteSpace(_error))
-        {
-            <MudAlert Severity="Severity.Error" Class="mt-3" Dense="true">@_error</MudAlert>
-        }
-    </DialogContent>
-    <DialogActions>
-        <MudButton OnClick="Cancel" Disabled="_busy">Cancel</MudButton>
-        <MudButton Color="@(Activate ? Color.Success : Color.Warning)"
-                   Variant="Variant.Filled"
-                   OnClick="SubmitAsync"
-                   Disabled="_busy">
-            @(Activate ? "Activate" : "Deactivate")
-        </MudButton>
-    </DialogActions>
-</MudDialog>
+<p style="margin-top:0">
+    @(Content.Activate ? "Activate" : "Deactivate") <b>@Content.DisplayName</b>?
+</p>
+<FluentTextField @bind-Value="_reason" Label="Administrative reason (optional)" Disabled="_busy" Style="width:100%;" />
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false" Style="margin-top:0.75rem;">@_error</FluentMessageBar>
+}
+<FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Style="margin-top:1rem;justify-content:flex-end;">
+    <FluentButton Appearance="Appearance.Outline" OnClick="CancelAsync" Disabled="_busy">Cancel</FluentButton>
+    <FluentButton Appearance="Appearance.Accent" OnClick="SubmitAsync" Disabled="_busy">
+        @(Content.Activate ? "Activate" : "Deactivate")
+    </FluentButton>
+</FluentStack>
 
 @code {
+    public sealed class Args
+    {
+        public Guid StaffMemberId { get; init; }
+        public int ExpectedVersion { get; init; }
+        public bool Activate { get; init; }
+        public string DisplayName { get; init; } = string.Empty;
+    }
+
+    [Parameter]
+    public Args Content { get; set; } = default!;
+
     [CascadingParameter]
-    private IMudDialogInstance MudDialog { get; set; } = default!;
-
-    [Parameter]
-    public Guid StaffMemberId { get; set; }
-
-    [Parameter]
-    public int ExpectedVersion { get; set; }
-
-    [Parameter]
-    public bool Activate { get; set; }
-
-    [Parameter]
-    public string DisplayName { get; set; } = string.Empty;
+    private FluentDialog Dialog { get; set; } = default!;
 
     private string? _reason;
     private string? _error;
     private bool _busy;
 
-    private void Cancel() => MudDialog.Cancel();
+    private async Task CancelAsync() => await Dialog.CancelAsync();
 
     private async Task SubmitAsync()
     {
@@ -54,20 +47,20 @@
             var bypass = Permissions.CurrentUser?.Roles.Contains(WebRoles.PlatformAdmin, StringComparer.Ordinal) == true;
             var request = new StaffActivationRequest
             {
-                ExpectedVersion = ExpectedVersion,
+                ExpectedVersion = Content.ExpectedVersion,
                 Reason = string.IsNullOrWhiteSpace(_reason) ? null : _reason.Trim(),
             };
 
-            if (Activate)
+            if (Content.Activate)
             {
-                await StaffApi.ActivateAsync(StaffMemberId, request, bypass);
+                await StaffApi.ActivateAsync(Content.StaffMemberId, request, bypass);
             }
             else
             {
-                await StaffApi.DeactivateAsync(StaffMemberId, request, bypass);
+                await StaffApi.DeactivateAsync(Content.StaffMemberId, request, bypass);
             }
 
-            MudDialog.Close(DialogResult.Ok(true));
+            await Dialog.CloseAsync(DialogResult.Ok(true));
         }
         catch (ApiProblemException ex)
         {

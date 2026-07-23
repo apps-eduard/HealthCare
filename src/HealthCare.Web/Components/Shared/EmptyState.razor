@@ -1,0 +1,21 @@
+@namespace HealthCare.Web.Components.Shared
+
+<div class="hc-state">
+    <h2 class="hc-state-title">@(string.IsNullOrWhiteSpace(Title) ? "Nothing here yet" : Title)</h2>
+    @if (!string.IsNullOrWhiteSpace(Message))
+    {
+        <p class="hc-state-body">@Message</p>
+    }
+    @ChildContent
+</div>
+
+@code {
+    [Parameter]
+    public string? Title { get; set; }
+
+    [Parameter]
+    public string? Message { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

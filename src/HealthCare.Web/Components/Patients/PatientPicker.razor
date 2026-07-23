@@ -4,68 +4,79 @@
 @using HealthCare.Web.Patients
 @inject IStaffPatientApiClient PatientsApi
 @inject IPermissionState Permissions
-@inject ISnackbar Snackbar
 
 @if (!Permissions.Has(WebPermissions.PatientsSearch))
 {
-    <MudAlert Severity="Severity.Warning" Dense="true">Patient search permission is required.</MudAlert>
+    <FluentMessageBar Intent="MessageIntent.Warning" AllowDismiss="false">Patient search permission is required.</FluentMessageBar>
 }
 else
 {
-    <MudAutocomplete T="StaffPatientSummaryResponse"
-                     Label="@Label"
-                     Value="_selected"
-                     ValueChanged="OnValueChanged"
-                     SearchFunc="SearchPatientsAsync"
-                     ToStringFunc="FormatPatient"
-                     Dense="true"
-                     Clearable="true"
-                     Disabled="@Disabled"
-                     Required="@Required"
-                     RequiredError="Patient is required"
-                     HelperText="@HelperText"
-                     MaxItems="20"
-                     DebounceInterval="400"
-                     ShowProgressIndicator="true"
-                     Variant="Variant.Outlined"
-                     ResetValueOnEmptyText="true" />
-
-    @if (!string.IsNullOrWhiteSpace(_error))
-    {
-        <MudAlert Severity="Severity.Error" Dense="true" Class="mt-1">@_error</MudAlert>
-    }
+    <div class="hc-picker">
+        <FluentTextField Value="@_searchText"
+                         ValueChanged="OnSearchTextChanged"
+                         Label="@Label"
+                         Placeholder="Type to search…"
+                         Disabled="@Disabled"
+                         Required="@Required"
+                         Style="width:100%;" />
+        @if (_selected is not null)
+        {
+            <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" VerticalAlignment="VerticalAlignment.Center" Style="margin-top:0.35rem;">
+                <span class="hc-caption">Selected: @FormatPatient(_selected)</span>
+                @if (!Disabled)
+                {
+                    <FluentButton Appearance="Appearance.Lightweight" OnClick="ClearAsync">Clear</FluentButton>
+                }
+            </FluentStack>
+        }
+        @if (_showResults && !Disabled)
+        {
+            <div class="hc-picker-results" role="listbox">
+                @if (_searching)
+                {
+                    <div class="hc-caption" style="padding:0.5rem 0.75rem;">Searching…</div>
+                }
+                else if (_results.Count == 0)
+                {
+                    <div class="hc-caption" style="padding:0.5rem 0.75rem;">No patients matched.</div>
+                }
+                else
+                {
+                    @foreach (var item in _results)
+                    {
+                        <button type="button" class="hc-picker-item" @onclick="(() => SelectAsync(item))">@FormatPatient(item)</button>
+                    }
+                }
+            </div>
+        }
+        @if (!string.IsNullOrWhiteSpace(HelperText))
+        {
+            <div class="hc-caption" style="margin-top:0.35rem;">@HelperText</div>
+        }
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false" Style="margin-top:0.35rem;">@_error</FluentMessageBar>
+        }
+    </div>
 }
 
 @code {
-    [Parameter]
-    public Guid? Value { get; set; }
-
-    [Parameter]
-    public EventCallback<Guid?> ValueChanged { get; set; }
-
-    [Parameter]
-    public EventCallback<StaffPatientSummaryResponse?> SelectedPatientChanged { get; set; }
-
-    [Parameter]
-    public string Label { get; set; } = "Patient";
-
-    [Parameter]
-    public string? HelperText { get; set; } = "Search by name or local patient number";
-
-    [Parameter]
-    public bool Required { get; set; }
-
-    [Parameter]
-    public bool Disabled { get; set; }
-
-    [Parameter]
-    public Guid? ClinicId { get; set; }
-
-    [Parameter]
-    public bool PlatformAdminBypass { get; set; }
+    [Parameter] public Guid? Value { get; set; }
+    [Parameter] public EventCallback<Guid?> ValueChanged { get; set; }
+    [Parameter] public EventCallback<StaffPatientSummaryResponse?> SelectedPatientChanged { get; set; }
+    [Parameter] public string Label { get; set; } = "Patient";
+    [Parameter] public string? HelperText { get; set; } = "Search by name or local patient number";
+    [Parameter] public bool Required { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public Guid? ClinicId { get; set; }
+    [Parameter] public bool PlatformAdminBypass { get; set; }
 
     private StaffPatientSummaryResponse? _selected;
+    private List<StaffPatientSummaryResponse> _results = [];
+    private string _searchText = string.Empty;
     private string? _error;
+    private bool _showResults;
+    private bool _searching;
     private CancellationTokenSource? _searchCts;
     private int _searchVersion;
 
@@ -77,7 +88,6 @@ else
         }
         else if (_selected?.PatientId != Value)
         {
-            // Value set externally without picker selection — clear display to avoid stale name.
             if (_selected is null || _selected.PatientId != Value)
             {
                 _selected = null;
@@ -85,27 +95,25 @@ else
         }
     }
 
-    private async Task OnValueChanged(StaffPatientSummaryResponse? patient)
+    private async Task OnSearchTextChanged(string? value)
     {
-        _selected = patient;
-        var id = patient?.PatientId;
-        await ValueChanged.InvokeAsync(id);
-        await SelectedPatientChanged.InvokeAsync(patient);
+        _searchText = value ?? string.Empty;
+        _showResults = true;
+        await SearchAsync(_searchText);
     }
 
-    private async Task<IEnumerable<StaffPatientSummaryResponse>> SearchPatientsAsync(
-        string? value,
-        CancellationToken token)
+    private async Task SearchAsync(string? value)
     {
         _error = null;
         if (!Permissions.Has(WebPermissions.PatientsSearch))
         {
-            return [];
+            return;
         }
 
+        _searching = true;
         _searchCts?.Cancel();
         _searchCts?.Dispose();
-        _searchCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        _searchCts = new CancellationTokenSource();
         var cts = _searchCts;
         var version = Interlocked.Increment(ref _searchVersion);
 
@@ -128,38 +136,55 @@ else
 
             if (version != _searchVersion)
             {
-                return [];
+                return;
             }
 
-            if (result.Items.Count == 0)
-            {
-                return [];
-            }
-
-            return result.Items;
+            _results = result.Items.ToList();
         }
         catch (OperationCanceledException)
         {
-            return [];
         }
         catch (ApiProblemException ex)
         {
             if (version == _searchVersion)
             {
                 _error = PatientProblemMessages.ToUserMessage(ex);
+                _results = [];
             }
-
-            return [];
         }
         catch (Exception)
         {
             if (version == _searchVersion)
             {
                 _error = "Unable to search patients.";
+                _results = [];
             }
-
-            return [];
         }
+        finally
+        {
+            if (version == _searchVersion)
+            {
+                _searching = false;
+            }
+        }
+    }
+
+    private async Task SelectAsync(StaffPatientSummaryResponse patient)
+    {
+        _selected = patient;
+        _searchText = FormatPatient(patient);
+        _showResults = false;
+        await ValueChanged.InvokeAsync(patient.PatientId);
+        await SelectedPatientChanged.InvokeAsync(patient);
+    }
+
+    private async Task ClearAsync()
+    {
+        _selected = null;
+        _searchText = string.Empty;
+        _showResults = false;
+        await ValueChanged.InvokeAsync(null);
+        await SelectedPatientChanged.InvokeAsync(null);
     }
 
     private static string FormatPatient(StaffPatientSummaryResponse? p) =>

@@ -29,6 +29,24 @@ public sealed class WebArchitectureTests
     }
 
     [Fact]
+    public void Web_Uses_FluentUI_Not_MudBlazor()
+    {
+        var csproj = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "HealthCare.Web", "HealthCare.Web.csproj"));
+        var text = File.ReadAllText(csproj);
+        text.Should().Contain("Microsoft.FluentUI.AspNetCore.Components");
+        text.Should().Contain("4.14.3");
+        text.Should().NotContain("MudBlazor");
+
+        var refs = typeof(AppointmentApiClient).Assembly
+            .GetReferencedAssemblies()
+            .Select(a => a.Name)
+            .ToArray();
+        refs.Should().Contain("Microsoft.FluentUI.AspNetCore.Components");
+        refs.Should().NotContain("MudBlazor");
+    }
+
+    [Fact]
     public void Web_Does_Not_Duplicate_RolePermissionMatrix()
     {
         typeof(AppointmentApiClient).Assembly.GetTypes()

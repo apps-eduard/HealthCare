@@ -19,7 +19,7 @@
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Medical notes MudBlazor UI, Google auth, or remaining BFF multi-instance hardening
+**Current focus:** Medical notes staff UI, Google auth, or remaining BFF multi-instance hardening
 
 ### All phases at a glance
 
@@ -34,7 +34,7 @@
 | 5 | Patients and clinic-patient registration | Complete | `██████████` 100% |
 | 6 | Staff and doctors | Partial | `████████░░` 75% |
 | 7 | Appointment booking | Partial | `█████████░` 85% |
-| 8 | Staff web application (MudBlazor) | Partial | `███████░░░` 70% |
+| 8 | Staff web application (Fluent UI) | Partial | `████████░░` 80% |
 | 9 | Medical notes | Partial | `███████░░░` 70% |
 | 10 | Hangfire and notifications | Partial | `█████████░` 85% |
 | 11 | Patient mobile application | Not started | `░░░░░░░░░░` 0% |
@@ -91,7 +91,7 @@ Authoritative design docs:
 | 5 | Patients and clinic-patient registration | Complete (staff search + clinic admin) | 2026-07-23 |
 | 6 | Staff and doctors | Partial (staff-management APIs; UI deferred) | 2026-07-23 |
 | 7 | Appointment booking | Partial (foundation + availability + reschedule) | 2026-07-23 |
-| 8 | Staff web application (MudBlazor) | Partial (auth + staff + appointments UI) | 2026-07-23 |
+| 8 | Staff web application (Fluent UI) | Partial (auth + staff + appointments UI; MudBlazor removed) | 2026-07-24 |
 | 9 | Medical notes | Not started | — |
 | 10 | Hangfire and notifications | Partial (reminders + daily clinic summary) | 2026-07-23 |
 | 11 | Patient mobile application | Not started | — |
@@ -690,6 +690,31 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 - See commit verification notes
 
 ---
+## Phase 8e — Fluent UI migration (replace MudBlazor)
+
+**Status:** Complete  
+**Updated:** 2026-07-24
+
+### Delivered
+
+- Replaced MudBlazor with `Microsoft.FluentUI.AspNetCore.Components` **4.14.3** (+ Icons)
+- Enterprise healthcare design tokens (`wwwroot/css/healthcare-enterprise.css`)
+- Shared: `PageHeader`, `StatusBadge`, loading/empty/error/permission states, `IUserNotificationService`
+- Migrated shell, login, dashboard, staff, patients, appointments, calendar (CSS grid), availability, pickers, dialogs
+- Zero MudBlazor package/usings/components remaining in Web
+- Docs: `Docs/fluent-ui-design-system.md`
+
+### Known limitations
+
+- No paid Fluent scheduler — calendar is custom CSS Grid day/week
+- Dense lists use enterprise HTML tables (server-side paging preserved)
+- Some date/time fields use native inputs styled to match Fluent
+
+### Verification
+
+- See commit verification notes
+
+---
 ## Phase 9 — Medical notes
 
 **Status:** Partial (~70% — secure backend foundation; no staff UI yet)  
@@ -709,7 +734,7 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 
 ### Known limitations / remaining
 
-- No MudBlazor medical-notes UI
+- No staff medical-notes UI yet
 - No patient self-access / IsVisibleToPatient
 - No ordinary delete; drafts cannot be abandoned via API yet
 - No field-level encryption (document TLS + encrypted DB/backups)

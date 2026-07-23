@@ -8,53 +8,55 @@
 
 @if (Permissions.IsPatientOnly)
 {
-    <MudAlert Severity="Severity.Error">Patient accounts cannot use the staff application.</MudAlert>
+    <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">
+        Patient accounts cannot use the staff application.
+    </FluentMessageBar>
 }
 else if (!Permissions.IsStaffUser)
 {
-    <MudAlert Severity="Severity.Warning">An active staff membership is required.</MudAlert>
+    <FluentMessageBar Intent="MessageIntent.Warning" AllowDismiss="false">
+        An active staff membership is required.
+    </FluentMessageBar>
 }
 else
 {
-    <MudText Typo="Typo.h4" GutterBottom="true">Dashboard</MudText>
-    <MudText Typo="Typo.body1" Class="mb-4">
-        Welcome@(string.IsNullOrWhiteSpace(Permissions.CurrentUser?.Email) ? "" : $", {Permissions.CurrentUser!.Email}").
-    </MudText>
+    <PageHeader Title="Dashboard"
+                Subtitle="@($"Welcome{(string.IsNullOrWhiteSpace(Permissions.CurrentUser?.Email) ? "" : $", {Permissions.CurrentUser!.Email}")}.")" />
 
-    <MudPaper Class="pa-4 mb-4" Outlined="true">
-        <MudText Typo="Typo.subtitle1" GutterBottom="true">Session context</MudText>
-        <MudText Typo="Typo.body2">Organization: @(Permissions.CurrentUser?.OrganizationId?.ToString("D") ?? "—")</MudText>
-        <MudText Typo="Typo.body2">Clinic: @(Permissions.CurrentUser?.ClinicId?.ToString("D") ?? "—")</MudText>
-        <MudText Typo="Typo.body2">Roles: @string.Join(", ", Permissions.CurrentUser?.Roles ?? [])</MudText>
-        <MudText Typo="Typo.body2">Staff membership: @(Permissions.CurrentUser?.HasActiveStaffMembership == true ? "Active" : "None")</MudText>
-    </MudPaper>
+    <FluentCard Class="hc-card">
+        <h2 class="hc-caption" style="margin-top:0;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">Session context</h2>
+        <p>Organization: @(Permissions.CurrentUser?.OrganizationId?.ToString("D") ?? "—")</p>
+        <p>Clinic: @(Permissions.CurrentUser?.ClinicId?.ToString("D") ?? "—")</p>
+        <p>Roles: @string.Join(", ", Permissions.CurrentUser?.Roles ?? [])</p>
+        <p>Staff membership: @(Permissions.CurrentUser?.HasActiveStaffMembership == true ? "Active" : "None")</p>
+    </FluentCard>
 
-    <MudStack Row="true" Spacing="2">
+    <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Wrap="true">
         @if (Permissions.Has(WebPermissions.AppointmentsRead))
         {
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/appointments" StartIcon="@Icons.Material.Filled.Event">
+            <FluentButton Appearance="Appearance.Accent" Href="/appointments" IconStart="@(new Icons.Regular.Size20.CalendarLtr())">
                 Appointments
-            </MudButton>
+            </FluentButton>
         }
         @if (Permissions.Has(WebPermissions.PatientsSearch))
         {
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/patients" StartIcon="@Icons.Material.Filled.People">
+            <FluentButton Appearance="Appearance.Accent" Href="/patients" IconStart="@(new Icons.Regular.Size20.People())">
                 Patients
-            </MudButton>
+            </FluentButton>
         }
         @if (AvailabilityPermissionRules.CanManage(Permissions))
         {
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/availability" StartIcon="@Icons.Material.Filled.Schedule">
+            <FluentButton Appearance="Appearance.Accent" Href="/availability" IconStart="@(new Icons.Regular.Size20.Clock())">
                 Availability
-            </MudButton>
+            </FluentButton>
         }
         @if (Permissions.Has(WebPermissions.StaffRead))
         {
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/staff" StartIcon="@Icons.Material.Filled.Groups">
+            <FluentButton Appearance="Appearance.Accent" Href="/staff" IconStart="@(new Icons.Regular.Size20.PeopleTeam())">
                 Staff Management
-            </MudButton>
+            </FluentButton>
         }
-    </MudStack>
+    </FluentStack>
 }
 
 @code {

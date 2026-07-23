@@ -9,75 +9,82 @@
 }
 else if (_readOnlyClinic is not null)
 {
-    <MudTextField Value="@($"{_readOnlyClinic.Name} ({_readOnlyClinic.Slug})")"
-                  Label="@Label"
-                  Disabled="true"
-                  HelperText="Assigned clinic from your staff membership"
-                  Variant="Variant.Outlined" />
+    <FluentTextField Value="@($"{_readOnlyClinic.Name} ({_readOnlyClinic.Slug})")"
+                     Label="@Label"
+                     Disabled="true"
+                     Style="width:100%;" />
+    <div class="hc-caption">Assigned clinic from your staff membership</div>
 }
 else
 {
-    <MudAutocomplete T="ClinicDirectoryItemResponse"
-                     Label="@Label"
-                     Value="_selected"
-                     ValueChanged="OnValueChanged"
-                     SearchFunc="SearchClinicsAsync"
-                     ToStringFunc="FormatClinic"
-                     Dense="true"
-                     Clearable="@AllowClear"
-                     Disabled="@EffectiveDisabled"
-                     Required="@Required"
-                     RequiredError="Clinic is required"
-                     HelperText="@(IsPlatformScopeMissing ? "Select an organization in the platform banner first." : HelperText)"
-                     MaxItems="20"
-                     ShowProgressIndicator="true"
-                     Variant="Variant.Outlined" />
-
-    @if (!string.IsNullOrWhiteSpace(_error))
-    {
-        <MudAlert Severity="Severity.Error" Dense="true" Class="mt-1">@_error</MudAlert>
-    }
-    else if (_emptyHint)
-    {
-        <MudText Typo="Typo.caption" Class="mud-text-secondary mt-1">No clinics matched your search.</MudText>
-    }
+    <div class="hc-picker">
+        <FluentTextField Value="@_searchText"
+                         ValueChanged="OnSearchTextChanged"
+                         Label="@Label"
+                         Placeholder="Type to search…"
+                         Disabled="@EffectiveDisabled"
+                         Required="@Required"
+                         Style="width:100%;" />
+        @if (_selected is not null)
+        {
+            <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" VerticalAlignment="VerticalAlignment.Center" Style="margin-top:0.35rem;">
+                <span class="hc-caption">Selected: @FormatClinic(_selected)</span>
+                @if (AllowClear && !EffectiveDisabled)
+                {
+                    <FluentButton Appearance="Appearance.Lightweight" OnClick="ClearAsync">Clear</FluentButton>
+                }
+            </FluentStack>
+        }
+        @if (_showResults && !EffectiveDisabled)
+        {
+            <div class="hc-picker-results" role="listbox">
+                @if (_searching)
+                {
+                    <div class="hc-caption" style="padding:0.5rem 0.75rem;">Searching…</div>
+                }
+                else if (_results.Count == 0)
+                {
+                    <div class="hc-caption" style="padding:0.5rem 0.75rem;">No clinics matched your search.</div>
+                }
+                else
+                {
+                    @foreach (var item in _results)
+                    {
+                        <button type="button" class="hc-picker-item" @onclick="(() => SelectAsync(item))">@FormatClinic(item)</button>
+                    }
+                }
+            </div>
+        }
+        @if (!string.IsNullOrWhiteSpace(EffectiveHelper))
+        {
+            <div class="hc-caption" style="margin-top:0.35rem;">@EffectiveHelper</div>
+        }
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false" Style="margin-top:0.35rem;">@_error</FluentMessageBar>
+        }
+    </div>
 }
 
 @code {
-    [Parameter]
-    public Guid? Value { get; set; }
-
-    [Parameter]
-    public EventCallback<Guid?> ValueChanged { get; set; }
-
-    [Parameter]
-    public string Label { get; set; } = "Clinic";
-
-    [Parameter]
-    public string? HelperText { get; set; }
-
-    [Parameter]
-    public bool Required { get; set; }
-
-    [Parameter]
-    public bool AllowClear { get; set; } = true;
-
-    [Parameter]
-    public bool Disabled { get; set; }
-
-    [Parameter]
-    public bool? ActiveOnly { get; set; } = true;
-
-    [Parameter]
-    public Guid? PlatformOrganizationId { get; set; }
-
-    [Parameter]
-    public bool PlatformAdminBypass { get; set; }
+    [Parameter] public Guid? Value { get; set; }
+    [Parameter] public EventCallback<Guid?> ValueChanged { get; set; }
+    [Parameter] public string Label { get; set; } = "Clinic";
+    [Parameter] public string? HelperText { get; set; }
+    [Parameter] public bool Required { get; set; }
+    [Parameter] public bool AllowClear { get; set; } = true;
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public bool? ActiveOnly { get; set; } = true;
+    [Parameter] public Guid? PlatformOrganizationId { get; set; }
+    [Parameter] public bool PlatformAdminBypass { get; set; }
 
     private ClinicDirectoryItemResponse? _selected;
     private ClinicDirectoryItemResponse? _readOnlyClinic;
+    private List<ClinicDirectoryItemResponse> _results = [];
+    private string _searchText = string.Empty;
     private string? _error;
-    private bool _emptyHint;
+    private bool _showResults;
+    private bool _searching;
     private CancellationTokenSource? _searchCts;
     private int _searchVersion;
     private Guid? _lastPlatformOrganizationId;
@@ -87,6 +94,9 @@ else
         && (PlatformOrganizationId is null || PlatformOrganizationId == Guid.Empty);
 
     private bool EffectiveDisabled => Disabled || IsPlatformScopeMissing;
+
+    private string? EffectiveHelper =>
+        IsPlatformScopeMissing ? "Select an organization in the platform banner first." : HelperText;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -103,6 +113,7 @@ else
                     || _selected.OrganizationId != PlatformOrganizationId))
             {
                 _selected = null;
+                _searchText = string.Empty;
                 if (Value is not null)
                 {
                     await ValueChanged.InvokeAsync(null);
@@ -128,6 +139,7 @@ else
             }
 
             await EnsureSelectedAsync(id);
+            _searchText = FormatClinic(_selected);
         }
         else if (Value is null)
         {
@@ -186,16 +198,20 @@ else
         }
     }
 
-    private async Task<IEnumerable<ClinicDirectoryItemResponse>> SearchClinicsAsync(
-        string? value,
-        CancellationToken token)
+    private async Task OnSearchTextChanged(string? value)
+    {
+        _searchText = value ?? string.Empty;
+        _showResults = true;
+        await SearchAsync(_searchText);
+    }
+
+    private async Task SearchAsync(string? value)
     {
         _error = null;
-        _emptyHint = false;
-
+        _searching = true;
         _searchCts?.Cancel();
         _searchCts?.Dispose();
-        _searchCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+        _searchCts = new CancellationTokenSource();
         var cts = _searchCts;
         var version = Interlocked.Increment(ref _searchVersion);
 
@@ -204,14 +220,15 @@ else
             await Task.Delay(300, cts.Token);
             if (version != _searchVersion)
             {
-                return Array.Empty<ClinicDirectoryItemResponse>();
+                return;
             }
 
             if (PlatformAdminBypass
                 && (PlatformOrganizationId is null || PlatformOrganizationId == Guid.Empty))
             {
                 _error = "Organization scope is required before searching clinics.";
-                return Array.Empty<ClinicDirectoryItemResponse>();
+                _results = [];
+                return;
             }
 
             var page = await ClinicsApi.SearchAsync(
@@ -230,40 +247,53 @@ else
 
             if (version != _searchVersion)
             {
-                return Array.Empty<ClinicDirectoryItemResponse>();
+                return;
             }
 
-            _emptyHint = page.Items.Count == 0;
-            return page.Items;
+            _results = page.Items.ToList();
         }
         catch (OperationCanceledException)
         {
-            return Array.Empty<ClinicDirectoryItemResponse>();
         }
         catch (ApiProblemException ex)
         {
             if (version == _searchVersion)
             {
                 _error = ex.ToUserMessage();
+                _results = [];
             }
-
-            return Array.Empty<ClinicDirectoryItemResponse>();
         }
         catch (HttpRequestException)
         {
             if (version == _searchVersion)
             {
                 _error = "Unable to reach the API.";
+                _results = [];
             }
-
-            return Array.Empty<ClinicDirectoryItemResponse>();
+        }
+        finally
+        {
+            if (version == _searchVersion)
+            {
+                _searching = false;
+            }
         }
     }
 
-    private async Task OnValueChanged(ClinicDirectoryItemResponse? item)
+    private async Task SelectAsync(ClinicDirectoryItemResponse item)
     {
         _selected = item;
-        await ValueChanged.InvokeAsync(item?.ClinicId);
+        _searchText = FormatClinic(item);
+        _showResults = false;
+        await ValueChanged.InvokeAsync(item.ClinicId);
+    }
+
+    private async Task ClearAsync()
+    {
+        _selected = null;
+        _searchText = string.Empty;
+        _showResults = false;
+        await ValueChanged.InvokeAsync(null);
     }
 
     private static string FormatClinic(ClinicDirectoryItemResponse? clinic) =>

@@ -47,7 +47,7 @@ The MVP must follow these principles:
              |                                       |
        Staff Browser                         Patient Mobile App
        Blazor Web App                        .NET MAUI Blazor Hybrid
-       MudBlazor                             Android first
+       Fluent UI Blazor                       Android first
              |                                       |
              +-------------------+-------------------+
                                  |
@@ -81,12 +81,13 @@ The MVP must follow these principles:
 
 - Blazor Web App
 - ASP.NET Core 10
-- MudBlazor
+- Microsoft Fluent UI Blazor
 - C#
 - Responsive desktop-first design
 - Support tablet layouts where practical
 - HttpOnly BFF cookie authentication (`POST /bff/auth/login` / `POST /bff/auth/logout` only; antiforgery required)
 - API access/refresh tokens stored server-side only (never in the browser)
+- Staff UI: **Microsoft Fluent UI Blazor** (`Microsoft.FluentUI.AspNetCore.Components` 4.14.3) — see [fluent-ui-design-system.md](./fluent-ui-design-system.md)
 
 ### 4.2 Patient mobile application
 
@@ -606,7 +607,7 @@ Any emergency support access must be explicit and audited.
 
 ### 12.1 Staff web application
 
-Use MudBlazor to build:
+Use Fluent UI Blazor to build:
 
 - Dashboard
 - Left navigation drawer

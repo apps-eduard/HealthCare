@@ -9,7 +9,7 @@
 @inject IPermissionState Permissions
 @inject IPlatformTenantContext PlatformTenant
 @inject IDialogService DialogService
-@inject ISnackbar Snackbar
+@inject IUserNotificationService Notify
 @inject IClinicDirectoryCache ClinicCache
 @inject IClinicDirectoryApiClient ClinicsApi
 
@@ -17,174 +17,131 @@
 
 @if (Permissions.IsPatientOnly)
 {
-    <MudAlert Severity="Severity.Error">Patient accounts cannot use staff appointments.</MudAlert>
+    <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">Patient accounts cannot use staff appointments.</FluentMessageBar>
 }
 else if (!Permissions.Has(WebPermissions.AppointmentsRead))
 {
-    <MudAlert Severity="Severity.Error">You do not have permission to view appointments.</MudAlert>
+    <PermissionDeniedState Message="You do not have permission to view appointments." />
 }
 else
 {
-    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
-        <div>
-            <MudText Typo="Typo.h4">Calendar</MudText>
-            @if (!string.IsNullOrWhiteSpace(_timezoneLabel))
-            {
-                <MudText Typo="Typo.caption" Class="mud-text-secondary">Clinic timezone: @_timezoneLabel</MudText>
-            }
-        </div>
-        <MudStack Row="true" Spacing="2">
-            <MudButton Variant="Variant.Outlined" Href="/appointments" StartIcon="@Icons.Material.Filled.List">Queue</MudButton>
-            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync" Disabled="_loading">Refresh</MudButton>
-        </MudStack>
-    </MudStack>
+    <PageHeader Title="Calendar" Subtitle="@(string.IsNullOrWhiteSpace(_timezoneLabel) ? null : $"Clinic timezone: {_timezoneLabel}")">
+        <FluentButton Appearance="Appearance.Outline" Href="/appointments" IconStart="@(new Icons.Regular.Size20.TextBulletListLtr())">Queue</FluentButton>
+        <FluentButton Appearance="Appearance.Outline" IconStart="@(new Icons.Regular.Size20.ArrowClockwise())" OnClick="LoadAsync" Disabled="_loading">Refresh</FluentButton>
+    </PageHeader>
 
     @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
     {
-        <MudAlert Severity="Severity.Info" Class="mb-4">
+        <FluentMessageBar Intent="MessageIntent.Info" AllowDismiss="false" Style="margin-bottom:1rem;">
             Select an organization in the platform banner before loading the calendar. Global calendar load is not allowed.
-        </MudAlert>
+        </FluentMessageBar>
     }
     else if (Permissions.IsPlatformAdmin && !PlatformTenant.HasClinic)
     {
-        <MudAlert Severity="Severity.Info" Class="mb-4">
+        <FluentMessageBar Intent="MessageIntent.Info" AllowDismiss="false" Style="margin-bottom:1rem;">
             Select a clinic in the platform banner (or below) before loading the calendar for the selected organization.
-        </MudAlert>
+        </FluentMessageBar>
     }
 
-    <MudPaper Class="pa-4 mb-4" Outlined="true">
-        <MudGrid>
-            <MudItem xs="12" md="3">
-                <MudButtonGroup Color="Color.Primary" Variant="Variant.Outlined">
-                    <MudButton OnClick="@(() => SetMode(CalendarMode.Day))" Variant="@(_mode == CalendarMode.Day ? Variant.Filled : Variant.Outlined)">Day</MudButton>
-                    <MudButton OnClick="@(() => SetMode(CalendarMode.Week))" Variant="@(_mode == CalendarMode.Week ? Variant.Filled : Variant.Outlined)">Week</MudButton>
-                </MudButtonGroup>
-            </MudItem>
-            <MudItem xs="12" md="4">
-                <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
-                    <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" OnClick="PreviousAsync" aria-label="Previous" />
-                    <MudButton Variant="Variant.Text" OnClick="GoTodayAsync">Today</MudButton>
-                    <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" OnClick="NextAsync" aria-label="Next" />
-                    <MudText Typo="Typo.subtitle1">@_rangeLabel</MudText>
-                </MudStack>
-            </MudItem>
-            <MudItem xs="12" md="2">
-                <MudSelect T="string" @bind-Value="_status" Label="Status" Clearable="true" Variant="Variant.Outlined">
-                    @foreach (var status in AppointmentStatusPresentation.AllStatuses)
-                    {
-                        <MudSelectItem Value="@status">@status</MudSelectItem>
-                    }
-                </MudSelect>
-            </MudItem>
-            <MudItem xs="12" md="2">
-                <MudSelect T="Guid?" @bind-Value="_doctorId" Label="Doctor" Clearable="true" Variant="Variant.Outlined">
-                    @foreach (var doctor in _doctors)
-                    {
-                        <MudSelectItem T="Guid?" Value="@doctor.StaffMemberId">@doctor.DisplayName</MudSelectItem>
-                    }
-                </MudSelect>
-            </MudItem>
+    <div class="hc-card">
+        <div class="hc-filter-grid">
+            <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="4">
+                <FluentButton Appearance="@(_mode == CalendarMode.Day ? Appearance.Accent : Appearance.Outline)" OnClick="@(() => SetMode(CalendarMode.Day))">Day</FluentButton>
+                <FluentButton Appearance="@(_mode == CalendarMode.Week ? Appearance.Accent : Appearance.Outline)" OnClick="@(() => SetMode(CalendarMode.Week))">Week</FluentButton>
+            </FluentStack>
+            <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="4" VerticalAlignment="VerticalAlignment.Center">
+                <FluentButton Appearance="Appearance.Stealth" IconStart="@(new Icons.Regular.Size20.ChevronLeft())" OnClick="PreviousAsync" aria-label="Previous" />
+                <FluentButton Appearance="Appearance.Lightweight" OnClick="GoTodayAsync">Today</FluentButton>
+                <FluentButton Appearance="Appearance.Stealth" IconStart="@(new Icons.Regular.Size20.ChevronRight())" OnClick="NextAsync" aria-label="Next" />
+                <strong>@_rangeLabel</strong>
+            </FluentStack>
+            <FluentSelect TOption="string" @bind-Value="_status" Label="Status" Style="width:100%;">
+                <FluentOption Value="">Any</FluentOption>
+                @foreach (var status in AppointmentStatusPresentation.AllStatuses)
+                {
+                    <FluentOption Value="@status">@status</FluentOption>
+                }
+            </FluentSelect>
+            <FluentSelect TOption="string" Value="@(_doctorId?.ToString() ?? "")" ValueChanged="OnDoctorFilterChanged" Label="Doctor" Style="width:100%;">
+                <FluentOption Value="">Any</FluentOption>
+                @foreach (var doctor in _doctors)
+                {
+                    <FluentOption Value="@doctor.StaffMemberId.ToString()">@doctor.DisplayName</FluentOption>
+                }
+            </FluentSelect>
             @if (Permissions.CanFilterByClinic)
             {
-                <MudItem xs="12" md="3">
-                    <ClinicPicker Value="_clinicId"
-                                  ValueChanged="OnClinicFilterChanged"
-                                  Label="Clinic"
-                                  AllowClear="false"
-                                  Required="true"
-                                  HelperText="@(Permissions.IsPlatformAdmin ? "Required for PLATFORM_ADMIN" : "Select a clinic for calendar scope")"
-                                  ActiveOnly="true"
-                                  PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
-                                  PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
-                                  Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)" />
-                </MudItem>
+                <ClinicPicker Value="_clinicId" ValueChanged="OnClinicFilterChanged" Label="Clinic" AllowClear="false" Required="true"
+                              HelperText="@(Permissions.IsPlatformAdmin ? "Required for PLATFORM_ADMIN" : "Select a clinic for calendar scope")"
+                              ActiveOnly="true" PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
+                              PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
+                              Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)" />
             }
-            <MudItem xs="12" md="2" Class="d-flex align-end">
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAsync" FullWidth="true"
-                           Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !_clinicId.HasValue))">
-                    Apply
-                </MudButton>
-            </MudItem>
-        </MudGrid>
-    </MudPaper>
+            <FluentButton Appearance="Appearance.Accent" OnClick="LoadAsync"
+                          Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !_clinicId.HasValue))">Apply</FluentButton>
+        </div>
+    </div>
 
-    @if (!string.IsNullOrWhiteSpace(_error))
-    {
-        <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
-    }
+    @if (!string.IsNullOrWhiteSpace(_error)) { <ErrorState Message="@_error" /> }
 
     @if (_loading)
     {
-        <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+        <PageLoading />
     }
     else if (_items.Count == 0)
     {
-        <MudPaper Class="pa-6" Outlined="true">
-            <MudText Align="Align.Center">No appointments in this range.</MudText>
-        </MudPaper>
+        <EmptyState Message="No appointments in this range." />
     }
     else if (_mode == CalendarMode.Day)
     {
-        <MudPaper Class="pa-3" Outlined="true">
-            <MudStack Spacing="2">
-                @foreach (var appt in _items.OrderBy(a => a.AppointmentDateUtc))
-                {
-                    <MudPaper Class="pa-3" Outlined="true" Style="cursor:pointer" @onclick="(() => OpenDetailAsync(appt.Id))">
-                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-                            <div>
-                                <MudText Typo="Typo.subtitle2">
-                                    @ClinicTimeDisplay.FormatLocal(appt.AppointmentDateUtc, appt.ClinicTimeZoneId ?? _timezoneLabel, "HH:mm")
-                                    · @(appt.PatientDisplayName ?? "Patient")
-                                    @if (!string.IsNullOrWhiteSpace(appt.LocalPatientNumber))
-                                    {
-                                        <span> (@appt.LocalPatientNumber)</span>
-                                    }
-                                </MudText>
-                                <MudText Typo="Typo.caption">@(appt.DoctorDisplayName ?? "Doctor") · @appt.DurationMinutes min</MudText>
-                            </div>
-                            <MudChip T="string" Size="Size.Small" Color="@AppointmentStatusPresentation.ChipColor(appt.Status)">
-                                @AppointmentStatusPresentation.DisplayLabel(appt.Status)
-                            </MudChip>
-                        </MudStack>
-                    </MudPaper>
-                }
-            </MudStack>
-        </MudPaper>
+        <div class="hc-cal">
+            <div class="hc-cal-grid hc-cal-grid-day">
+                <div class="hc-cal-day">
+                    @foreach (var appt in _items.OrderBy(a => a.AppointmentDateUtc))
+                    {
+                        <button type="button" class="hc-cal-event" @onclick="(() => OpenDetailAsync(appt.Id))">
+                            <div class="hc-cal-event-time">@ClinicTimeDisplay.FormatLocal(appt.AppointmentDateUtc, appt.ClinicTimeZoneId ?? _timezoneLabel, "HH:mm")</div>
+                            <div>@(appt.PatientDisplayName ?? "Patient")@(string.IsNullOrWhiteSpace(appt.LocalPatientNumber) ? "" : $" ({appt.LocalPatientNumber})")</div>
+                            <div class="hc-caption">@(appt.DoctorDisplayName ?? "Doctor") · @appt.DurationMinutes min</div>
+                            <StatusBadge Text="@AppointmentStatusPresentation.DisplayLabel(appt.Status)" Tone="@AppointmentStatusPresentation.ChipTone(appt.Status)" />
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
     }
     else
     {
-        <MudStack Row="true" Spacing="2" Class="flex-wrap">
-            @foreach (var day in _weekDays)
-            {
-                var dayItems = _items
-                    .Where(a => ClinicTimeDisplay.ToClinicDate(a.AppointmentDateUtc, a.ClinicTimeZoneId ?? _timezoneLabel) == day)
-                    .OrderBy(a => a.AppointmentDateUtc)
-                    .ThenBy(a => a.DoctorDisplayName)
-                    .ToList();
-                <MudPaper Class="pa-2 flex-grow-1" Outlined="true" Style="min-width:120px; min-height:220px; max-width:180px">
-                    <MudText Typo="Typo.subtitle2" Class="mb-2">@day.ToString("ddd dd MMM")</MudText>
-                    @if (dayItems.Count == 0)
-                    {
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary">—</MudText>
-                    }
-                    else
-                    {
-                        @foreach (var appt in dayItems)
+        <div class="hc-cal">
+            <div class="hc-cal-grid hc-cal-grid-week">
+                @foreach (var day in _weekDays)
+                {
+                    var dayItems = _items
+                        .Where(a => ClinicTimeDisplay.ToClinicDate(a.AppointmentDateUtc, a.ClinicTimeZoneId ?? _timezoneLabel) == day)
+                        .OrderBy(a => a.AppointmentDateUtc)
+                        .ThenBy(a => a.DoctorDisplayName)
+                        .ToList();
+                    <div class="hc-cal-day">
+                        <div class="hc-cal-day-header">@day.ToString("ddd dd MMM")</div>
+                        @if (dayItems.Count == 0)
                         {
-                            <MudPaper Class="pa-2 mb-2" Outlined="true" Style="cursor:pointer" @onclick="(() => OpenDetailAsync(appt.Id))">
-                                <MudText Typo="Typo.caption">
-                                    @ClinicTimeDisplay.FormatLocal(appt.AppointmentDateUtc, appt.ClinicTimeZoneId ?? _timezoneLabel, "HH:mm")
-                                </MudText>
-                                <MudText Typo="Typo.caption">@(appt.DoctorDisplayName ?? "Doctor")</MudText>
-                                <MudChip T="string" Size="Size.Small" Color="@AppointmentStatusPresentation.ChipColor(appt.Status)">
-                                    @AppointmentStatusPresentation.DisplayLabel(appt.Status)
-                                </MudChip>
-                            </MudPaper>
+                            <div class="hc-caption">—</div>
                         }
-                    }
-                </MudPaper>
-            }
-        </MudStack>
+                        else
+                        {
+                            @foreach (var appt in dayItems)
+                            {
+                                <button type="button" class="hc-cal-event" @onclick="(() => OpenDetailAsync(appt.Id))">
+                                    <div class="hc-cal-event-time">@ClinicTimeDisplay.FormatLocal(appt.AppointmentDateUtc, appt.ClinicTimeZoneId ?? _timezoneLabel, "HH:mm")</div>
+                                    <div class="hc-caption">@(appt.DoctorDisplayName ?? "Doctor")</div>
+                                    <StatusBadge Text="@AppointmentStatusPresentation.DisplayLabel(appt.Status)" Tone="@AppointmentStatusPresentation.ChipTone(appt.Status)" />
+                                </button>
+                            }
+                        }
+                    </div>
+                }
+            </div>
+        </div>
     }
 }
 
@@ -482,19 +439,23 @@ else
         }
     }
 
+    private Task OnDoctorFilterChanged(string? value)
+    {
+        _doctorId = Guid.TryParse(value, out var id) ? id : null;
+        return Task.CompletedTask;
+    }
+
     private async Task OpenDetailAsync(Guid appointmentId)
     {
-        var parameters = new DialogParameters<AppointmentDetailDialog>
-        {
-            { x => x.AppointmentId, appointmentId },
-            { x => x.PlatformAdminBypass, Permissions.IsPlatformAdmin },
-        };
-        var dialog = await DialogService.ShowAsync<AppointmentDetailDialog>(
-            "Appointment",
-            parameters,
-            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        var dialog = await DialogService.ShowDialogAsync<AppointmentDetailDialog>(
+            new AppointmentDetailDialog.Args
+            {
+                AppointmentId = appointmentId,
+                PlatformAdminBypass = Permissions.IsPlatformAdmin,
+            },
+            FluentDialogDefaults.ContentOnly("Appointment", "640px"));
         var result = await dialog.Result;
-        if (result is { Canceled: false })
+        if (!result.Cancelled)
         {
             await LoadAsync();
         }

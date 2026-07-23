@@ -1,0 +1,23 @@
+@namespace HealthCare.Web.Components.Shared
+@using HealthCare.Web.Design
+
+<span class="hc-badge hc-badge-@ToneCss">@Text</span>
+
+@code {
+    [Parameter]
+    public string Text { get; set; } = string.Empty;
+
+    [Parameter]
+    public StatusTone Tone { get; set; } = StatusTone.Default;
+
+    private string ToneCss => Tone switch
+    {
+        StatusTone.Success => "success",
+        StatusTone.Warning => "warning",
+        StatusTone.Error => "error",
+        StatusTone.Info => "info",
+        StatusTone.Primary => "primary",
+        StatusTone.Neutral => "neutral",
+        _ => "default",
+    };
+}

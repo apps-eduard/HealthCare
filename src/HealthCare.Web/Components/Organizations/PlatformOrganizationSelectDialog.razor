@@ -1,30 +1,24 @@
 @namespace HealthCare.Web.Components.Organizations
+@implements IDialogContentComponent
 @inject IPlatformTenantContext PlatformTenant
 
-<MudDialog>
-    <TitleContent>
-        <MudText Typo="Typo.h6">Select organization</MudText>
-    </TitleContent>
-    <DialogContent>
-        <MudText Typo="Typo.body2" Class="mb-3">
-            Search and choose an organization. This does not grant clinic or resource access by itself.
-        </MudText>
-        <OrganizationPicker Value="_organizationId"
-                            ValueChanged="OnOrganizationChanged"
-                            Label="Organization"
-                            Required="true"
-                            AllowClear="false"
-                            SyncPlatformContext="true"
-                            HelperText="Server-side search by name or slug" />
-    </DialogContent>
-    <DialogActions>
-        <MudButton OnClick="Cancel">Close</MudButton>
-    </DialogActions>
-</MudDialog>
+<p class="hc-muted" style="margin-top:0">
+    Search and choose an organization. This does not grant clinic or resource access by itself.
+</p>
+<OrganizationPicker Value="_organizationId"
+                    ValueChanged="OnOrganizationChanged"
+                    Label="Organization"
+                    Required="true"
+                    AllowClear="false"
+                    SyncPlatformContext="true"
+                    HelperText="Server-side search by name or slug" />
+<FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Style="margin-top:1rem;justify-content:flex-end;">
+    <FluentButton Appearance="Appearance.Outline" OnClick="CancelAsync">Close</FluentButton>
+</FluentStack>
 
 @code {
     [CascadingParameter]
-    private IMudDialogInstance MudDialog { get; set; } = default!;
+    private FluentDialog Dialog { get; set; } = default!;
 
     private Guid? _organizationId;
 
@@ -33,14 +27,14 @@
         _organizationId = PlatformTenant.SelectedOrganizationId;
     }
 
-    private void OnOrganizationChanged(Guid? organizationId)
+    private async Task OnOrganizationChanged(Guid? organizationId)
     {
         _organizationId = organizationId;
         if (organizationId is not null)
         {
-            MudDialog.Close(DialogResult.Ok(true));
+            await Dialog.CloseAsync(DialogResult.Ok(true));
         }
     }
 
-    private void Cancel() => MudDialog.Cancel();
+    private async Task CancelAsync() => await Dialog.CancelAsync();
 }

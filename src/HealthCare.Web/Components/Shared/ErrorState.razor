@@ -1,0 +1,16 @@
+@namespace HealthCare.Web.Components.Shared
+
+<div class="hc-state">
+    <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">
+        @(string.IsNullOrWhiteSpace(Message) ? "Something went wrong." : Message)
+    </FluentMessageBar>
+    @ChildContent
+</div>
+
+@code {
+    [Parameter]
+    public string? Message { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

@@ -1,65 +1,62 @@
+@implements IDialogContentComponent
 @inject IStaffManagementApiClient StaffApi
 @inject IPermissionState Permissions
 @inject IPlatformTenantContext PlatformTenant
-@inject ISnackbar Snackbar
 
-<MudDialog>
-    <TitleContent>
-        <MudText Typo="Typo.h6">Create staff</MudText>
-    </TitleContent>
-    <DialogContent>
-        <MudStack Spacing="2">
-            <MudTextField @bind-Value="_email" Label="Email" Required="true" Disabled="_busy" />
-            <MudTextField @bind-Value="_firstName" Label="First name" Required="true" Disabled="_busy" />
-            <MudTextField @bind-Value="_lastName" Label="Last name" Required="true" Disabled="_busy" />
-            <MudTextField @bind-Value="_displayName" Label="Display name" Disabled="_busy" />
-            <MudTextField @bind-Value="_jobTitle" Label="Job title" Disabled="_busy" />
-            <MudTextField @bind-Value="_phone" Label="Phone" Disabled="_busy" />
-            @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
-            {
-                <MudAlert Severity="Severity.Warning" Dense="true">
-                    Select an organization in the platform banner before creating staff.
-                </MudAlert>
-            }
-            @if (Permissions.CanFilterByClinic)
-            {
-                <ClinicPicker @bind-Value="_clinicId"
-                              Label="Clinic"
-                              Required="true"
-                              AllowClear="false"
-                              Disabled="@(_busy || (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization))"
-                              ActiveOnly="true"
-                              PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
-                              PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
-                              HelperText="Choose an authorized clinic." />
-            }
-            else if (Permissions.Has(WebPermissions.ClinicsRead))
-            {
-                <ClinicPicker Label="Clinic" AllowClear="false" Disabled="true" />
-            }
-            <MudSelect T="string" @bind-Value="_role" Label="Initial role" Required="true" Disabled="_busy || _rolesLoading">
-                @foreach (var role in _roles.Where(r => r.AssignableByCurrentUser))
-                {
-                    <MudSelectItem Value="@role.Name">@role.DisplayLabel</MudSelectItem>
-                }
-            </MudSelect>
-            <MudTextField @bind-Value="_temporaryPassword" Label="Temporary password" InputType="InputType.Password" Required="true" Disabled="_busy" />
-            <MudTextField @bind-Value="_confirmPassword" Label="Confirm temporary password" InputType="InputType.Password" Required="true" Disabled="_busy" />
-            @if (!string.IsNullOrWhiteSpace(_error))
-            {
-                <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
-            }
-        </MudStack>
-    </DialogContent>
-    <DialogActions>
-        <MudButton OnClick="Cancel" Disabled="_busy">Cancel</MudButton>
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync" Disabled="_busy">Create</MudButton>
-    </DialogActions>
-</MudDialog>
+<FluentStack Orientation="Orientation.Vertical" VerticalGap="8">
+    <FluentTextField @bind-Value="_email" Label="Email" Required="true" Disabled="_busy" Style="width:100%;" />
+    <FluentTextField @bind-Value="_firstName" Label="First name" Required="true" Disabled="_busy" Style="width:100%;" />
+    <FluentTextField @bind-Value="_lastName" Label="Last name" Required="true" Disabled="_busy" Style="width:100%;" />
+    <FluentTextField @bind-Value="_displayName" Label="Display name" Disabled="_busy" Style="width:100%;" />
+    <FluentTextField @bind-Value="_jobTitle" Label="Job title" Disabled="_busy" Style="width:100%;" />
+    <FluentTextField @bind-Value="_phone" Label="Phone" Disabled="_busy" Style="width:100%;" />
+    @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+    {
+        <FluentMessageBar Intent="MessageIntent.Warning" AllowDismiss="false">
+            Select an organization in the platform banner before creating staff.
+        </FluentMessageBar>
+    }
+    @if (Permissions.CanFilterByClinic)
+    {
+        <ClinicPicker @bind-Value="_clinicId"
+                      Label="Clinic"
+                      Required="true"
+                      AllowClear="false"
+                      Disabled="@(_busy || (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization))"
+                      ActiveOnly="true"
+                      PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
+                      PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
+                      HelperText="Choose an authorized clinic." />
+    }
+    else if (Permissions.Has(WebPermissions.ClinicsRead))
+    {
+        <ClinicPicker Label="Clinic" AllowClear="false" Disabled="true" />
+    }
+    <FluentSelect TOption="string"
+                  Label="Initial role"
+                  @bind-Value="_role"
+                  Disabled="@(_busy || _rolesLoading)"
+                  Style="width:100%;">
+        @foreach (var role in _roles.Where(r => r.AssignableByCurrentUser))
+        {
+            <FluentOption Value="@role.Name">@role.DisplayLabel</FluentOption>
+        }
+    </FluentSelect>
+    <FluentTextField @bind-Value="_temporaryPassword" Label="Temporary password" TextFieldType="TextFieldType.Password" Required="true" Disabled="_busy" Style="width:100%;" />
+    <FluentTextField @bind-Value="_confirmPassword" Label="Confirm temporary password" TextFieldType="TextFieldType.Password" Required="true" Disabled="_busy" Style="width:100%;" />
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">@_error</FluentMessageBar>
+    }
+</FluentStack>
+<FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Style="margin-top:1rem;justify-content:flex-end;">
+    <FluentButton Appearance="Appearance.Outline" OnClick="CancelAsync" Disabled="_busy">Cancel</FluentButton>
+    <FluentButton Appearance="Appearance.Accent" OnClick="SubmitAsync" Disabled="_busy">Create</FluentButton>
+</FluentStack>
 
 @code {
     [CascadingParameter]
-    private IMudDialogInstance MudDialog { get; set; } = default!;
+    private FluentDialog Dialog { get; set; } = default!;
 
     private List<StaffRoleInfoResponse> _roles = [];
     private bool _rolesLoading = true;
@@ -106,7 +103,7 @@
         }
     }
 
-    private void Cancel() => MudDialog.Cancel();
+    private async Task CancelAsync() => await Dialog.CancelAsync();
 
     private async Task SubmitAsync()
     {
@@ -166,7 +163,7 @@
 
             _temporaryPassword = string.Empty;
             _confirmPassword = string.Empty;
-            MudDialog.Close(DialogResult.Ok(true));
+            await Dialog.CloseAsync(DialogResult.Ok(true));
         }
         catch (ApiProblemException ex)
         {

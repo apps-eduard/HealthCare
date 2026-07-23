@@ -69,7 +69,7 @@ dotnet run --project src/HealthCare.Api --launch-profile http
 
 Authorization uses a code-defined permission catalog (`Docs/authorization-matrix.md`). Controllers declare `[AuthorizePermission]`; tenant scope remains enforced in services.
 
-- Medical notes: `/api/v1/appointments/{appointmentId}/medical-notes`, `/api/v1/medical-notes/{id}` (+ `/draft`, `/sign`, `/amend`). Requires clinical role + `medical_notes.*`. No MudBlazor UI yet.
+- Medical notes: `/api/v1/appointments/{appointmentId}/medical-notes`, `/api/v1/medical-notes/{id}` (+ `/draft`, `/sign`, `/amend`). Requires clinical role + `medical_notes.*`. No staff UI yet.
 
 ### 5. Run the staff web app
 
@@ -77,7 +77,7 @@ Authorization uses a code-defined permission catalog (`Docs/authorization-matrix
 dotnet run --project src/HealthCare.Web --launch-profile http
 ```
 
-- Staff UI: http://localhost:5018
+- Staff UI: http://localhost:5018 — **Microsoft Fluent UI Blazor** (MudBlazor removed). See `Docs/fluent-ui-design-system.md`.
 - Configure API base URL via `Api:BaseUrl` in `src/HealthCare.Web/appsettings*.json` (default `http://localhost:5080/`)
 - Sign in with a staff account (for example `clinicadmin@healthcare.local`)
 - PLATFORM_ADMIN (`admin@healthcare.local`): use the platform tenant banner to search/select an organization (`OrganizationPicker`), then select a clinic. Free-text Organization IDs are not accepted. Selection is circuit-scoped only and cleared on logout.
@@ -105,7 +105,7 @@ Integration tests start PostgreSQL via Testcontainers and require Docker.
 HealthCare/
 ├── src/
 │   ├── HealthCare.Api/              # ASP.NET Core Web API host
-│   ├── HealthCare.Web/              # Staff Blazor + MudBlazor web app
+│   ├── HealthCare.Web/              # Staff Blazor + Fluent UI web app
 │   ├── HealthCare.Mobile/           # Patient MAUI placeholder (Phase 11)
 │   ├── HealthCare.Domain/           # Domain entities by module
 │   ├── HealthCare.Application/      # Use cases, validators, DI

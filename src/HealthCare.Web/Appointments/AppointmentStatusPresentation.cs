@@ -1,4 +1,4 @@
-using MudBlazor;
+using HealthCare.Web.Design;
 
 namespace HealthCare.Web.Appointments;
 
@@ -22,18 +22,18 @@ public static class AppointmentStatusPresentation
     public static string DisplayLabel(string? status) =>
         string.IsNullOrWhiteSpace(status) ? "Unknown" : status.Trim();
 
-    public static Color ChipColor(string? status) =>
+    public static StatusTone ChipTone(string? status) =>
         status switch
         {
-            "Requested" => Color.Warning,
-            "Confirmed" => Color.Info,
-            "CheckedIn" => Color.Primary,
-            "InProgress" => Color.Secondary,
-            "Completed" => Color.Success,
-            "NoShow" => Color.Dark,
-            "CancelledByPatient" => Color.Default,
-            "CancelledByClinic" => Color.Default,
-            _ => Color.Default,
+            "Requested" => StatusTone.Warning,
+            "Confirmed" => StatusTone.Info,
+            "CheckedIn" => StatusTone.Primary,
+            "InProgress" => StatusTone.Neutral,
+            "Completed" => StatusTone.Success,
+            "NoShow" => StatusTone.Neutral,
+            "CancelledByPatient" => StatusTone.Default,
+            "CancelledByClinic" => StatusTone.Default,
+            _ => StatusTone.Default,
         };
 
     public static bool IsTerminal(string? status) =>

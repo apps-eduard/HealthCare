@@ -1,118 +1,97 @@
 @namespace HealthCare.Web.Components.Patients
+@implements IDialogContentComponent<PatientDetailDialog.Args>
 @using HealthCare.Contracts.Patients
 @using HealthCare.Web.Patients
 
-<MudDialog>
-    <TitleContent>
-        <MudText Typo="Typo.h6">Patient details</MudText>
-    </TitleContent>
-    <DialogContent>
-        @if (_loading)
-        {
-            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-3" />
-        }
-        else if (_patient is null)
-        {
-            <MudAlert Severity="Severity.Error">@(_error ?? "Patient was not found or you do not have access.")</MudAlert>
-        }
-        else
-        {
-            @if (!string.IsNullOrWhiteSpace(_error))
-            {
-                <MudAlert Severity="Severity.Error" Class="mb-3">@_error</MudAlert>
-            }
+@if (_loading)
+{
+    <PageLoading />
+}
+else if (_patient is null)
+{
+    <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">@(_error ?? "Patient was not found or you do not have access.")</FluentMessageBar>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false" Style="margin-bottom:0.75rem;">@_error</FluentMessageBar>
+    }
 
-            <MudStack Spacing="2">
-                <MudText><strong>Local number:</strong> @_patient.LocalPatientNumber</MudText>
-                <MudText><strong>Name:</strong> @PatientDisplay.FullName(_patient)</MudText>
-                <MudText><strong>Date of birth:</strong> @(_patient.DateOfBirth?.ToString("yyyy-MM-dd") ?? "—")</MudText>
-                <MudText><strong>Gender:</strong> @(_patient.Gender ?? "—")</MudText>
-                <MudText><strong>Mobile:</strong> @(_patient.MobileNumber ?? "—")</MudText>
-                <MudText><strong>Preferred language:</strong> @(_patient.PreferredLanguage ?? "—")</MudText>
-                <MudText>
-                    <strong>Patient status:</strong>
-                    <MudChip T="string" Size="Size.Small" Color="@PatientStatusPresentation.PatientActiveColor(_patient.PatientIsActive)">
-                        @PatientStatusPresentation.PatientActiveLabel(_patient.PatientIsActive)
-                    </MudChip>
-                </MudText>
-                <MudText>
-                    <strong>Clinic enrollment:</strong>
-                    <MudChip T="string" Size="Size.Small" Color="@PatientStatusPresentation.ClinicPatientColor(_patient.ClinicPatientStatus)">
-                        @PatientStatusPresentation.ClinicPatientLabel(_patient.ClinicPatientStatus)
-                    </MudChip>
-                </MudText>
-                <MudText><strong>Clinic:</strong> @(_clinicLabel ?? _patient.ClinicId.ToString("D"))</MudText>
-                <MudText><strong>Enrolled:</strong> @_patient.RegisteredAtUtc.UtcDateTime.ToString("yyyy-MM-dd HH:mm") UTC</MudText>
-                <MudText><strong>Version:</strong> @_patient.Version</MudText>
-                @if (!string.IsNullOrWhiteSpace(_patient.Address))
-                {
-                    <MudText><strong>Address:</strong> @_patient.Address</MudText>
-                }
-                @if (!string.IsNullOrWhiteSpace(_patient.EmergencyContact))
-                {
-                    <MudText><strong>Emergency contact:</strong> @_patient.EmergencyContact</MudText>
-                }
-                <MudText Typo="Typo.caption" Class="mud-text-secondary">Patient ID: @_patient.PatientId</MudText>
-            </MudStack>
-
-            @if (Permissions.Has(WebPermissions.PatientsUpdateClinicStatus))
-            {
-                <MudDivider Class="my-4" />
-                <MudText Typo="Typo.subtitle2" GutterBottom="true">Update clinic enrollment status</MudText>
-                <MudSelect T="string" @bind-Value="_newStatus" Label="ClinicPatient status" Variant="Variant.Outlined" Disabled="_busy">
-                    @foreach (var status in PatientStatusPresentation.ClinicPatientStatuses)
-                    {
-                        <MudSelectItem Value="@status">@status</MudSelectItem>
-                    }
-                </MudSelect>
-            }
-        }
-    </DialogContent>
-    <DialogActions>
-        <MudButton OnClick="Close" Disabled="_busy">Close</MudButton>
-        @if (_patient is not null && Permissions.Has(WebPermissions.PatientsUpdateClinicStatus))
+    <FluentStack Orientation="Orientation.Vertical" VerticalGap="8">
+        <div><strong>Local number:</strong> @_patient.LocalPatientNumber</div>
+        <div><strong>Name:</strong> @PatientDisplay.FullName(_patient)</div>
+        <div><strong>Date of birth:</strong> @(_patient.DateOfBirth?.ToString("yyyy-MM-dd") ?? "—")</div>
+        <div><strong>Gender:</strong> @(_patient.Gender ?? "—")</div>
+        <div><strong>Mobile:</strong> @(_patient.MobileNumber ?? "—")</div>
+        <div><strong>Preferred language:</strong> @(_patient.PreferredLanguage ?? "—")</div>
+        <div>
+            <strong>Patient status:</strong>
+            <StatusBadge Text="@PatientStatusPresentation.PatientActiveLabel(_patient.PatientIsActive)"
+                         Tone="@PatientStatusPresentation.PatientActiveTone(_patient.PatientIsActive)" />
+        </div>
+        <div>
+            <strong>Clinic enrollment:</strong>
+            <StatusBadge Text="@PatientStatusPresentation.ClinicPatientLabel(_patient.ClinicPatientStatus)"
+                         Tone="@PatientStatusPresentation.ClinicPatientTone(_patient.ClinicPatientStatus)" />
+        </div>
+        <div><strong>Clinic:</strong> @(_clinicLabel ?? _patient.ClinicId.ToString("D"))</div>
+        <div><strong>Enrolled:</strong> @_patient.RegisteredAtUtc.UtcDateTime.ToString("yyyy-MM-dd HH:mm") UTC</div>
+        <div><strong>Version:</strong> @_patient.Version</div>
+        @if (!string.IsNullOrWhiteSpace(_patient.Address))
         {
-            <MudButton Color="Color.Primary"
-                       Variant="Variant.Filled"
-                       Disabled="_busy || string.IsNullOrWhiteSpace(_newStatus) || _newStatus == _patient.ClinicPatientStatus"
-                       OnClick="ConfirmUpdateAsync">
-                @if (_busy)
-                {
-                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                }
-                Update status
-            </MudButton>
+            <div><strong>Address:</strong> @_patient.Address</div>
         }
-    </DialogActions>
-</MudDialog>
+        @if (!string.IsNullOrWhiteSpace(_patient.EmergencyContact))
+        {
+            <div><strong>Emergency contact:</strong> @_patient.EmergencyContact</div>
+        }
+        <div class="hc-caption">Patient ID: @_patient.PatientId</div>
+    </FluentStack>
+
+    @if (Permissions.Has(WebPermissions.PatientsUpdateClinicStatus))
+    {
+        <hr style="margin:1rem 0;border:0;border-top:1px solid var(--hc-border);" />
+        <div style="font-weight:600;margin-bottom:0.5rem;">Update clinic enrollment status</div>
+        <FluentSelect TOption="string" @bind-Value="_newStatus" Label="ClinicPatient status" Disabled="_busy" Style="width:100%;">
+            @foreach (var status in PatientStatusPresentation.ClinicPatientStatuses)
+            {
+                <FluentOption Value="@status">@status</FluentOption>
+            }
+        </FluentSelect>
+    }
+}
+<FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Style="margin-top:1rem;justify-content:flex-end;">
+    <FluentButton Appearance="Appearance.Outline" OnClick="CloseAsync" Disabled="_busy">Close</FluentButton>
+    @if (_patient is not null && Permissions.Has(WebPermissions.PatientsUpdateClinicStatus))
+    {
+        <FluentButton Appearance="Appearance.Accent"
+                      Disabled="_busy || string.IsNullOrWhiteSpace(_newStatus) || _newStatus == _patient.ClinicPatientStatus"
+                      OnClick="ConfirmUpdateAsync">
+            @if (_busy) { <FluentProgressRing Style="width:16px;height:16px;margin-right:0.35rem;" /> }
+            Update status
+        </FluentButton>
+    }
+</FluentStack>
 
 @code {
-    [CascadingParameter]
-    private IMudDialogInstance MudDialog { get; set; } = default!;
+    public sealed class Args
+    {
+        public Guid PatientId { get; init; }
+        public bool PlatformAdminBypass { get; init; }
+    }
 
-    [Parameter]
-    public Guid PatientId { get; set; }
+    [Parameter] public Args Content { get; set; } = default!;
+    [CascadingParameter] private FluentDialog Dialog { get; set; } = default!;
+    [Inject] private IStaffPatientApiClient PatientsApi { get; set; } = default!;
+    [Inject] private IPermissionState Permissions { get; set; } = default!;
+    [Inject] private IClinicDirectoryApiClient ClinicsApi { get; set; } = default!;
+    [Inject] private IClinicDirectoryCache ClinicCache { get; set; } = default!;
+    [Inject] private IDialogService DialogService { get; set; } = default!;
+    [Inject] private IUserNotificationService Notify { get; set; } = default!;
 
-    [Parameter]
-    public bool PlatformAdminBypass { get; set; }
-
-    [Inject]
-    private IStaffPatientApiClient PatientsApi { get; set; } = default!;
-
-    [Inject]
-    private IPermissionState Permissions { get; set; } = default!;
-
-    [Inject]
-    private IClinicDirectoryApiClient ClinicsApi { get; set; } = default!;
-
-    [Inject]
-    private IClinicDirectoryCache ClinicCache { get; set; } = default!;
-
-    [Inject]
-    private IDialogService DialogService { get; set; } = default!;
-
-    [Inject]
-    private ISnackbar Snackbar { get; set; } = default!;
+    private Guid PatientId => Content.PatientId;
+    private bool PlatformAdminBypass => Content.PlatformAdminBypass;
 
     private StaffPatientDetailResponse? _patient;
     private string? _clinicLabel;
@@ -187,12 +166,13 @@
             return;
         }
 
-        var confirm = await DialogService.ShowMessageBoxAsync(
-            "Update clinic enrollment",
+        var confirm = await DialogService.ShowConfirmationAsync(
             $"Change clinic enrollment status to '{_newStatus}'?",
-            yesText: "Update",
-            cancelText: "Cancel");
-        if (confirm != true)
+            "Update clinic enrollment",
+            "Update",
+            "Cancel");
+        var result = await confirm.Result;
+        if (result.Cancelled)
         {
             return;
         }
@@ -221,16 +201,17 @@
                 PlatformAdminBypass);
             _newStatus = _patient.ClinicPatientStatus;
             _changed = true;
-            Snackbar.Add("Clinic enrollment status updated.", Severity.Success);
+            Notify.Success("Clinic enrollment status updated.");
         }
         catch (ApiProblemException ex) when (PatientProblemMessages.IsConcurrencyConflict(ex))
         {
-            var reload = await DialogService.ShowMessageBoxAsync(
-                "Record changed",
+            var reload = await DialogService.ShowConfirmationAsync(
                 "This clinic patient record was updated elsewhere. Reload the latest version?",
-                yesText: "Reload",
-                cancelText: "Close");
-            if (reload == true)
+                "Record changed",
+                "Reload",
+                "Close");
+            var result = await reload.Result;
+            if (!result.Cancelled)
             {
                 await LoadAsync();
             }
@@ -242,7 +223,7 @@
         catch (ApiProblemException ex)
         {
             _error = PatientProblemMessages.ToUserMessage(ex);
-            Snackbar.Add(_error, Severity.Error);
+            Notify.Error(_error);
         }
         finally
         {
@@ -250,5 +231,6 @@
         }
     }
 
-    private void Close() => MudDialog.Close(_changed ? DialogResult.Ok(true) : DialogResult.Cancel());
+    private async Task CloseAsync() =>
+        await Dialog.CloseAsync(_changed ? DialogResult.Ok(true) : DialogResult.Cancel());
 }

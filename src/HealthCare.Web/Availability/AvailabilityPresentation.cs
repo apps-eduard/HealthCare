@@ -1,6 +1,6 @@
 using HealthCare.Web.Auth;
+using HealthCare.Web.Design;
 using HealthCare.Web.Services;
-using MudBlazor;
 
 namespace HealthCare.Web.Availability;
 
@@ -34,8 +34,8 @@ public static class AvailabilityPresentation
             _ => string.IsNullOrWhiteSpace(type) ? "Unknown" : type.Trim(),
         };
 
-    public static Color ActiveColor(bool isActive) =>
-        isActive ? Color.Success : Color.Default;
+    public static StatusTone ActiveTone(bool isActive) =>
+        isActive ? StatusTone.Success : StatusTone.Default;
 
     public static string ActiveLabel(bool isActive) =>
         isActive ? "Active" : "Inactive";

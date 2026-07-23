@@ -9,7 +9,7 @@
 @inject IPermissionState Permissions
 @inject IPlatformTenantContext PlatformTenant
 @inject IDialogService DialogService
-@inject ISnackbar Snackbar
+@inject IUserNotificationService Notify
 @inject IClinicDirectoryApiClient ClinicsApi
 @inject IClinicDirectoryCache ClinicCache
 
@@ -17,212 +17,166 @@
 
 @if (Permissions.IsPatientOnly)
 {
-    <MudAlert Severity="Severity.Error">Patient accounts cannot manage staff availability.</MudAlert>
+    <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">Patient accounts cannot manage staff availability.</FluentMessageBar>
 }
 else if (!AvailabilityPermissionRules.CanManage(Permissions))
 {
-    <MudAlert Severity="Severity.Error">You do not have permission to manage doctor availability.</MudAlert>
+    <PermissionDeniedState Message="You do not have permission to manage doctor availability." />
 }
 else
 {
-    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
-        <div>
-            <MudText Typo="Typo.h4">Availability</MudText>
-            @if (!string.IsNullOrWhiteSpace(_timeZoneId))
-            {
-                <MudText Typo="Typo.caption" Class="mud-text-secondary">Clinic timezone: @_timeZoneId</MudText>
-            }
-        </div>
-        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="RefreshAllAsync" Disabled="_loading">Refresh</MudButton>
-    </MudStack>
+    <PageHeader Title="Availability" Subtitle="@(string.IsNullOrWhiteSpace(_timeZoneId) ? null : $"Clinic timezone: {_timeZoneId}")">
+        <FluentButton Appearance="Appearance.Outline" IconStart="@(new Icons.Regular.Size20.ArrowClockwise())" OnClick="RefreshAllAsync" Disabled="_loading">Refresh</FluentButton>
+    </PageHeader>
 
     @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
     {
-        <MudAlert Severity="Severity.Info" Class="mb-4">
+        <FluentMessageBar Intent="MessageIntent.Info" AllowDismiss="false" Style="margin-bottom:1rem;">
             Select an organization in the platform banner before managing availability. Global availability load is not allowed.
-        </MudAlert>
+        </FluentMessageBar>
     }
     else if (Permissions.IsPlatformAdmin && !PlatformTenant.HasClinic)
     {
-        <MudAlert Severity="Severity.Info" Class="mb-4">
+        <FluentMessageBar Intent="MessageIntent.Info" AllowDismiss="false" Style="margin-bottom:1rem;">
             Select a clinic in the platform banner (or below) before loading availability for the selected organization.
-        </MudAlert>
+        </FluentMessageBar>
     }
 
-    <MudPaper Class="pa-4 mb-4" Outlined="true">
-        <MudGrid>
+    <div class="hc-card">
+        <div class="hc-filter-grid">
             @if (Permissions.CanFilterByClinic)
             {
-                <MudItem xs="12" md="4">
-                    <ClinicPicker Value="_clinicId"
-                                  ValueChanged="OnClinicChanged"
-                                  Label="Clinic"
-                                  Required="true"
-                                  AllowClear="false"
-                                  ActiveOnly="true"
-                                  PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
-                                  PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
-                                  Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)" />
-                </MudItem>
+                <ClinicPicker Value="_clinicId" ValueChanged="OnClinicChanged" Label="Clinic" Required="true" AllowClear="false" ActiveOnly="true"
+                              PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
+                              PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
+                              Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)" />
             }
             else if (Permissions.Has(WebPermissions.ClinicsRead))
             {
-                <MudItem xs="12" md="4">
+                <div>
                     <ClinicPicker Label="Clinic" AllowClear="false" Required="false" Disabled="true" />
-                    <MudText Typo="Typo.caption">@_clinicName</MudText>
-                </MudItem>
+                    <div class="hc-caption">@_clinicName</div>
+                </div>
             }
 
-            <MudItem xs="12" md="4">
-                @if (_selfOnly)
-                {
-                    <MudTextField Value="@_selfDoctorLabel" Label="Doctor" Disabled="true" Variant="Variant.Outlined" />
-                }
-                else
-                {
-                    <MudSelect T="Guid?" Value="_doctorId" ValueChanged="OnDoctorChanged" Label="Doctor" Required="true" Disabled="_doctorsLoading || string.IsNullOrWhiteSpace(_clinicSlug)" Variant="Variant.Outlined">
-                        @foreach (var doctor in _doctors)
-                        {
-                            <MudSelectItem T="Guid?" Value="@doctor.StaffMemberId">
-                                @doctor.DisplayName@(string.IsNullOrWhiteSpace(doctor.Specialty) ? "" : $" · {doctor.Specialty}")
-                            </MudSelectItem>
-                        }
-                    </MudSelect>
-                }
-            </MudItem>
-        </MudGrid>
-    </MudPaper>
+            @if (_selfOnly)
+            {
+                <FluentTextField Value="@_selfDoctorLabel" Label="Doctor" Disabled="true" Style="width:100%;" />
+            }
+            else
+            {
+                <FluentSelect TOption="string" Value="@(_doctorId?.ToString() ?? "")" ValueChanged="OnDoctorStringChanged" Label="Doctor" Required="true"
+                              Disabled="_doctorsLoading || string.IsNullOrWhiteSpace(_clinicSlug)" Style="width:100%;">
+                    @foreach (var doctor in _doctors)
+                    {
+                        <FluentOption Value="@doctor.StaffMemberId.ToString()">
+                            @doctor.DisplayName@(string.IsNullOrWhiteSpace(doctor.Specialty) ? "" : $" · {doctor.Specialty}")
+                        </FluentOption>
+                    }
+                </FluentSelect>
+            }
+        </div>
+    </div>
 
-    @if (!string.IsNullOrWhiteSpace(_error))
-    {
-        <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
-    }
+    @if (!string.IsNullOrWhiteSpace(_error)) { <ErrorState Message="@_error" /> }
 
     @if (_doctorId is null)
     {
-        <MudAlert Severity="Severity.Info">Select a clinic and doctor to manage availability.</MudAlert>
+        <FluentMessageBar Intent="MessageIntent.Info" AllowDismiss="false">Select a clinic and doctor to manage availability.</FluentMessageBar>
     }
     else
     {
-        <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true">
-            <MudTabPanel Text="Weekly windows" Class="pa-4">
-                <MudStack Row="true" Justify="Justify.FlexEnd" Class="mb-3">
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateWindowAsync" Disabled="_loading">Add window</MudButton>
-                </MudStack>
-                @if (_loading)
-                {
-                    <MudProgressLinear Indeterminate="true" />
-                }
-                else if (_windows.Count == 0)
-                {
-                    <MudText>No weekly availability windows.</MudText>
-                }
-                else
-                {
-                    @foreach (var (day, list) in AvailabilityPresentation.GroupByDay(_windows))
+        <FluentTabs>
+            <FluentTab Label="Weekly windows">
+                <div style="padding:1rem 0;">
+                    <FluentStack Orientation="Orientation.Horizontal" Style="justify-content:flex-end;margin-bottom:0.75rem;">
+                        <FluentButton Appearance="Appearance.Accent" IconStart="@(new Icons.Regular.Size20.Add())" OnClick="OpenCreateWindowAsync" Disabled="_loading">Add window</FluentButton>
+                    </FluentStack>
+                    @if (_loading) { <PageLoading /> }
+                    else if (_windows.Count == 0) { <EmptyState Message="No weekly availability windows." /> }
+                    else
                     {
-                        <MudText Typo="Typo.subtitle1" Class="mt-3 mb-2">@day</MudText>
-                        <MudTable Items="list" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" T="DoctorAvailabilityResponse">
-                            <HeaderContent>
-                                <MudTh>Time</MudTh>
-                                <MudTh>Slot</MudTh>
-                                <MudTh>Effective</MudTh>
-                                <MudTh>Status</MudTh>
-                                <MudTh>Version</MudTh>
-                                <MudTh Style="text-align:right">Actions</MudTh>
-                            </HeaderContent>
-                            <RowTemplate>
-                                <MudTd>@AvailabilityPresentation.FormatLocalWindow(context.StartLocalTime, context.EndLocalTime)</MudTd>
-                                <MudTd>@context.SlotDurationMinutes min</MudTd>
-                                <MudTd>@AvailabilityPresentation.FormatEffectiveRange(context.EffectiveFrom, context.EffectiveTo)</MudTd>
-                                <MudTd>
-                                    <MudChip T="string" Size="Size.Small" Color="@AvailabilityPresentation.ActiveColor(context.IsActive)">
-                                        @AvailabilityPresentation.ActiveLabel(context.IsActive)
-                                    </MudChip>
-                                </MudTd>
-                                <MudTd>@context.Version</MudTd>
-                                <MudTd Style="text-align:right">
-                                    <MudIconButton Icon="@Icons.Material.Filled.Edit" aria-label="Edit" OnClick="@(() => OpenEditWindowAsync(context))" />
-                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" aria-label="Delete" OnClick="@(() => DeleteWindowAsync(context))" />
-                                </MudTd>
-                            </RowTemplate>
-                        </MudTable>
-                    }
-                }
-            </MudTabPanel>
-
-            <MudTabPanel Text="Exceptions" Class="pa-4">
-                <MudStack Row="true" Justify="Justify.FlexEnd" Class="mb-3">
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateExceptionAsync" Disabled="_loading">Add exception</MudButton>
-                </MudStack>
-                @if (_loading)
-                {
-                    <MudProgressLinear Indeterminate="true" />
-                }
-                else if (_exceptions.Count == 0)
-                {
-                    <MudText>No date-specific exceptions.</MudText>
-                }
-                else
-                {
-                    <MudTable Items="_exceptions" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" T="DoctorAvailabilityExceptionResponse">
-                        <HeaderContent>
-                            <MudTh>Date</MudTh>
-                            <MudTh>Type</MudTh>
-                            <MudTh>Time</MudTh>
-                            <MudTh>Reason</MudTh>
-                            <MudTh>Version</MudTh>
-                            <MudTh Style="text-align:right">Actions</MudTh>
-                        </HeaderContent>
-                        <RowTemplate>
-                            <MudTd>@context.Date.ToString("yyyy-MM-dd")</MudTd>
-                            <MudTd>@AvailabilityPresentation.ExceptionTypeLabel(context.ExceptionType)</MudTd>
-                            <MudTd>
-                                @(string.IsNullOrWhiteSpace(context.StartLocalTime)
-                                    ? "Full day"
-                                    : AvailabilityPresentation.FormatLocalWindow(context.StartLocalTime!, context.EndLocalTime ?? ""))
-                            </MudTd>
-                            <MudTd>@(context.Reason ?? "—")</MudTd>
-                            <MudTd>@context.Version</MudTd>
-                            <MudTd Style="text-align:right">
-                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" aria-label="Delete exception" OnClick="@(() => DeleteExceptionAsync(context))" />
-                            </MudTd>
-                        </RowTemplate>
-                    </MudTable>
-                }
-            </MudTabPanel>
-
-            <MudTabPanel Text="Slot preview" Class="pa-4">
-                <MudGrid>
-                    <MudItem xs="12" md="3">
-                        <MudDatePicker Date="_previewDate" DateChanged="OnPreviewDateChanged" Label="Date" Editable="true" Variant="Variant.Outlined" />
-                    </MudItem>
-                    <MudItem xs="12" md="3">
-                        <MudNumericField T="int" Value="_previewDuration" ValueChanged="OnPreviewDurationChanged" Label="Duration (minutes)" Min="10" Max="240" Variant="Variant.Outlined" />
-                    </MudItem>
-                    <MudItem xs="12" md="2" Class="d-flex align-end">
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadSlotsAsync" Disabled="_slotsLoading || string.IsNullOrWhiteSpace(_clinicSlug)">Preview</MudButton>
-                    </MudItem>
-                </MudGrid>
-                @if (_slotsLoading)
-                {
-                    <MudProgressLinear Indeterminate="true" Class="mt-3" />
-                }
-                else if (_slots.Count == 0)
-                {
-                    <MudText Class="mt-3">No available slots for this date.</MudText>
-                }
-                else
-                {
-                    <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mt-3">
-                        @foreach (var slot in _slots)
+                        @foreach (var (day, list) in AvailabilityPresentation.GroupByDay(_windows))
                         {
-                            <MudChip T="string" Size="Size.Small">@slot.StartLocal – @slot.EndLocal</MudChip>
+                            <h3 style="font-size:1rem;margin:1rem 0 0.5rem;">@day</h3>
+                            <div class="hc-table-wrap" style="margin-bottom:0.75rem;">
+                                <table class="hc-table">
+                                    <thead><tr><th>Time</th><th>Slot</th><th>Effective</th><th>Status</th><th>Version</th><th class="hc-actions">Actions</th></tr></thead>
+                                    <tbody>
+                                    @foreach (var row in list)
+                                    {
+                                        <tr>
+                                            <td>@AvailabilityPresentation.FormatLocalWindow(row.StartLocalTime, row.EndLocalTime)</td>
+                                            <td>@row.SlotDurationMinutes min</td>
+                                            <td>@AvailabilityPresentation.FormatEffectiveRange(row.EffectiveFrom, row.EffectiveTo)</td>
+                                            <td><StatusBadge Text="@AvailabilityPresentation.ActiveLabel(row.IsActive)" Tone="@AvailabilityPresentation.ActiveTone(row.IsActive)" /></td>
+                                            <td>@row.Version</td>
+                                            <td class="hc-actions">
+                                                <FluentButton Appearance="Appearance.Stealth" IconStart="@(new Icons.Regular.Size16.Edit())" OnClick="@(() => OpenEditWindowAsync(row))" aria-label="Edit" />
+                                                <FluentButton Appearance="Appearance.Stealth" IconStart="@(new Icons.Regular.Size16.Delete())" OnClick="@(() => DeleteWindowAsync(row))" aria-label="Delete" />
+                                            </td>
+                                        </tr>
+                                    }
+                                    </tbody>
+                                </table>
+                            </div>
                         }
-                    </MudStack>
-                }
-            </MudTabPanel>
-        </MudTabs>
+                    }
+                </div>
+            </FluentTab>
+            <FluentTab Label="Exceptions">
+                <div style="padding:1rem 0;">
+                    <FluentStack Orientation="Orientation.Horizontal" Style="justify-content:flex-end;margin-bottom:0.75rem;">
+                        <FluentButton Appearance="Appearance.Accent" IconStart="@(new Icons.Regular.Size20.Add())" OnClick="OpenCreateExceptionAsync" Disabled="_loading">Add exception</FluentButton>
+                    </FluentStack>
+                    @if (_loading) { <PageLoading /> }
+                    else if (_exceptions.Count == 0) { <EmptyState Message="No date-specific exceptions." /> }
+                    else
+                    {
+                        <div class="hc-table-wrap">
+                            <table class="hc-table">
+                                <thead><tr><th>Date</th><th>Type</th><th>Time</th><th>Reason</th><th>Version</th><th class="hc-actions">Actions</th></tr></thead>
+                                <tbody>
+                                @foreach (var row in _exceptions)
+                                {
+                                    <tr>
+                                        <td>@row.Date.ToString("yyyy-MM-dd")</td>
+                                        <td>@AvailabilityPresentation.ExceptionTypeLabel(row.ExceptionType)</td>
+                                        <td>@(string.IsNullOrWhiteSpace(row.StartLocalTime) ? "Full day" : AvailabilityPresentation.FormatLocalWindow(row.StartLocalTime!, row.EndLocalTime ?? ""))</td>
+                                        <td>@(row.Reason ?? "—")</td>
+                                        <td>@row.Version</td>
+                                        <td class="hc-actions">
+                                            <FluentButton Appearance="Appearance.Stealth" IconStart="@(new Icons.Regular.Size16.Delete())" OnClick="@(() => DeleteExceptionAsync(row))" aria-label="Delete exception" />
+                                        </td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </FluentTab>
+            <FluentTab Label="Slot preview">
+                <div style="padding:1rem 0;">
+                    <div class="hc-filter-grid">
+                        <FluentDatePicker Value="_previewDate" ValueChanged="OnPreviewDateChanged" Label="Date" Style="width:100%;" />
+                        <FluentNumberField @bind-Value="_previewDuration" Label="Duration (minutes)" Min="10" Max="240" Style="width:100%;" @bind-Value:after="OnPreviewDurationChangedAfter" />
+                        <FluentButton Appearance="Appearance.Accent" OnClick="LoadSlotsAsync" Disabled="_slotsLoading || string.IsNullOrWhiteSpace(_clinicSlug)">Preview</FluentButton>
+                    </div>
+                    @if (_slotsLoading) { <PageLoading /> }
+                    else if (_slots.Count == 0) { <EmptyState Message="No available slots for this date." /> }
+                    else
+                    {
+                        <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="4" Wrap="true" Style="margin-top:0.75rem;">
+                            @foreach (var slot in _slots)
+                            {
+                                <StatusBadge Text="@($"{slot.StartLocal} – {slot.EndLocal}")" Tone="StatusTone.Neutral" />
+                            }
+                        </FluentStack>
+                    }
+                </div>
+            </FluentTab>
+        </FluentTabs>
     }
 }
 
@@ -392,6 +346,14 @@ else
         }
     }
 
+    private Task OnPreviewDurationChangedAfter() => OnPreviewDurationChanged(_previewDuration);
+
+    private async Task OnDoctorStringChanged(string? value)
+    {
+        Guid? doctorId = Guid.TryParse(value, out var id) ? id : null;
+        await OnDoctorChanged(doctorId);
+    }
+
     private async Task OnDoctorChanged(Guid? doctorId)
     {
         _doctorId = doctorId;
@@ -512,14 +474,15 @@ else
             return;
         }
 
-        var parameters = new DialogParameters<AvailabilityWindowDialog>
-        {
-            { x => x.DoctorStaffMemberId, doctorId },
-            { x => x.PlatformAdminBypass, Permissions.IsPlatformAdmin },
-        };
-        var dialog = await DialogService.ShowAsync<AvailabilityWindowDialog>("Add availability", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var dialog = await DialogService.ShowDialogAsync<AvailabilityWindowDialog>(
+            new AvailabilityWindowDialog.Args
+            {
+                DoctorStaffMemberId = doctorId,
+                PlatformAdminBypass = Permissions.IsPlatformAdmin,
+            },
+            FluentDialogDefaults.ContentOnly("Add availability"));
         var result = await dialog.Result;
-        if (result is { Canceled: false })
+        if (!result.Cancelled)
         {
             await RefreshAllAsync();
         }
@@ -532,15 +495,16 @@ else
             return;
         }
 
-        var parameters = new DialogParameters<AvailabilityWindowDialog>
-        {
-            { x => x.DoctorStaffMemberId, doctorId },
-            { x => x.PlatformAdminBypass, Permissions.IsPlatformAdmin },
-            { x => x.Existing, window },
-        };
-        var dialog = await DialogService.ShowAsync<AvailabilityWindowDialog>("Edit availability", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var dialog = await DialogService.ShowDialogAsync<AvailabilityWindowDialog>(
+            new AvailabilityWindowDialog.Args
+            {
+                DoctorStaffMemberId = doctorId,
+                PlatformAdminBypass = Permissions.IsPlatformAdmin,
+                Existing = window,
+            },
+            FluentDialogDefaults.ContentOnly("Edit availability"));
         var result = await dialog.Result;
-        if (result is { Canceled: false })
+        if (!result.Cancelled)
         {
             await RefreshAllAsync();
         }
@@ -553,12 +517,13 @@ else
             return;
         }
 
-        var confirm = await DialogService.ShowMessageBoxAsync(
-            "Delete availability",
+        var confirm = await DialogService.ShowConfirmationAsync(
             $"Delete {window.DayOfWeek} {window.StartLocalTime}–{window.EndLocalTime}?",
-            yesText: "Delete",
-            cancelText: "Cancel");
-        if (confirm != true)
+            "Delete availability",
+            "Delete",
+            "Cancel");
+        var confirmResult = await confirm.Result;
+        if (confirmResult.Cancelled)
         {
             return;
         }
@@ -566,17 +531,17 @@ else
         try
         {
             await AvailabilityApi.DeleteAvailabilityAsync(doctorId, window.Id, window.Version, Permissions.IsPlatformAdmin);
-            Snackbar.Add("Availability deleted.", Severity.Success);
+            Notify.Success("Availability deleted.");
             await RefreshAllAsync();
         }
         catch (ApiProblemException ex) when (AvailabilityProblemMessages.IsConcurrencyConflict(ex))
         {
-            Snackbar.Add(AvailabilityProblemMessages.ToUserMessage(ex), Severity.Warning);
+            Notify.Warning(AvailabilityProblemMessages.ToUserMessage(ex));
             await RefreshAllAsync();
         }
         catch (ApiProblemException ex)
         {
-            Snackbar.Add(AvailabilityProblemMessages.ToUserMessage(ex), Severity.Error);
+            Notify.Error(AvailabilityProblemMessages.ToUserMessage(ex));
         }
     }
 
@@ -587,14 +552,15 @@ else
             return;
         }
 
-        var parameters = new DialogParameters<AvailabilityExceptionDialog>
-        {
-            { x => x.DoctorStaffMemberId, doctorId },
-            { x => x.PlatformAdminBypass, Permissions.IsPlatformAdmin },
-        };
-        var dialog = await DialogService.ShowAsync<AvailabilityExceptionDialog>("Add exception", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var dialog = await DialogService.ShowDialogAsync<AvailabilityExceptionDialog>(
+            new AvailabilityExceptionDialog.Args
+            {
+                DoctorStaffMemberId = doctorId,
+                PlatformAdminBypass = Permissions.IsPlatformAdmin,
+            },
+            FluentDialogDefaults.ContentOnly("Add exception"));
         var result = await dialog.Result;
-        if (result is { Canceled: false })
+        if (!result.Cancelled)
         {
             await RefreshAllAsync();
         }
@@ -607,12 +573,13 @@ else
             return;
         }
 
-        var confirm = await DialogService.ShowMessageBoxAsync(
-            "Delete exception",
+        var confirm = await DialogService.ShowConfirmationAsync(
             $"Delete exception on {exception.Date:yyyy-MM-dd}?",
-            yesText: "Delete",
-            cancelText: "Cancel");
-        if (confirm != true)
+            "Delete exception",
+            "Delete",
+            "Cancel");
+        var confirmResult = await confirm.Result;
+        if (confirmResult.Cancelled)
         {
             return;
         }
@@ -620,17 +587,17 @@ else
         try
         {
             await AvailabilityApi.DeleteExceptionAsync(doctorId, exception.Id, exception.Version, Permissions.IsPlatformAdmin);
-            Snackbar.Add("Exception deleted.", Severity.Success);
+            Notify.Success("Exception deleted.");
             await RefreshAllAsync();
         }
         catch (ApiProblemException ex) when (AvailabilityProblemMessages.IsConcurrencyConflict(ex))
         {
-            Snackbar.Add(AvailabilityProblemMessages.ToUserMessage(ex), Severity.Warning);
+            Notify.Warning(AvailabilityProblemMessages.ToUserMessage(ex));
             await RefreshAllAsync();
         }
         catch (ApiProblemException ex)
         {
-            Snackbar.Add(AvailabilityProblemMessages.ToUserMessage(ex), Severity.Error);
+            Notify.Error(AvailabilityProblemMessages.ToUserMessage(ex));
         }
     }
 
@@ -675,7 +642,7 @@ else
         }
         catch (ApiProblemException ex)
         {
-            Snackbar.Add(AvailabilityProblemMessages.ToUserMessage(ex), Severity.Error);
+            Notify.Error(AvailabilityProblemMessages.ToUserMessage(ex));
         }
         finally
         {

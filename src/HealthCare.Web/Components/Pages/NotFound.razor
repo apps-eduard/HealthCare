@@ -3,10 +3,12 @@
 
 <PageTitle>Not found</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
-    <MudPaper Class="pa-6" Elevation="0">
-        <MudText Typo="Typo.h4" GutterBottom="true">Page not found</MudText>
-        <MudText Class="mb-4">The page you requested does not exist.</MudText>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/dashboard">Go to dashboard</MudButton>
-    </MudPaper>
-</MudContainer>
+<div class="hc-auth-shell">
+    <div class="hc-auth-container">
+        <div class="hc-auth-card">
+            <h1 class="hc-auth-brand" style="font-size:1.5rem">Page not found</h1>
+            <p class="hc-auth-sub">The page you requested does not exist.</p>
+            <FluentButton Appearance="Appearance.Accent" Href="/dashboard" Class="hc-auth-submit">Go to dashboard</FluentButton>
+        </div>
+    </div>
+</div>

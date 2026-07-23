@@ -1,103 +1,83 @@
 @namespace HealthCare.Web.Components.Appointments
+@implements IDialogContentComponent<AppointmentDetailDialog.Args>
 @using HealthCare.Contracts.Appointments
 @using HealthCare.Web.Appointments
 
-<MudDialog>
-    <TitleContent>
-        <MudText Typo="Typo.h6">Appointment details</MudText>
-    </TitleContent>
-    <DialogContent>
-        @if (_loading)
-        {
-            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-3" />
-        }
-        else if (_appointment is null)
-        {
-            <MudAlert Severity="Severity.Error">@_error ?? "Appointment not found."</MudAlert>
-        }
-        else
-        {
-            @if (!string.IsNullOrWhiteSpace(_error))
-            {
-                <MudAlert Severity="Severity.Error" Class="mb-3">@_error</MudAlert>
-            }
+@if (_loading)
+{
+    <PageLoading />
+}
+else if (_appointment is null)
+{
+    <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">@(_error ?? "Appointment not found.")</FluentMessageBar>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false" Style="margin-bottom:0.75rem;">@_error</FluentMessageBar>
+    }
 
-            <MudStack Spacing="2">
-                <MudText Typo="Typo.caption">ID: @_appointment.Id</MudText>
-                <MudText>
-                    <strong>When:</strong>
-                    @ClinicTimeDisplay.FormatLocalWithZone(_appointment.AppointmentDateUtc, _appointment.ClinicTimeZoneId)
-                </MudText>
-                <MudText><strong>Duration:</strong> @_appointment.DurationMinutes min</MudText>
-                <MudText>
-                    <strong>Status:</strong>
-                    <MudChip T="string" Size="Size.Small" Color="@AppointmentStatusPresentation.ChipColor(_appointment.Status)">
-                        @AppointmentStatusPresentation.DisplayLabel(_appointment.Status)
-                    </MudChip>
-                </MudText>
-                <MudText><strong>Clinic:</strong> @(_appointment.ClinicName ?? _appointment.ClinicId.ToString("D"))</MudText>
-                <MudText><strong>Doctor:</strong> @(_appointment.DoctorDisplayName ?? "—")</MudText>
-                <MudText>
-                    <strong>Patient:</strong>
-                    @(_appointment.PatientDisplayName ?? "—")
-                    @if (!string.IsNullOrWhiteSpace(_appointment.LocalPatientNumber))
-                    {
-                        <span> · @_appointment.LocalPatientNumber</span>
-                    }
-                </MudText>
-                <MudText><strong>Source:</strong> @_appointment.Source</MudText>
-                <MudText><strong>Version:</strong> @_appointment.Version</MudText>
-                <MudText Typo="Typo.caption">
-                    Created: @ClinicTimeDisplay.FormatLocalWithZone(_appointment.CreatedAtUtc, _appointment.ClinicTimeZoneId)
-                </MudText>
-                <MudText Typo="Typo.caption">
-                    Updated: @ClinicTimeDisplay.FormatLocalWithZone(_appointment.UpdatedAtUtc, _appointment.ClinicTimeZoneId)
-                </MudText>
-                @if (!string.IsNullOrWhiteSpace(_appointment.CancellationReason))
-                {
-                    <MudText><strong>Cancellation reason:</strong> @_appointment.CancellationReason</MudText>
-                }
-            </MudStack>
-        }
-    </DialogContent>
-    <DialogActions>
-        <MudButton OnClick="Close" Disabled="_busy">Close</MudButton>
-        @if (_appointment is not null)
-        {
-            @foreach (var action in AppointmentActionRules.GetVisibleActions(_appointment.Status, Permissions))
+    <FluentStack Orientation="Orientation.Vertical" VerticalGap="8">
+        <div class="hc-caption">ID: @_appointment.Id</div>
+        <div><strong>When:</strong> @ClinicTimeDisplay.FormatLocalWithZone(_appointment.AppointmentDateUtc, _appointment.ClinicTimeZoneId)</div>
+        <div><strong>Duration:</strong> @_appointment.DurationMinutes min</div>
+        <div>
+            <strong>Status:</strong>
+            <StatusBadge Text="@AppointmentStatusPresentation.DisplayLabel(_appointment.Status)"
+                         Tone="@AppointmentStatusPresentation.ChipTone(_appointment.Status)" />
+        </div>
+        <div><strong>Clinic:</strong> @(_appointment.ClinicName ?? _appointment.ClinicId.ToString("D"))</div>
+        <div><strong>Doctor:</strong> @(_appointment.DoctorDisplayName ?? "—")</div>
+        <div>
+            <strong>Patient:</strong>
+            @(_appointment.PatientDisplayName ?? "—")
+            @if (!string.IsNullOrWhiteSpace(_appointment.LocalPatientNumber))
             {
-                <MudButton Color="@ActionColor(action)"
-                           Variant="Variant.Filled"
-                           Disabled="_busy"
-                           OnClick="@(() => RunActionAsync(action))">
-                    @ActionLabel(action)
-                </MudButton>
+                <span> · @_appointment.LocalPatientNumber</span>
             }
+        </div>
+        <div><strong>Source:</strong> @_appointment.Source</div>
+        <div><strong>Version:</strong> @_appointment.Version</div>
+        <div class="hc-caption">Created: @ClinicTimeDisplay.FormatLocalWithZone(_appointment.CreatedAtUtc, _appointment.ClinicTimeZoneId)</div>
+        <div class="hc-caption">Updated: @ClinicTimeDisplay.FormatLocalWithZone(_appointment.UpdatedAtUtc, _appointment.ClinicTimeZoneId)</div>
+        @if (!string.IsNullOrWhiteSpace(_appointment.CancellationReason))
+        {
+            <div><strong>Cancellation reason:</strong> @_appointment.CancellationReason</div>
         }
-    </DialogActions>
-</MudDialog>
+    </FluentStack>
+}
+
+<FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Wrap="true" Style="margin-top:1rem;justify-content:flex-end;">
+    <FluentButton Appearance="Appearance.Outline" OnClick="CloseAsync" Disabled="_busy">Close</FluentButton>
+    @if (_appointment is not null)
+    {
+        @foreach (var action in AppointmentActionRules.GetVisibleActions(_appointment.Status, Permissions))
+        {
+            <FluentButton Appearance="Appearance.Accent" Disabled="_busy" OnClick="@(() => RunActionAsync(action))">
+                @ActionLabel(action)
+            </FluentButton>
+        }
+    }
+</FluentStack>
 
 @code {
+    public sealed class Args
+    {
+        public Guid AppointmentId { get; init; }
+        public bool PlatformAdminBypass { get; init; }
+    }
+
+    [Parameter]
+    public Args Content { get; set; } = default!;
+
     [CascadingParameter]
-    private IMudDialogInstance MudDialog { get; set; } = default!;
+    private FluentDialog Dialog { get; set; } = default!;
 
-    [Parameter]
-    public Guid AppointmentId { get; set; }
-
-    [Parameter]
-    public bool PlatformAdminBypass { get; set; }
-
-    [Inject]
-    private IAppointmentApiClient AppointmentsApi { get; set; } = default!;
-
-    [Inject]
-    private IPermissionState Permissions { get; set; } = default!;
-
-    [Inject]
-    private IDialogService DialogService { get; set; } = default!;
-
-    [Inject]
-    private ISnackbar Snackbar { get; set; } = default!;
+    [Inject] private IAppointmentApiClient AppointmentsApi { get; set; } = default!;
+    [Inject] private IPermissionState Permissions { get; set; } = default!;
+    [Inject] private IDialogService DialogService { get; set; } = default!;
+    [Inject] private IUserNotificationService Notify { get; set; } = default!;
 
     private AppointmentResponse? _appointment;
     private bool _loading = true;
@@ -105,10 +85,10 @@
     private string? _error;
     private bool _changed;
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadAsync();
-    }
+    private Guid AppointmentId => Content.AppointmentId;
+    private bool PlatformAdminBypass => Content.PlatformAdminBypass;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
 
     private async Task LoadAsync()
     {
@@ -146,12 +126,13 @@
                 return;
         }
 
-        var confirm = await DialogService.ShowMessageBoxAsync(
-            ActionLabel(action),
+        var confirm = await DialogService.ShowConfirmationAsync(
             $"Confirm {ActionLabel(action).ToLowerInvariant()} for this appointment?",
-            yesText: ActionLabel(action),
-            cancelText: "Cancel");
-        if (confirm != true)
+            ActionLabel(action),
+            ActionLabel(action),
+            "Cancel");
+        var confirmResult = await confirm.Result;
+        if (confirmResult.Cancelled)
         {
             return;
         }
@@ -180,16 +161,17 @@
                 _ => _appointment,
             };
             _changed = true;
-            Snackbar.Add($"{ActionLabel(action)} succeeded.", Severity.Success);
+            Notify.Success($"{ActionLabel(action)} succeeded.");
         }
         catch (ApiProblemException ex) when (AppointmentProblemMessages.IsConcurrencyConflict(ex))
         {
-            var reload = await DialogService.ShowMessageBoxAsync(
-                "Appointment changed",
+            var reload = await DialogService.ShowConfirmationAsync(
                 "This appointment was updated elsewhere. Reload the latest version?",
-                yesText: "Reload",
-                cancelText: "Close");
-            if (reload == true)
+                "Appointment changed",
+                "Reload",
+                "Close");
+            var reloadResult = await reload.Result;
+            if (!reloadResult.Cancelled)
             {
                 await LoadAsync();
             }
@@ -201,7 +183,7 @@
         catch (ApiProblemException ex)
         {
             _error = AppointmentProblemMessages.ToUserMessage(ex);
-            Snackbar.Add(_error, Severity.Error);
+            Notify.Error(_error);
         }
         finally
         {
@@ -216,15 +198,16 @@
             return;
         }
 
-        var parameters = new DialogParameters<CancelAppointmentDialog>
-        {
-            { x => x.AppointmentId, _appointment.Id },
-            { x => x.ExpectedVersion, _appointment.Version },
-            { x => x.PlatformAdminBypass, PlatformAdminBypass },
-        };
-        var dialog = await DialogService.ShowAsync<CancelAppointmentDialog>("Cancel appointment", parameters);
+        var dialog = await DialogService.ShowDialogAsync<CancelAppointmentDialog>(
+            new CancelAppointmentDialog.Args
+            {
+                AppointmentId = _appointment.Id,
+                ExpectedVersion = _appointment.Version,
+                PlatformAdminBypass = PlatformAdminBypass,
+            },
+            FluentDialogDefaults.ContentOnly("Cancel appointment"));
         var result = await dialog.Result;
-        if (result is { Canceled: false })
+        if (!result.Cancelled)
         {
             _changed = true;
             await LoadAsync();
@@ -238,21 +221,23 @@
             return;
         }
 
-        var parameters = new DialogParameters<RescheduleAppointmentDialog>
-        {
-            { x => x.Appointment, _appointment },
-            { x => x.PlatformAdminBypass, PlatformAdminBypass },
-        };
-        var dialog = await DialogService.ShowAsync<RescheduleAppointmentDialog>("Reschedule appointment", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var dialog = await DialogService.ShowDialogAsync<RescheduleAppointmentDialog>(
+            new RescheduleAppointmentDialog.Args
+            {
+                Appointment = _appointment,
+                PlatformAdminBypass = PlatformAdminBypass,
+            },
+            FluentDialogDefaults.ContentOnly("Reschedule appointment", "560px"));
         var result = await dialog.Result;
-        if (result is { Canceled: false })
+        if (!result.Cancelled)
         {
             _changed = true;
             await LoadAsync();
         }
     }
 
-    private void Close() => MudDialog.Close(_changed ? DialogResult.Ok(true) : DialogResult.Cancel());
+    private async Task CloseAsync() =>
+        await Dialog.CloseAsync(_changed ? DialogResult.Ok(true) : DialogResult.Cancel());
 
     private static string ActionLabel(AppointmentUiAction action) => action switch
     {
@@ -263,12 +248,5 @@
         AppointmentUiAction.Cancel => "Cancel",
         AppointmentUiAction.Reschedule => "Reschedule",
         _ => action.ToString(),
-    };
-
-    private static Color ActionColor(AppointmentUiAction action) => action switch
-    {
-        AppointmentUiAction.Cancel or AppointmentUiAction.NoShow => Color.Error,
-        AppointmentUiAction.Complete => Color.Success,
-        _ => Color.Primary,
     };
 }

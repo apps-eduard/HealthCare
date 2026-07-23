@@ -21,7 +21,7 @@ Deliver a usable multi-clinic platform where:
 - Each clinic can manage only its own patients, appointments, and medical notes.
 - Clinic A cannot access Clinic B's private records.
 - Clinic B cannot access Clinic A's private records.
-- Staff use a MudBlazor web application.
+- Staff use a Microsoft Fluent UI Blazor web application (MudBlazor removed).
 - Patients use a .NET MAUI Blazor Hybrid application.
 
 ---

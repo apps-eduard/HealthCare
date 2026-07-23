@@ -5,7 +5,7 @@
 @inject IPermissionState Permissions
 @inject IPlatformTenantContext PlatformTenant
 @inject IDialogService DialogService
-@inject ISnackbar Snackbar
+@inject IUserNotificationService Notify
 @inject NavigationManager Navigation
 @inject StaffAuthenticationStateProvider AuthState
 
@@ -13,150 +13,147 @@
 
 @if (!Permissions.Has(WebPermissions.StaffRead))
 {
-    <MudAlert Severity="Severity.Error">You do not have permission to view staff.</MudAlert>
+    <PermissionDeniedState Message="You do not have permission to view staff." />
 }
 else
 {
-    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
-        <MudText Typo="Typo.h4">Staff</MudText>
-        <MudStack Row="true" Spacing="2">
-            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="RefreshClicked" Disabled="_loading">Refresh</MudButton>
-            @if (Permissions.Has(WebPermissions.StaffManage))
-            {
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="OpenCreateAsync"
-                           Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !PlatformTenant.HasClinic))">
-                    Create staff
-                </MudButton>
-            }
-        </MudStack>
-    </MudStack>
+    <PageHeader Title="Staff">
+        <FluentButton Appearance="Appearance.Outline" IconStart="@(new Icons.Regular.Size20.ArrowClockwise())" OnClick="RefreshClicked" Disabled="_loading">Refresh</FluentButton>
+        @if (Permissions.Has(WebPermissions.StaffManage))
+        {
+            <FluentButton Appearance="Appearance.Accent"
+                          IconStart="@(new Icons.Regular.Size20.PersonAdd())"
+                          OnClick="OpenCreateAsync"
+                          Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !PlatformTenant.HasClinic))">
+                Create staff
+            </FluentButton>
+        }
+    </PageHeader>
 
     @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
     {
-        <MudAlert Severity="Severity.Info" Class="mb-4">
+        <FluentMessageBar Intent="MessageIntent.Info" AllowDismiss="false" Style="margin-bottom:1rem;">
             Select an organization in the platform banner before searching staff. Global staff search is not allowed.
-        </MudAlert>
+        </FluentMessageBar>
     }
     else if (Permissions.IsPlatformAdmin && !PlatformTenant.HasClinic)
     {
-        <MudAlert Severity="Severity.Info" Class="mb-4">
+        <FluentMessageBar Intent="MessageIntent.Info" AllowDismiss="false" Style="margin-bottom:1rem;">
             Select a clinic in the platform banner (or below) before loading staff for the selected organization.
-        </MudAlert>
+        </FluentMessageBar>
     }
 
-    <MudPaper Class="pa-4 mb-4" Outlined="true">
-        <MudGrid>
-            <MudItem xs="12" md="4">
-                <MudTextField @bind-Value="_search"
-                              Label="Search"
-                              Immediate="true"
-                              Adornment="Adornment.End"
-                              AdornmentIcon="@Icons.Material.Filled.Search"
-                              OnAdornmentClick="RefreshClicked"
-                              OnKeyUp="OnSearchKeyUp" />
-            </MudItem>
-            <MudItem xs="12" md="2">
-                <MudSelect T="string" @bind-Value="_role" Label="Role" Clearable="true">
-                    @foreach (var role in _roleOptions)
-                    {
-                        <MudSelectItem Value="@role">@role</MudSelectItem>
-                    }
-                </MudSelect>
-            </MudItem>
-            <MudItem xs="12" md="2">
-                <MudSelect T="string" @bind-Value="_activeFilter" Label="Status" Clearable="true">
-                    <MudSelectItem Value="@("active")">Active</MudSelectItem>
-                    <MudSelectItem Value="@("inactive")">Inactive</MudSelectItem>
-                </MudSelect>
-            </MudItem>
+    <div class="hc-card">
+        <div class="hc-filter-grid">
+            <FluentTextField @bind-Value="_search" Label="Search" Disabled="_loading" Style="width:100%;"
+                             @onkeyup="OnSearchKeyUp" />
+            <FluentSelect TOption="string" @bind-Value="_role" Label="Role" Style="width:100%;">
+                <FluentOption Value="">Any</FluentOption>
+                @foreach (var role in _roleOptions)
+                {
+                    <FluentOption Value="@role">@role</FluentOption>
+                }
+            </FluentSelect>
+            <FluentSelect TOption="string" @bind-Value="_activeFilter" Label="Status" Style="width:100%;">
+                <FluentOption Value="">Any</FluentOption>
+                <FluentOption Value="active">Active</FluentOption>
+                <FluentOption Value="inactive">Inactive</FluentOption>
+            </FluentSelect>
             @if (Permissions.CanFilterByClinic)
             {
-                <MudItem xs="12" md="3">
-                    <ClinicPicker Value="_clinicId"
-                                  ValueChanged="OnClinicFilterChanged"
-                                  Label="Clinic filter"
-                                  HelperText="@(Permissions.IsPlatformAdmin ? "Required for PLATFORM_ADMIN" : "Leave empty for all clinics in your organization")"
-                                  AllowClear="@(!Permissions.IsPlatformAdmin)"
-                                  Required="@(Permissions.IsPlatformAdmin)"
-                                  ActiveOnly="null"
-                                  PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
-                                  PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
-                                  Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)" />
-                </MudItem>
+                <ClinicPicker Value="_clinicId"
+                              ValueChanged="OnClinicFilterChanged"
+                              Label="Clinic filter"
+                              HelperText="@(Permissions.IsPlatformAdmin ? "Required for PLATFORM_ADMIN" : "Leave empty for all clinics in your organization")"
+                              AllowClear="@(!Permissions.IsPlatformAdmin)"
+                              Required="@(Permissions.IsPlatformAdmin)"
+                              ActiveOnly="null"
+                              PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
+                              PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
+                              Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)" />
             }
             else if (Permissions.Has(WebPermissions.ClinicsRead))
             {
-                <MudItem xs="12" md="3">
-                    <ClinicPicker Label="Clinic" AllowClear="false" Required="false" />
-                </MudItem>
+                <ClinicPicker Label="Clinic" AllowClear="false" Required="false" />
             }
-            <MudItem xs="12" md="1" Class="d-flex align-end">
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="RefreshClicked" FullWidth="true"
-                           Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !_clinicId.HasValue))">
-                    Apply
-                </MudButton>
-            </MudItem>
-        </MudGrid>
-    </MudPaper>
+            <FluentButton Appearance="Appearance.Accent" OnClick="RefreshClicked"
+                          Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !_clinicId.HasValue))">
+                Apply
+            </FluentButton>
+        </div>
+    </div>
 
     @if (!string.IsNullOrWhiteSpace(_error))
     {
-        <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
+        <ErrorState Message="@_error" />
     }
 
-    <MudTable Items="_items"
-              Hover="true"
-              Loading="_loading"
-              LoadingProgressColor="Color.Primary"
-              Breakpoint="Breakpoint.Sm"
-              Dense="true">
-        <HeaderContent>
-            <MudTh>Name</MudTh>
-            <MudTh>Email</MudTh>
-            <MudTh>Role</MudTh>
-            <MudTh>Status</MudTh>
-            <MudTh>Clinic</MudTh>
-            <MudTh Style="text-align:right">Actions</MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd DataLabel="Name">@DisplayName(context)</MudTd>
-            <MudTd DataLabel="Email">@context.Email</MudTd>
-            <MudTd DataLabel="Role"><MudChip T="string" Size="Size.Small">@context.Role</MudChip></MudTd>
-            <MudTd DataLabel="Status">
-                <MudChip T="string" Size="Size.Small" Color="@(context.MembershipIsActive ? Color.Success : Color.Default)">
-                    @(context.MembershipIsActive ? "Active" : "Inactive")
-                </MudChip>
-            </MudTd>
-            <MudTd DataLabel="Clinic"><MudText Typo="Typo.caption">@context.ClinicId</MudText></MudTd>
-            <MudTd DataLabel="Actions" Style="text-align:right">
-                <MudIconButton Icon="@Icons.Material.Filled.Visibility" aria-label="Details" OnClick="@(() => OpenDetailAsync(context))" />
-                @if (Permissions.Has(WebPermissions.StaffManage))
-                {
-                    @if (context.MembershipIsActive)
+    @if (_loading)
+    {
+        <PageLoading />
+    }
+    else if (_items.Count == 0)
+    {
+        <EmptyState Message="No staff members matched your filters." />
+    }
+    else
+    {
+        <div class="hc-table-wrap">
+            <table class="hc-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Clinic</th>
+                        <th class="hc-actions">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _items)
                     {
-                        <MudIconButton Icon="@Icons.Material.Filled.PersonOff" aria-label="Deactivate" Color="Color.Warning" OnClick="@(() => OpenActivationAsync(context, activate: false))" />
+                        <tr>
+                            <td>@DisplayName(row)</td>
+                            <td>@row.Email</td>
+                            <td><StatusBadge Text="@row.Role" Tone="StatusTone.Neutral" /></td>
+                            <td>
+                                <StatusBadge Text="@(row.MembershipIsActive ? "Active" : "Inactive")"
+                                             Tone="@(row.MembershipIsActive ? StatusTone.Success : StatusTone.Default)" />
+                            </td>
+                            <td><span class="hc-caption">@row.ClinicId</span></td>
+                            <td class="hc-actions">
+                                <FluentButton Appearance="Appearance.Stealth" IconStart="@(new Icons.Regular.Size16.Eye())" OnClick="@(() => OpenDetailAsync(row))" aria-label="Details" />
+                                @if (Permissions.Has(WebPermissions.StaffManage))
+                                {
+                                    @if (row.MembershipIsActive)
+                                    {
+                                        <FluentButton Appearance="Appearance.Stealth" IconStart="@(new Icons.Regular.Size16.PersonProhibited())" OnClick="@(() => OpenActivationAsync(row, activate: false))" aria-label="Deactivate" />
+                                    }
+                                    else
+                                    {
+                                        <FluentButton Appearance="Appearance.Stealth" IconStart="@(new Icons.Regular.Size16.Person())" OnClick="@(() => OpenActivationAsync(row, activate: true))" aria-label="Activate" />
+                                    }
+                                }
+                                @if (Permissions.Has(WebPermissions.RolesAssign))
+                                {
+                                    <FluentButton Appearance="Appearance.Stealth" IconStart="@(new Icons.Regular.Size16.Shield())" OnClick="@(() => OpenRolesAsync(row))" aria-label="Roles" />
+                                }
+                            </td>
+                        </tr>
                     }
-                    else
-                    {
-                        <MudIconButton Icon="@Icons.Material.Filled.Person" aria-label="Activate" Color="Color.Success" OnClick="@(() => OpenActivationAsync(context, activate: true))" />
-                    }
-                }
-                @if (Permissions.Has(WebPermissions.RolesAssign))
-                {
-                    <MudIconButton Icon="@Icons.Material.Filled.Badge" aria-label="Roles" OnClick="@(() => OpenRolesAsync(context))" />
-                }
-            </MudTd>
-        </RowTemplate>
-        <NoRecordsContent>
-            <MudText>No staff members matched your filters.</MudText>
-        </NoRecordsContent>
-        <PagerContent>
-            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="pa-2">
-                <MudText Typo="Typo.caption">Total: @_totalCount</MudText>
-                <MudPagination Count="@Math.Max(1, _totalPages)" Selected="_page" SelectedChanged="OnPageChanged" />
-            </MudStack>
-        </PagerContent>
-    </MudTable>
+                </tbody>
+            </table>
+            <div class="hc-pager">
+                <span class="hc-caption">Total: @_totalCount</span>
+                <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="4">
+                    <FluentButton Appearance="Appearance.Outline" Disabled="@(_page <= 1 || _loading)" OnClick="@(() => OnPageChanged(_page - 1))">Prev</FluentButton>
+                    <span class="hc-caption">Page @_page / @_totalPages</span>
+                    <FluentButton Appearance="Appearance.Outline" Disabled="@(_page >= _totalPages || _loading)" OnClick="@(() => OnPageChanged(_page + 1))">Next</FluentButton>
+                </FluentStack>
+            </div>
+        </div>
+    }
 }
 
 @code {
@@ -336,62 +333,60 @@ else
         if (Permissions.IsPlatformAdmin
             && (!PlatformTenant.HasOrganization || !PlatformTenant.HasClinic))
         {
-            Snackbar.Add("Select organization and clinic in the platform banner first.", Severity.Warning);
+            Notify.Warning("Select organization and clinic in the platform banner first.");
             return;
         }
 
-        var dialog = await DialogService.ShowAsync<CreateStaffDialog>("Create staff");
+        var dialog = await DialogService.ShowDialogAsync<CreateStaffDialog>(FluentDialogDefaults.ContentOnly("Create staff"));
         var result = await dialog.Result;
-        if (result is { Canceled: false })
+        if (!result.Cancelled)
         {
-            Snackbar.Add("Staff member created.", Severity.Success);
+            Notify.Success("Staff member created.");
             await ReloadAsync();
         }
     }
 
     private async Task OpenDetailAsync(StaffSummaryResponse row)
     {
-        var parameters = new DialogParameters<StaffDetailDialog>
-        {
-            { x => x.StaffMemberId, row.StaffMemberId },
-        };
-        await DialogService.ShowAsync<StaffDetailDialog>("Staff details", parameters);
+        await DialogService.ShowDialogAsync<StaffDetailDialog>(
+            new StaffDetailDialog.Args { StaffMemberId = row.StaffMemberId },
+            FluentDialogDefaults.ContentOnly("Staff details"));
     }
 
     private async Task OpenActivationAsync(StaffSummaryResponse row, bool activate)
     {
-        var parameters = new DialogParameters<StaffActivationDialog>
-        {
-            { x => x.StaffMemberId, row.StaffMemberId },
-            { x => x.ExpectedVersion, row.Version },
-            { x => x.Activate, activate },
-            { x => x.DisplayName, DisplayName(row) },
-        };
-        var dialog = await DialogService.ShowAsync<StaffActivationDialog>(
-            activate ? "Activate staff" : "Deactivate staff",
-            parameters);
+        var dialog = await DialogService.ShowDialogAsync<StaffActivationDialog>(
+            new StaffActivationDialog.Args
+            {
+                StaffMemberId = row.StaffMemberId,
+                ExpectedVersion = row.Version,
+                Activate = activate,
+                DisplayName = DisplayName(row),
+            },
+            FluentDialogDefaults.ContentOnly(activate ? "Activate staff" : "Deactivate staff"));
         var result = await dialog.Result;
-        if (result is { Canceled: false })
+        if (!result.Cancelled)
         {
-            Snackbar.Add(activate ? "Staff activated." : "Staff deactivated.", Severity.Success);
+            Notify.Success(activate ? "Staff activated." : "Staff deactivated.");
             await ReloadAsync(resetPage: false);
         }
     }
 
     private async Task OpenRolesAsync(StaffSummaryResponse row)
     {
-        var parameters = new DialogParameters<StaffRolesDialog>
-        {
-            { x => x.StaffMemberId, row.StaffMemberId },
-            { x => x.CurrentRole, row.Role },
-            { x => x.DisplayName, DisplayName(row) },
-            { x => x.TargetUserId, row.UserId },
-        };
-        var dialog = await DialogService.ShowAsync<StaffRolesDialog>("Assign role", parameters);
+        var dialog = await DialogService.ShowDialogAsync<StaffRolesDialog>(
+            new StaffRolesDialog.Args
+            {
+                StaffMemberId = row.StaffMemberId,
+                CurrentRole = row.Role,
+                DisplayName = DisplayName(row),
+                TargetUserId = row.UserId,
+            },
+            FluentDialogDefaults.ContentOnly("Assign role"));
         var result = await dialog.Result;
-        if (result is { Canceled: false })
+        if (!result.Cancelled)
         {
-            Snackbar.Add("Role updated.", Severity.Success);
+            Notify.Success("Role updated.");
             if (Permissions.CurrentUser?.UserId == row.UserId)
             {
                 await AuthState.RefreshProfileAsync();

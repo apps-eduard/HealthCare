@@ -3,59 +3,102 @@
 @inject IPermissionState Permissions
 @inject StaffAuthenticationStateProvider AuthState
 @inject NavigationManager Navigation
-@inject ISnackbar Snackbar
+@inject IUserNotificationService Notify
 
-<MudLayout>
-    <MudAppBar Elevation="1" Color="Color.Primary">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" />
-        <MudText Typo="Typo.h6" Class="ml-2">HealthCare Staff</MudText>
-        <MudSpacer />
+<div class="hc-layout">
+    <FluentHeader Class="hc-header">
+        <FluentButton Appearance="Appearance.Stealth"
+                      IconStart="@(new Icons.Regular.Size20.Navigation())"
+                      OnClick="ToggleDrawer"
+                      aria-label="Toggle navigation" />
+        <div class="hc-brand">
+            <span class="hc-brand-title">HealthCare</span>
+            <span class="hc-brand-subtitle">Staff console</span>
+        </div>
+        <div class="hc-spacer"></div>
         @if (Permissions.CurrentUser is { } user)
         {
-            <MudText Typo="Typo.body2" Class="mr-3 d-none d-md-flex">@user.Email</MudText>
+            <span class="hc-user-email">@user.Email</span>
+            <FluentPersona Name="@user.Email"
+                           Status="PresenceStatus.Available"
+                           ImageSize="32px"
+                           Initials="@GetInitials(user.Email)" />
+            <FluentButton id="user-menu"
+                          Appearance="Appearance.Stealth"
+                          IconEnd="@(new Icons.Regular.Size16.ChevronDown())"
+                          aria-label="User menu">
+                Account
+            </FluentButton>
+            <FluentMenu Anchor="user-menu">
+                <FluentMenuItem OnClick="LogoutAsync">Sign out</FluentMenuItem>
+            </FluentMenu>
         }
-        <MudMenu Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit" AnchorOrigin="Origin.BottomRight">
-            <MudMenuItem OnClick="LogoutAsync">Sign out</MudMenuItem>
-        </MudMenu>
-    </MudAppBar>
+    </FluentHeader>
 
-    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="1" Variant="DrawerVariant.Responsive">
-        <MudNavMenu>
-            <MudNavLink Href="/dashboard" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Dashboard</MudNavLink>
-            @if (Permissions.Has(WebPermissions.AppointmentsRead))
-            {
-                <MudNavLink Href="/appointments" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Event">Appointments</MudNavLink>
-            }
-            @if (Permissions.Has(WebPermissions.PatientsSearch))
-            {
-                <MudNavLink Href="/patients" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.People">Patients</MudNavLink>
-            }
-            @if (AvailabilityPermissionRules.CanManage(Permissions))
-            {
-                <MudNavLink Href="/availability" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Schedule">Availability</MudNavLink>
-            }
-            @if (Permissions.Has(WebPermissions.StaffRead))
-            {
-                <MudNavLink Href="/staff" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Groups">Staff Management</MudNavLink>
-            }
-        </MudNavMenu>
-    </MudDrawer>
+    <div class="hc-shell">
+        <nav class="hc-nav-rail @(_drawerOpen ? "hc-nav-open" : "hc-nav-collapsed")">
+            <FluentNavMenu Class="hc-nav">
+                <FluentNavLink Href="/dashboard"
+                               Match="NavLinkMatch.All"
+                               Icon="@(new Icons.Regular.Size20.Home())">
+                    Dashboard
+                </FluentNavLink>
+                @if (Permissions.Has(WebPermissions.AppointmentsRead))
+                {
+                    <FluentNavLink Href="/appointments"
+                                   Match="NavLinkMatch.All"
+                                   Icon="@(new Icons.Regular.Size20.CalendarLtr())">
+                        Appointments
+                    </FluentNavLink>
+                    <FluentNavLink Href="/appointments/calendar"
+                                   Match="NavLinkMatch.Prefix"
+                                   Icon="@(new Icons.Regular.Size20.CalendarWeekStart())">
+                        Appointment Calendar
+                    </FluentNavLink>
+                }
+                @if (Permissions.Has(WebPermissions.PatientsSearch))
+                {
+                    <FluentNavLink Href="/patients"
+                                   Match="NavLinkMatch.Prefix"
+                                   Icon="@(new Icons.Regular.Size20.People())">
+                        Patients
+                    </FluentNavLink>
+                }
+                @if (AvailabilityPermissionRules.CanManage(Permissions))
+                {
+                    <FluentNavLink Href="/availability"
+                                   Match="NavLinkMatch.Prefix"
+                                   Icon="@(new Icons.Regular.Size20.Clock())">
+                        Availability
+                    </FluentNavLink>
+                }
+                @if (Permissions.Has(WebPermissions.StaffRead))
+                {
+                    <FluentNavLink Href="/staff"
+                                   Match="NavLinkMatch.Prefix"
+                                   Icon="@(new Icons.Regular.Size20.PeopleTeam())">
+                        Staff Management
+                    </FluentNavLink>
+                }
+            </FluentNavMenu>
+        </nav>
 
-    <MudMainContent Class="pa-4">
-        @if (Permissions.IsPatientOnly)
-        {
-            <MudAlert Severity="Severity.Error" Class="mb-4">
-                Patient accounts cannot use the staff application.
-            </MudAlert>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/forbidden">View access details</MudButton>
-        }
-        else
-        {
-            <PlatformTenantBanner />
-            @Body
-        }
-    </MudMainContent>
-</MudLayout>
+        <main class="hc-main">
+            @if (Permissions.IsPatientOnly)
+            {
+                <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">
+                    Patient accounts cannot use the staff application.
+                </FluentMessageBar>
+                <FluentButton Appearance="Appearance.Accent" Href="/forbidden">View access details</FluentButton>
+            }
+            else
+            {
+                <PlatformTenantBanner />
+                @Body
+            }
+        </main>
+    </div>
+</div>
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
@@ -80,16 +123,26 @@
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
 
+    private static string GetInitials(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return "?";
+        }
+
+        var local = email.Split('@')[0];
+        return local.Length >= 2 ? local[..2].ToUpperInvariant() : local.ToUpperInvariant();
+    }
+
     private async Task LogoutAsync()
     {
         try
         {
-            // Clear circuit state immediately; cookie/session cleared by antiforgery-protected POST.
             await AuthState.MarkLoggedOutAsync(callRemoteLogout: true);
         }
         catch
         {
-            Snackbar.Add("Signed out locally.", Severity.Info);
+            Notify.Info("Signed out locally.");
         }
 
         Navigation.NavigateTo("/logout", forceLoad: true);

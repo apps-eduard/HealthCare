@@ -1,50 +1,52 @@
 @namespace HealthCare.Web.Components.Availability
+@implements IDialogContentComponent<AvailabilityWindowDialog.Args>
 @using HealthCare.Contracts.Appointments
 @using HealthCare.Web.Availability
 
-<MudDialog>
-    <DialogContent>
-        <MudStack Spacing="3">
-            <MudSelect T="string" @bind-Value="_day" Label="Day of week" Required="true" Disabled="_busy || IsEdit" Variant="Variant.Outlined">
-                @foreach (var day in AvailabilityPresentation.DaysOfWeekOrdered)
-                {
-                    <MudSelectItem Value="@day">@day</MudSelectItem>
-                }
-            </MudSelect>
-            <MudTextField @bind-Value="_start" Label="Start (clinic local HH:mm)" Required="true" Disabled="_busy" Variant="Variant.Outlined" />
-            <MudTextField @bind-Value="_end" Label="End (clinic local HH:mm)" Required="true" Disabled="_busy" Variant="Variant.Outlined" />
-            <MudNumericField T="int" @bind-Value="_duration" Label="Slot duration (minutes)" Min="10" Max="240" Disabled="_busy" Variant="Variant.Outlined" />
-            <MudDatePicker Date="_effectiveFrom" DateChanged="d => _effectiveFrom = d" Label="Effective from" Editable="true" Disabled="_busy" Variant="Variant.Outlined" />
-            <MudDatePicker Date="_effectiveTo" DateChanged="d => _effectiveTo = d" Label="Effective to (optional)" Editable="true" Clearable="true" Disabled="_busy" Variant="Variant.Outlined" />
-            @if (IsEdit)
-            {
-                <MudSwitch @bind-Value="_isActive" Label="Active" Color="Color.Primary" Disabled="_busy" />
-            }
-            @if (!string.IsNullOrWhiteSpace(_error))
-            {
-                <MudAlert Severity="Severity.Error">@_error</MudAlert>
-            }
-        </MudStack>
-    </DialogContent>
-    <DialogActions>
-        <MudButton OnClick="Cancel" Disabled="_busy">Cancel</MudButton>
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync" Disabled="_busy || !ClientValid">
-            @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
-            @(IsEdit ? "Save" : "Create")
-        </MudButton>
-    </DialogActions>
-</MudDialog>
+<FluentStack Orientation="Orientation.Vertical" VerticalGap="12">
+    <FluentSelect TOption="string" @bind-Value="_day" Label="Day of week" Required="true" Disabled="@(_busy || IsEdit)" Style="width:100%;">
+        @foreach (var day in AvailabilityPresentation.DaysOfWeekOrdered)
+        {
+            <FluentOption Value="@day">@day</FluentOption>
+        }
+    </FluentSelect>
+    <FluentTextField @bind-Value="_start" Label="Start (clinic local HH:mm)" Required="true" Disabled="_busy" Style="width:100%;" />
+    <FluentTextField @bind-Value="_end" Label="End (clinic local HH:mm)" Required="true" Disabled="_busy" Style="width:100%;" />
+    <FluentNumberField @bind-Value="_duration" Label="Slot duration (minutes)" Min="10" Max="240" Disabled="_busy" Style="width:100%;" />
+    <FluentDatePicker @bind-Value="_effectiveFrom" Label="Effective from" Disabled="_busy" Style="width:100%;" />
+    <FluentDatePicker @bind-Value="_effectiveTo" Label="Effective to (optional)" Disabled="_busy" Style="width:100%;" />
+    @if (IsEdit)
+    {
+        <FluentSwitch @bind-Value="_isActive" Label="Active" Disabled="_busy" />
+    }
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">@_error</FluentMessageBar>
+    }
+</FluentStack>
+<FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Style="margin-top:1rem;justify-content:flex-end;">
+    <FluentButton Appearance="Appearance.Outline" OnClick="CancelAsync" Disabled="_busy">Cancel</FluentButton>
+    <FluentButton Appearance="Appearance.Accent" OnClick="SubmitAsync" Disabled="_busy || !ClientValid">
+        @if (_busy) { <FluentProgressRing Style="width:16px;height:16px;margin-right:0.35rem;" /> }
+        @(IsEdit ? "Save" : "Create")
+    </FluentButton>
+</FluentStack>
 
 @code {
-    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
-    [Parameter] public Guid DoctorStaffMemberId { get; set; }
-    [Parameter] public bool PlatformAdminBypass { get; set; }
-    [Parameter] public DoctorAvailabilityResponse? Existing { get; set; }
+    public sealed class Args
+    {
+        public Guid DoctorStaffMemberId { get; init; }
+        public bool PlatformAdminBypass { get; init; }
+        public DoctorAvailabilityResponse? Existing { get; init; }
+    }
+
+    [Parameter] public Args Content { get; set; } = default!;
+    [CascadingParameter] private FluentDialog Dialog { get; set; } = default!;
     [Inject] private IDoctorAvailabilityApiClient Api { get; set; } = default!;
-    [Inject] private ISnackbar Snackbar { get; set; } = default!;
+    [Inject] private IUserNotificationService Notify { get; set; } = default!;
     [Inject] private IDialogService DialogService { get; set; } = default!;
 
-    private bool IsEdit => Existing is not null;
+    private bool IsEdit => Content.Existing is not null;
     private string _day = "Monday";
     private string _start = "09:00";
     private string _end = "12:00";
@@ -64,21 +66,21 @@
 
     protected override void OnInitialized()
     {
-        if (Existing is null)
+        if (Content.Existing is null)
         {
             return;
         }
 
-        _day = Existing.DayOfWeek;
-        _start = Existing.StartLocalTime;
-        _end = Existing.EndLocalTime;
-        _duration = Existing.SlotDurationMinutes;
-        _effectiveFrom = Existing.EffectiveFrom.ToDateTime(TimeOnly.MinValue);
-        _effectiveTo = Existing.EffectiveTo?.ToDateTime(TimeOnly.MinValue);
-        _isActive = Existing.IsActive;
+        _day = Content.Existing.DayOfWeek;
+        _start = Content.Existing.StartLocalTime;
+        _end = Content.Existing.EndLocalTime;
+        _duration = Content.Existing.SlotDurationMinutes;
+        _effectiveFrom = Content.Existing.EffectiveFrom.ToDateTime(TimeOnly.MinValue);
+        _effectiveTo = Content.Existing.EffectiveTo?.ToDateTime(TimeOnly.MinValue);
+        _isActive = Content.Existing.IsActive;
     }
 
-    private void Cancel() => MudDialog.Cancel();
+    private async Task CancelAsync() => await Dialog.CancelAsync();
 
     private async Task SubmitAsync()
     {
@@ -92,14 +94,14 @@
         _error = null;
         try
         {
-            if (IsEdit && Existing is not null)
+            if (IsEdit && Content.Existing is not null)
             {
                 var updated = await Api.UpdateAvailabilityAsync(
-                    DoctorStaffMemberId,
-                    Existing.Id,
+                    Content.DoctorStaffMemberId,
+                    Content.Existing.Id,
                     new UpdateDoctorAvailabilityRequest
                     {
-                        ExpectedVersion = Existing.Version,
+                        ExpectedVersion = Content.Existing.Version,
                         StartLocalTime = _start.Trim(),
                         EndLocalTime = _end.Trim(),
                         SlotDurationMinutes = _duration,
@@ -108,14 +110,14 @@
                         ClearEffectiveTo = _effectiveTo is null,
                         IsActive = _isActive,
                     },
-                    PlatformAdminBypass);
-                Snackbar.Add("Availability updated.", Severity.Success);
-                MudDialog.Close(DialogResult.Ok(updated));
+                    Content.PlatformAdminBypass);
+                Notify.Success("Availability updated.");
+                await Dialog.CloseAsync(DialogResult.Ok(updated));
             }
             else
             {
                 var created = await Api.CreateAvailabilityAsync(
-                    DoctorStaffMemberId,
+                    Content.DoctorStaffMemberId,
                     new CreateDoctorAvailabilityRequest
                     {
                         DayOfWeek = _day,
@@ -125,28 +127,29 @@
                         EffectiveFrom = DateOnly.FromDateTime(_effectiveFrom.Value),
                         EffectiveTo = _effectiveTo is DateTime to ? DateOnly.FromDateTime(to) : null,
                     },
-                    PlatformAdminBypass);
-                Snackbar.Add("Availability created.", Severity.Success);
-                MudDialog.Close(DialogResult.Ok(created));
+                    Content.PlatformAdminBypass);
+                Notify.Success("Availability created.");
+                await Dialog.CloseAsync(DialogResult.Ok(created));
             }
         }
         catch (ApiProblemException ex) when (AvailabilityProblemMessages.IsConcurrencyConflict(ex))
         {
-            var reload = await DialogService.ShowMessageBoxAsync(
-                "Record changed",
+            var confirm = await DialogService.ShowConfirmationAsync(
                 "This availability was updated elsewhere. Close and reload?",
-                yesText: "OK",
-                cancelText: "Stay");
+                "Record changed",
+                "OK",
+                "Stay");
+            var result = await confirm.Result;
             _error = AvailabilityProblemMessages.ToUserMessage(ex);
-            if (reload == true)
+            if (!result.Cancelled)
             {
-                MudDialog.Close(DialogResult.Ok(false));
+                await Dialog.CloseAsync(DialogResult.Ok(false));
             }
         }
         catch (ApiProblemException ex)
         {
             _error = AvailabilityProblemMessages.ToUserMessage(ex);
-            Snackbar.Add(_error, Severity.Error);
+            Notify.Error(_error);
         }
         finally
         {

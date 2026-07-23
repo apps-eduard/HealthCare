@@ -1,44 +1,46 @@
 @namespace HealthCare.Web.Components.Availability
+@implements IDialogContentComponent<AvailabilityExceptionDialog.Args>
 @using HealthCare.Contracts.Appointments
 @using HealthCare.Web.Availability
 
-<MudDialog>
-    <DialogContent>
-        <MudStack Spacing="3">
-            <MudSelect T="string" Value="_type" ValueChanged="OnTypeChanged" Label="Exception type" Required="true" Disabled="_busy" Variant="Variant.Outlined">
-                @foreach (var type in AvailabilityPresentation.ExceptionTypes)
-                {
-                    <MudSelectItem Value="@type">@AvailabilityPresentation.ExceptionTypeLabel(type)</MudSelectItem>
-                }
-            </MudSelect>
-            <MudDatePicker Date="_date" DateChanged="d => _date = d" Label="Date (clinic local)" Editable="true" Required="true" Disabled="_busy" Variant="Variant.Outlined" />
-            @if (AvailabilityPresentation.ExceptionRequiresTimes(_type))
-            {
-                <MudTextField @bind-Value="_start" Label="Start (HH:mm)" Required="true" Disabled="_busy" Variant="Variant.Outlined" />
-                <MudTextField @bind-Value="_end" Label="End (HH:mm)" Required="true" Disabled="_busy" Variant="Variant.Outlined" />
-            }
-            <MudTextField @bind-Value="_reason" Label="Reason (optional)" Disabled="_busy" Variant="Variant.Outlined" />
-            @if (!string.IsNullOrWhiteSpace(_error))
-            {
-                <MudAlert Severity="Severity.Error">@_error</MudAlert>
-            }
-        </MudStack>
-    </DialogContent>
-    <DialogActions>
-        <MudButton OnClick="Cancel" Disabled="_busy">Cancel</MudButton>
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync" Disabled="_busy || !ClientValid">
-            @if (_busy) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
-            Create
-        </MudButton>
-    </DialogActions>
-</MudDialog>
+<FluentStack Orientation="Orientation.Vertical" VerticalGap="12">
+    <FluentSelect TOption="string" Value="_type" ValueChanged="OnTypeChanged" Label="Exception type" Required="true" Disabled="_busy" Style="width:100%;">
+        @foreach (var type in AvailabilityPresentation.ExceptionTypes)
+        {
+            <FluentOption Value="@type">@AvailabilityPresentation.ExceptionTypeLabel(type)</FluentOption>
+        }
+    </FluentSelect>
+    <FluentDatePicker @bind-Value="_date" Label="Date (clinic local)" Disabled="_busy" Style="width:100%;" />
+    @if (AvailabilityPresentation.ExceptionRequiresTimes(_type))
+    {
+        <FluentTextField @bind-Value="_start" Label="Start (HH:mm)" Required="true" Disabled="_busy" Style="width:100%;" />
+        <FluentTextField @bind-Value="_end" Label="End (HH:mm)" Required="true" Disabled="_busy" Style="width:100%;" />
+    }
+    <FluentTextField @bind-Value="_reason" Label="Reason (optional)" Disabled="_busy" Style="width:100%;" />
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">@_error</FluentMessageBar>
+    }
+</FluentStack>
+<FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Style="margin-top:1rem;justify-content:flex-end;">
+    <FluentButton Appearance="Appearance.Outline" OnClick="CancelAsync" Disabled="_busy">Cancel</FluentButton>
+    <FluentButton Appearance="Appearance.Accent" OnClick="SubmitAsync" Disabled="_busy || !ClientValid">
+        @if (_busy) { <FluentProgressRing Style="width:16px;height:16px;margin-right:0.35rem;" /> }
+        Create
+    </FluentButton>
+</FluentStack>
 
 @code {
-    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
-    [Parameter] public Guid DoctorStaffMemberId { get; set; }
-    [Parameter] public bool PlatformAdminBypass { get; set; }
+    public sealed class Args
+    {
+        public Guid DoctorStaffMemberId { get; init; }
+        public bool PlatformAdminBypass { get; init; }
+    }
+
+    [Parameter] public Args Content { get; set; } = default!;
+    [CascadingParameter] private FluentDialog Dialog { get; set; } = default!;
     [Inject] private IDoctorAvailabilityApiClient Api { get; set; } = default!;
-    [Inject] private ISnackbar Snackbar { get; set; } = default!;
+    [Inject] private IUserNotificationService Notify { get; set; } = default!;
 
     private string _type = "UnavailableFullDay";
     private DateTime? _date = DateTime.Today;
@@ -83,7 +85,7 @@
         return Task.CompletedTask;
     }
 
-    private void Cancel() => MudDialog.Cancel();
+    private async Task CancelAsync() => await Dialog.CancelAsync();
 
     private async Task SubmitAsync()
     {
@@ -99,7 +101,7 @@
         {
             var requiresTimes = AvailabilityPresentation.ExceptionRequiresTimes(_type);
             var created = await Api.CreateExceptionAsync(
-                DoctorStaffMemberId,
+                Content.DoctorStaffMemberId,
                 new CreateDoctorAvailabilityExceptionRequest
                 {
                     Date = DateOnly.FromDateTime(_date.Value),
@@ -108,14 +110,14 @@
                     EndLocalTime = requiresTimes ? _end?.Trim() : null,
                     Reason = string.IsNullOrWhiteSpace(_reason) ? null : _reason.Trim(),
                 },
-                PlatformAdminBypass);
-            Snackbar.Add("Exception created.", Severity.Success);
-            MudDialog.Close(DialogResult.Ok(created));
+                Content.PlatformAdminBypass);
+            Notify.Success("Exception created.");
+            await Dialog.CloseAsync(DialogResult.Ok(created));
         }
         catch (ApiProblemException ex)
         {
             _error = AvailabilityProblemMessages.ToUserMessage(ex);
-            Snackbar.Add(_error, Severity.Error);
+            Notify.Error(_error);
         }
         finally
         {

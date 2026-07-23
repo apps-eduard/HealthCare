@@ -7,66 +7,65 @@
 
 <PageTitle>Staff sign in</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
-    <MudPaper Class="pa-6" Elevation="2">
-        <MudText Typo="Typo.h4" GutterBottom="true">HealthCare Staff</MudText>
-        <MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">Sign in with your staff account</MudText>
+<div class="hc-auth-shell">
+    <div class="hc-auth-container">
+        <div class="hc-auth-card">
+            <div class="hc-auth-eyebrow">Staff console</div>
+            <h1 class="hc-auth-brand">HealthCare</h1>
+            <p class="hc-auth-sub">Sign in with your staff account</p>
 
-        @if (!string.IsNullOrWhiteSpace(_error))
-        {
-            <MudAlert Severity="Severity.Error" Class="mb-3" Dense="true">@_error</MudAlert>
-        }
+            @if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false" Class="mb-4">@_error</FluentMessageBar>
+            }
 
-        @* Full browser POST to BFF — Set-Cookie must happen on an HTTP response, not the SignalR circuit. *@
-        <form id="bff-login-form"
-              method="post"
-              action="/bff/auth/login"
-              data-enhance="false"
-              onsubmit="return window.__hcLoginSubmit ? window.__hcLoginSubmit(this) : true;">
-            <AntiforgeryToken />
-            <input type="hidden" name="returnUrl" value="@SafeReturnUrl.Resolve(ReturnUrl)" />
+            @* Full browser POST to BFF — Set-Cookie must happen on an HTTP response, not the SignalR circuit. *@
+            <form id="bff-login-form"
+                  method="post"
+                  action="/bff/auth/login"
+                  data-enhance="false"
+                  onsubmit="return window.__hcLoginSubmit ? window.__hcLoginSubmit(this) : true;">
+                <AntiforgeryToken />
+                <input type="hidden" name="returnUrl" value="@SafeReturnUrl.Resolve(ReturnUrl)" />
 
-            <div class="mb-3">
-                <label class="mud-input-label mud-input-label-inputbased mud-input-label-text" for="bff-email">Email</label>
-                <input id="bff-email"
-                       name="email"
-                       type="email"
-                       required
-                       autocomplete="username"
-                       class="mud-input-slot mud-input-root mud-input-root-outlined mud-input-root-margin-dense pa-2"
-                       style="width:100%;border:1px solid var(--mud-palette-lines-inputs);border-radius:4px;background:transparent;color:inherit;" />
-            </div>
-            <div class="mb-3">
-                <label class="mud-input-label mud-input-label-inputbased mud-input-label-text" for="bff-password">Password</label>
-                <input id="bff-password"
-                       name="password"
-                       type="password"
-                       required
-                       autocomplete="current-password"
-                       class="mud-input-slot mud-input-root mud-input-root-outlined mud-input-root-margin-dense pa-2"
-                       style="width:100%;border:1px solid var(--mud-palette-lines-inputs);border-radius:4px;background:transparent;color:inherit;" />
-            </div>
+                <div class="hc-auth-field">
+                    <label for="bff-email">Email</label>
+                    <input id="bff-email"
+                           name="email"
+                           type="email"
+                           required
+                           autocomplete="username"
+                           class="hc-auth-input" />
+                </div>
+                <div class="hc-auth-field">
+                    <label for="bff-password">Password</label>
+                    <input id="bff-password"
+                           name="password"
+                           type="password"
+                           required
+                           autocomplete="current-password"
+                           class="hc-auth-input" />
+                </div>
 
-            <MudButton ButtonType="ButtonType.Submit"
-                       Variant="Variant.Filled"
-                       Color="Color.Primary"
-                       FullWidth="true"
-                       Class="mt-2"
-                       id="bff-login-submit">
-                Sign in
-            </MudButton>
-        </form>
-        <script>
-            window.__hcLoginSubmit = function (form) {
-                if (form.dataset.submitting === '1') { return false; }
-                form.dataset.submitting = '1';
-                var btn = document.getElementById('bff-login-submit');
-                if (btn) { btn.setAttribute('disabled', 'disabled'); }
-                return true;
-            };
-        </script>
-    </MudPaper>
-</MudContainer>
+                <FluentButton Type="ButtonType.Submit"
+                              Appearance="Appearance.Accent"
+                              Class="hc-auth-submit"
+                              id="bff-login-submit">
+                    Sign in
+                </FluentButton>
+            </form>
+            <script>
+                window.__hcLoginSubmit = function (form) {
+                    if (form.dataset.submitting === '1') { return false; }
+                    form.dataset.submitting = '1';
+                    var btn = document.getElementById('bff-login-submit');
+                    if (btn) { btn.setAttribute('disabled', 'disabled'); }
+                    return true;
+                };
+            </script>
+        </div>
+    </div>
+</div>
 
 @code {
     private string? _error;

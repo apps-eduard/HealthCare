@@ -1,11 +1,14 @@
 ﻿@using HealthCare.Web.Components.Layout
 @using HealthCare.Web.Components.Pages
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.FluentUI.AspNetCore.Components
 
-<MudThemeProvider />
-<MudPopoverProvider />
-<MudDialogProvider />
-<MudSnackbarProvider />
+<FluentDesignTheme Mode="DesignThemeModes.Light" OfficeColor="OfficeColor.Office" StorageName="hc-theme" />
+<FluentToastProvider MaxToastCount="5" Position="ToastPosition.BottomRight" />
+<FluentDialogProvider />
+<FluentTooltipProvider />
+<FluentMessageBarProvider Section="MESSAGES_TOP" />
+<FluentMenuProvider />
 
 <CascadingAuthenticationState>
     <Router AppAssembly="typeof(Program).Assembly" NotFoundPage="typeof(Pages.NotFound)">
@@ -24,7 +27,7 @@
                     }
                 </NotAuthorized>
                 <Authorizing>
-                    <MudProgressCircular Indeterminate="true" Class="ma-8" />
+                    <PageLoading Message="Checking session…" />
                 </Authorizing>
             </AuthorizeRouteView>
             <FocusOnNavigate RouteData="routeData" Selector="h1" />

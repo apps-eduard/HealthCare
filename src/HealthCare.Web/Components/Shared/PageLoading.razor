@@ -1,0 +1,11 @@
+@namespace HealthCare.Web.Components.Shared
+
+<div class="hc-loading" role="status" aria-live="polite">
+    <FluentProgressRing />
+    <span>@(string.IsNullOrWhiteSpace(Message) ? "Loading…" : Message)</span>
+</div>
+
+@code {
+    [Parameter]
+    public string? Message { get; set; }
+}

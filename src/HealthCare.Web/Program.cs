@@ -8,8 +8,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.DataProtection;
-using MudBlazor;
-using MudBlazor.Services;
+using Microsoft.FluentUI.AspNetCore.Components;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -120,12 +119,9 @@ builder.Services.AddScoped<IAppointmentApiClient, AppointmentApiClient>();
 builder.Services.AddScoped<IStaffPatientApiClient, StaffPatientApiClient>();
 builder.Services.AddScoped<IDoctorAvailabilityApiClient, DoctorAvailabilityApiClient>();
 
-builder.Services.AddMudServices(config =>
-{
-    config.SnackbarConfiguration.PositionClass = Defaults.Classes.Position.BottomRight;
-    config.SnackbarConfiguration.PreventDuplicates = true;
-    config.SnackbarConfiguration.ShowCloseIcon = true;
-});
+builder.Services.AddHttpClient();
+builder.Services.AddFluentUIComponents();
+builder.Services.AddScoped<IUserNotificationService, FluentUserNotificationService>();
 
 var app = builder.Build();
 
