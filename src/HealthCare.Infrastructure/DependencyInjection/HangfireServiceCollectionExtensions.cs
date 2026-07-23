@@ -27,6 +27,14 @@ public static class HangfireServiceCollectionExtensions
         services.AddScoped<IAppointmentReminderRecoveryService, AppointmentReminderRecoveryService>();
         services.AddScoped<IAppointmentReminderService, AppointmentReminderService>();
 
+        services.AddScoped<IClinicAppointmentSummarySender, DevelopmentClinicAppointmentSummarySender>();
+        services.AddScoped<IClinicAppointmentSummaryBuilder, ClinicAppointmentSummaryBuilder>();
+        services.AddScoped<IClinicAppointmentSummaryDispatcher, ClinicAppointmentSummaryDispatcher>();
+        services.AddScoped<IClinicAppointmentSummaryProcessor, ClinicAppointmentSummaryProcessor>();
+        services.AddScoped<IClinicAppointmentSummaryRecoveryService, ClinicAppointmentSummaryRecoveryService>();
+        services.AddScoped<IClinicAppointmentSummaryService, ClinicAppointmentSummaryService>();
+        services.AddScoped<IClinicAppointmentSummaryJobs, HangfireClinicAppointmentSummaryJobs>();
+
         var connectionString = configuration.GetConnectionString(InfrastructureServiceCollectionExtensions.DefaultConnectionName)
             ?? throw new InvalidOperationException(
                 $"Connection string '{InfrastructureServiceCollectionExtensions.DefaultConnectionName}' is required for Hangfire.");
@@ -70,6 +78,16 @@ public static class HangfireServiceCollectionExtensions
             "appointment-reminder-recovery",
             j => j.RecoverOverdueRemindersAsync(CancellationToken.None),
             "*/5 * * * *");
+
+        recurring.AddOrUpdate<ClinicAppointmentSummaryHangfireJobs>(
+            "clinic-appointment-summary-dispatch",
+            j => j.DispatchDueSummariesAsync(CancellationToken.None),
+            "*/15 * * * *");
+
+        recurring.AddOrUpdate<ClinicAppointmentSummaryHangfireJobs>(
+            "clinic-appointment-summary-recovery",
+            j => j.RecoverFailedSummariesAsync(CancellationToken.None),
+            "*/15 * * * *");
 
         app.UseHangfireDashboard(DashboardPath, new DashboardOptions
         {

@@ -2,10 +2,10 @@
 
 ## Progress overview
 
-**Overall completion: 49%**
+**Overall completion: 51%**
 
 ```text
-[███████████████░░░░░░░░░░░░░░░░░]  49%
+[████████████████░░░░░░░░░░░░░░░░]  51%
 ```
 
 | Metric | Value |
@@ -15,7 +15,7 @@
 | Partial | 6 (Phases 2, 3, 4, 6, 7, 10) |
 | In progress | 0 |
 | Not started | 5 |
-| Weighted score | (3×1.0) + (0.7 + 0.75 + 0.5 + 0.5 + 0.85 + 0.5) = 6.8 / 14 ≈ **49%** |
+| Weighted score | (3×1.0) + (0.7 + 0.75 + 0.5 + 0.5 + 0.85 + 0.75) = 7.05 / 14 ≈ **51%** |
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
@@ -36,7 +36,7 @@
 | 7 | Appointment booking | Partial | `█████████░` 85% |
 | 8 | Staff web application (MudBlazor) | Not started | `░░░░░░░░░░` 0% |
 | 9 | Medical notes | Not started | `░░░░░░░░░░` 0% |
-| 10 | Hangfire and notifications | Partial | `█████░░░░░` 50% |
+| 10 | Hangfire and notifications | Partial | `████████░░` 75% |
 | 11 | Patient mobile application | Not started | `░░░░░░░░░░` 0% |
 | 12 | Audit and security hardening | Not started | `░░░░░░░░░░` 0% |
 | 13 | Docker and deployment | Not started | `░░░░░░░░░░` 0% |
@@ -93,7 +93,7 @@ Authoritative design docs:
 | 7 | Appointment booking | Partial (foundation + availability + reschedule) | 2026-07-23 |
 | 8 | Staff web application (MudBlazor) | Not started | — |
 | 9 | Medical notes | Not started | — |
-| 10 | Hangfire and notifications | Partial (appointment reminders) | 2026-07-23 |
+| 10 | Hangfire and notifications | Partial (reminders + daily clinic summary) | 2026-07-23 |
 | 11 | Patient mobile application | Not started | — |
 | 12 | Audit and security hardening | Not started | — |
 | 13 | Docker and deployment | Not started | — |
@@ -445,7 +445,6 @@ Authoritative design docs:
 ### Remaining Appointment work
 
 - Reminder SMS/email provider integration (real delivery)
-- Daily clinic appointment summary Hangfire job
 - Staff UI appointment queue / calendar
 - Advanced recurring schedules
 - Broader assignable roles if needed beyond DOCTOR
@@ -529,7 +528,7 @@ Authoritative design docs:
 
 ## Phase 10 — Hangfire and notifications
 
-**Status:** Partial (~50% — appointment reminders MVP)  
+**Status:** Partial (~75% — reminders + daily clinic summary)  
 **Updated:** 2026-07-23
 
 ### Hangfire configuration
@@ -564,25 +563,79 @@ Authoritative design docs:
 ### Endpoints
 - `GET /api/v1/staff/appointments/{appointmentId}/reminders`
 - `POST /api/v1/staff/appointments/{appointmentId}/reminders/retry`
+- `GET /api/v1/staff/clinics/current/appointment-summary?date=&clinicId=`
+- `POST /api/v1/staff/clinics/{clinicId}/appointment-summary/{date}/retry`
+
+### Daily clinic appointment summary
+
+**Purpose**
+- Operational morning brief for each active clinic: status counts, doctor grouping, first/last times, minimal appointment list
+
+**Schedule and date semantics (assumption)**
+- Global dispatcher every **15 minutes** (`*/15 * * * *`)
+- Due when clinic-local time is **≥ 06:00**
+- Covers **the same clinic-local calendar day** (not tomorrow)
+- Clinic job arguments: **RunId only**; reload clinic/appointments from DB
+
+**Timezone strategy**
+- `Clinic.TimeZoneId` via `IClinicTimeZoneConverter`
+- Day bounds: `[ToUtc(date, 00:00), ToUtc(date+1, 00:00))`
+- Never uses server local time
+
+**Dispatcher design**
+- One recurring dispatcher (not one recurring job per clinic)
+- Skips inactive clinics/organizations
+- Inserts `ClinicAppointmentSummaryRun` with unique `IdempotencyKey = {clinicId:N}:{yyyy-MM-dd}` then enqueues process
+- Concurrent insert races ignored; Completed runs never re-queued
+- Separate recovery recurring job every 15 minutes (`DisableConcurrentExecution`)
+
+**Summary contents**
+- Counts: Total, Requested, Confirmed, CheckedIn, InProgress, Completed, NoShow, CancelledByPatient, CancelledByClinic, Unassigned
+- ByDoctor groups; first/last UTC + local display
+- Optional list items: AppointmentId, LocalTime, Status, DoctorDisplayName
+
+**Privacy exclusions**
+- No reason, patient notes, medical notes, patient profile, DOB, address, contacts, LocalPatientNumber, tokens
+
+**Idempotency / persistence**
+- Persistent `ClinicAppointmentSummaryRun` (no message body storage)
+- Statuses: Pending, Processing, Completed, Failed
+- Completed never resent; Failed may retry (max 5 attempts)
+- Sanitized `LastError` / `LastErrorCode` only
+
+**Retry and recovery**
+- Hangfire `AutomaticRetry` (3) on process job
+- Recovery retries Failed, stuck Processing (>30m), and Pending without BackgroundJobId
+- Staff retry endpoint for Failed/Pending
+
+**Sender**
+- `IClinicAppointmentSummarySender` → Development logging sender (counts only)
+
+**Tenant authorization (staff endpoints)**
+- Clinic staff: trusted clinic (client ClinicId ignored)
+- Org admin: clinic within organization
+- PATIENT: 403
+- PLATFORM_ADMIN: explicit bypass + clinicId (controller still requires StaffUser policy)
 
 ### Migration result
 - `AddAppointmentReminders` applied to `healthcare_db` (`AppointmentReminders` table)
+- `AddClinicAppointmentSummaryRuns` applied to `healthcare_db` (`ClinicAppointmentSummaryRuns` table)
 
 ### Verification
 - Build: succeeded
-- Unit tests: 137 passed
+- Unit tests: 177 passed (18 summary-focused)
 - Architecture tests: 15 passed
-- Integration tests: Docker unavailable; suite retained
-- Manual: health 200; Hangfire server starts in Development; appointment creates Confirmation+Upcoming; Development sender marks Sent; cancel cancels pending; cross-clinic list 404; anonymous dashboard not usable as admin UI
+- Integration tests: Docker unavailable; suite retained (`ClinicAppointmentSummaryEndpointTests`)
+- Manual: health **200**; Hangfire server started (PostgreSQL hangfire schema); staff summary scoped to trusted clinic; PATIENT **403**; Clinic B staff cannot see Clinic A via clinicId query; seeded day summary counts Requested=1; dispatcher created runs; process Completed; reprocess no duplicate attempts; sender failure → Failed with sanitized `delivery_failed`
 
 ### Known limitations
 - Development logging sender only (no real SMS/email)
 - Hangfire worker/dashboard Development-only
-- No daily clinic summary job yet
+- No production Hangfire worker hosting yet
+- PLATFORM_ADMIN without staff membership cannot call StaffUser-protected summary endpoints
 
 ### Remaining Hangfire / notification work
 - Real email/SMS provider adapters
-- Daily clinic summary
 - Production Hangfire worker hosting
 - Expired refresh-token cleanup job (architecture backlog)
 
@@ -643,6 +696,7 @@ Authoritative design docs:
 | 2026-07-23 | 7 | Availability windows, exceptions, doctor list, slots, booking rules; overall ~44% |
 | 2026-07-23 | 10 | Appointment reminders + Hangfire (PostgreSQL, Dev dashboard); overall ~48% |
 | 2026-07-23 | 7 | Appointment reschedule workflow + history + Upcoming replacement; overall ~49% |
+| 2026-07-23 | 10 | Daily clinic appointment summary Hangfire dispatcher + runs; overall ~51% |
 
 ---
 

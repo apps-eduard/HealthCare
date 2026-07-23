@@ -143,6 +143,9 @@ public sealed class LayerDependencyTests
             .Should().NotBeNull();
         typeof(IAppointmentReminderScheduler).GetMethod(nameof(IAppointmentReminderScheduler.ScheduleAfterAppointmentRescheduledAsync))
             .Should().NotBeNull();
+        typeof(IClinicAppointmentSummaryService).Namespace.Should().StartWith("HealthCare.Application.Appointments");
+        typeof(IClinicAppointmentSummaryDispatcher).Namespace.Should().StartWith("HealthCare.Application.Appointments");
+        typeof(IClinicAppointmentSummarySender).Namespace.Should().StartWith("HealthCare.Application.Appointments");
     }
 
     [Fact]
@@ -204,6 +207,26 @@ public sealed class LayerDependencyTests
         typeof(IAppointmentReminderScheduler).Namespace.Should().StartWith("HealthCare.Application.Appointments");
         typeof(IAppointmentReminderProcessor).Namespace.Should().StartWith("HealthCare.Application.Appointments");
         typeof(IReminderBackgroundJobs).Namespace.Should().StartWith("HealthCare.Application.Appointments");
+
+        typeof(IClinicAppointmentSummaryService).Namespace.Should().StartWith("HealthCare.Application.Appointments");
+        typeof(IClinicAppointmentSummaryBuilder).Namespace.Should().StartWith("HealthCare.Application.Appointments");
+        typeof(IClinicAppointmentSummaryDispatcher).Namespace.Should().StartWith("HealthCare.Application.Appointments");
+        typeof(IClinicAppointmentSummaryProcessor).Namespace.Should().StartWith("HealthCare.Application.Appointments");
+        typeof(IClinicAppointmentSummaryJobs).Namespace.Should().StartWith("HealthCare.Application.Appointments");
+        typeof(IClinicAppointmentSummarySender).Namespace.Should().StartWith("HealthCare.Application.Appointments");
+
+        typeof(Contracts.Appointments.ClinicAppointmentSummaryResponse)
+            .Should().NotBeAssignableTo(typeof(Domain.Appointments.Appointment));
+        typeof(Contracts.Appointments.ClinicAppointmentSummaryResponse)
+            .Should().NotBeAssignableTo(typeof(Domain.Appointments.ClinicAppointmentSummaryRun));
+        typeof(Contracts.Appointments.ClinicAppointmentSummaryItem)
+            .GetProperty("Reason").Should().BeNull();
+        typeof(Contracts.Appointments.ClinicAppointmentSummaryItem)
+            .GetProperty("PatientNotes").Should().BeNull();
+        typeof(Contracts.Appointments.ClinicAppointmentSummaryItem)
+            .GetProperty("PatientId").Should().BeNull();
+
+        typeof(IClinicTimeZoneConverter).Namespace.Should().StartWith("HealthCare.Application.Appointments");
 
         typeof(Contracts.Appointments.AppointmentReminderResponse)
             .Should().NotBeAssignableTo(typeof(Domain.Appointments.AppointmentReminder));

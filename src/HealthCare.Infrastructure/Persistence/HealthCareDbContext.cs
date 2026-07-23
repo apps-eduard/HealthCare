@@ -46,6 +46,8 @@ public sealed class HealthCareDbContext : IdentityDbContext<ApplicationUser, Ide
 
     public DbSet<AppointmentRescheduleHistory> AppointmentRescheduleHistories => Set<AppointmentRescheduleHistory>();
 
+    public DbSet<ClinicAppointmentSummaryRun> ClinicAppointmentSummaryRuns => Set<ClinicAppointmentSummaryRun>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -167,6 +169,14 @@ public sealed class HealthCareDbContext : IdentityDbContext<ApplicationUser, Ide
                         history.RescheduledAtUtc = utcNow;
                     }
 
+                    break;
+                case ClinicAppointmentSummaryRun summaryRun:
+                    if (entry.State == EntityState.Added)
+                    {
+                        summaryRun.CreatedAtUtc = utcNow;
+                    }
+
+                    summaryRun.UpdatedAtUtc = utcNow;
                     break;
             }
         }

@@ -137,6 +137,18 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
                 cancellationToken);
         }
 
+        if (exception is AppointmentSummaryException summaryException)
+        {
+            return await WriteAuthProblemAsync(
+                httpContext,
+                summaryException.StatusCode,
+                summaryException.Title,
+                summaryException.ErrorCode,
+                correlationId,
+                "Appointment summary operation denied",
+                cancellationToken);
+        }
+
         _logger.LogError(
             exception,
             "Unhandled exception. CorrelationId={CorrelationId} Path={Path}",
