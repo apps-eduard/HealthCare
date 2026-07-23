@@ -1,5 +1,6 @@
 using FluentAssertions;
 using HealthCare.Application;
+using HealthCare.Application.Appointments;
 using HealthCare.Application.Authorization;
 using HealthCare.Application.Identity;
 using HealthCare.Application.Patients;
@@ -78,7 +79,7 @@ public sealed class LayerDependencyTests
     }
 
     [Fact]
-    public void Patient_Controllers_Should_Not_Implement_Tenant_Authorization_Directly()
+    public void Controllers_Should_Not_Query_DbContext_Or_Own_Tenant_Rules()
     {
         var result = Types.InAssembly(typeof(Program).Assembly)
             .That()
@@ -94,6 +95,7 @@ public sealed class LayerDependencyTests
         typeof(IPatientService).Namespace.Should().StartWith("HealthCare.Application.Patients");
         typeof(IPatientAccountLinker).Namespace.Should().StartWith("HealthCare.Application.Patients");
         typeof(IStaffPatientService).Namespace.Should().StartWith("HealthCare.Application.Patients");
+        typeof(IAppointmentService).Namespace.Should().StartWith("HealthCare.Application.Appointments");
     }
 
     [Fact]
@@ -102,6 +104,19 @@ public sealed class LayerDependencyTests
         var result = Types.InAssembly(typeof(DomainAssemblyMarker).Assembly)
             .That()
             .ResideInNamespace("HealthCare.Domain.Patients")
+            .ShouldNot()
+            .HaveDependencyOnAny(InfrastructureNamespace, ApiNamespace, ApplicationNamespace)
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue(Because(result));
+    }
+
+    [Fact]
+    public void Appointment_Domain_Does_Not_Depend_On_Infrastructure_Or_Api()
+    {
+        var result = Types.InAssembly(typeof(DomainAssemblyMarker).Assembly)
+            .That()
+            .ResideInNamespace("HealthCare.Domain.Appointments")
             .ShouldNot()
             .HaveDependencyOnAny(InfrastructureNamespace, ApiNamespace, ApplicationNamespace)
             .GetResult();
@@ -122,6 +137,22 @@ public sealed class LayerDependencyTests
             .Should().NotBeNull();
         typeof(IStaffPatientService).GetMethod(nameof(IStaffPatientService.SearchAsync))
             .Should().NotBeNull();
+        typeof(IAppointmentService).GetMethod(nameof(IAppointmentService.CreateForCurrentPatientAsync))
+            .Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Appointment_Services_Use_Tenant_Abstractions_And_Contracts_Not_Entities()
+    {
+        typeof(IAppointmentService).Namespace.Should().StartWith("HealthCare.Application.Appointments");
+        typeof(ITenantAccessService).Namespace.Should().StartWith("HealthCare.Application");
+        typeof(ICurrentStaff).Namespace.Should().StartWith("HealthCare.Application");
+        typeof(ICurrentPatient).Namespace.Should().StartWith("HealthCare.Application");
+
+        typeof(Contracts.Appointments.AppointmentResponse).Assembly
+            .GetName().Name.Should().Be("HealthCare.Contracts");
+        typeof(Contracts.Appointments.AppointmentResponse)
+            .Should().NotBeAssignableTo(typeof(Domain.Appointments.Appointment));
     }
 
     [Fact]
