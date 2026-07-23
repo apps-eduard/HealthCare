@@ -27,6 +27,11 @@ public sealed class ClinicPatientConfiguration : IEntityTypeConfiguration<Clinic
             .HasConversion<string>()
             .HasMaxLength(32);
 
+        builder.Property(x => x.Version)
+            .IsRequired()
+            .IsConcurrencyToken()
+            .HasDefaultValue(0);
+
         builder.Property(x => x.RegisteredAtUtc)
             .IsRequired();
 
@@ -38,6 +43,8 @@ public sealed class ClinicPatientConfiguration : IEntityTypeConfiguration<Clinic
 
         builder.HasIndex(x => new { x.ClinicId, x.LocalPatientNumber })
             .IsUnique();
+
+        builder.HasIndex(x => new { x.ClinicId, x.Status });
 
         builder.HasIndex(x => x.PatientId);
 

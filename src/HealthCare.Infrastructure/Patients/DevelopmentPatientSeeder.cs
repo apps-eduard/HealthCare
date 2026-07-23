@@ -83,6 +83,11 @@ public sealed class DevelopmentPatientSeeder : IDevelopmentPatientSeeder
         await _linker.LinkUserToPatientAsync(patientUser.Id, patient.Id, cancellationToken);
 
         await EnsureClinicPatientAsync(clinicA.Id, patient.Id, _options.LocalPatientNumber, cancellationToken);
+        await EnsureClinicPatientAsync(
+            clinicB.Id,
+            patient.Id,
+            _options.OtherClinicLocalPatientNumber,
+            cancellationToken);
 
         if (!string.IsNullOrWhiteSpace(_options.StaffEmail) && !string.IsNullOrWhiteSpace(_options.StaffPassword))
         {
@@ -104,6 +109,18 @@ public sealed class DevelopmentPatientSeeder : IDevelopmentPatientSeeder
                 organization.Id,
                 clinicB.Id,
                 AppRoles.Doctor,
+                cancellationToken);
+        }
+
+        if (!string.IsNullOrWhiteSpace(_options.OrganizationAdminEmail)
+            && !string.IsNullOrWhiteSpace(_options.OrganizationAdminPassword))
+        {
+            await EnsureStaffAsync(
+                _options.OrganizationAdminEmail,
+                _options.OrganizationAdminPassword,
+                organization.Id,
+                clinicA.Id,
+                AppRoles.OrganizationAdmin,
                 cancellationToken);
         }
 
@@ -241,6 +258,7 @@ public sealed class DevelopmentPatientSeeder : IDevelopmentPatientSeeder
             return;
         }
 
+        var now = DateTimeOffset.UtcNow;
         _dbContext.ClinicPatients.Add(new ClinicPatient
         {
             Id = Guid.NewGuid(),
@@ -248,6 +266,9 @@ public sealed class DevelopmentPatientSeeder : IDevelopmentPatientSeeder
             PatientId = patientId,
             LocalPatientNumber = localNumber,
             Status = ClinicPatientStatus.Active,
+            Version = 0,
+            RegisteredAtUtc = now,
+            UpdatedAtUtc = now,
         });
         await _dbContext.SaveChangesAsync(cancellationToken);
     }

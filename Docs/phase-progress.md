@@ -2,24 +2,24 @@
 
 ## Progress overview
 
-**Overall completion: 39%**
+**Overall completion: 40%**
 
 ```text
-[████████████░░░░░░░░░░░░░░░░░░░░]  39%
+[████████████░░░░░░░░░░░░░░░░░░░░]  40%
 ```
 
 | Metric | Value |
 |--------|-------|
 | Official phases (0–13) | 14 |
-| Complete | 2 (Phases 0, 1) |
-| Partial | 5 (Phases 2, 3, 4, 5, 6) |
+| Complete | 3 (Phases 0, 1, 5) |
+| Partial | 4 (Phases 2, 3, 4, 6) |
 | In progress | 0 |
 | Not started | 7 |
-| Weighted score | (2×1.0) + (0.7 + 0.75 + 0.5 + 0.9 + 0.5) = 5.35 / 14 ≈ **38%** → **39%** |
+| Weighted score | (3×1.0) + (0.7 + 0.75 + 0.5 + 0.5) = 5.45 / 14 ≈ **39%** → **40%** |
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Staff patient search / patient administration, or Google auth
+**Current focus:** Appointment module foundation (Phase 7), or Google auth / staff UI
 
 ### All phases at a glance
 
@@ -31,7 +31,7 @@
 | 2 | Identity and authentication (JWT / refresh / endpoints) | Partial | `███████░░░` 70% |
 | 3 | Roles and authorization foundation | Partial | `████████░░` 75% |
 | 4 | Organizations and clinics | Partial | `█████░░░░░` 50% |
-| 5 | Patients and clinic-patient registration | Partial | `█████████░` 90% |
+| 5 | Patients and clinic-patient registration | Complete | `██████████` 100% |
 | 6 | Staff and doctors | Partial | `█████░░░░░` 50% |
 | 7 | Appointment booking | Not started | `░░░░░░░░░░` 0% |
 | 8 | Staff web application (MudBlazor) | Not started | `░░░░░░░░░░` 0% |
@@ -88,7 +88,7 @@ Authoritative design docs:
 | 2 | Identity and authentication (JWT / refresh / endpoints) | Partial (patient register + confirm) | 2026-07-23 |
 | 3 | Roles and authorization foundation | Partial (current-user + policies) | 2026-07-23 |
 | 4 | Organizations and clinics | Partial (entities + schema only) | 2026-07-23 |
-| 5 | Patients and clinic-patient registration | Partial (profile + self clinic register) | 2026-07-23 |
+| 5 | Patients and clinic-patient registration | Complete (staff search + clinic admin) | 2026-07-23 |
 | 6 | Staff and doctors | Partial (StaffMember entity + schema only) | 2026-07-23 |
 | 7 | Appointment booking | Not started | — |
 | 8 | Staff web application (MudBlazor) | Not started | — |
@@ -284,7 +284,7 @@ Authoritative design docs:
 
 ## Phase 5 — Patients and clinic-patient registration
 
-**Status:** Partial (~90%)  
+**Status:** Complete  
 **Updated:** 2026-07-23
 
 ### Already done
@@ -305,20 +305,34 @@ Authoritative design docs:
 - Idempotent find-or-create; reuses local patient number sequence
 - Migration `AddPatientProfileConcurrencyAndClinicRegistration` applied
 
+**Staff patient search and clinic administration**
+- `GET /api/v1/staff/patients` — paginated search (StaffUser policy)
+- `GET /api/v1/staff/patients/{patientId}` — scoped detail
+- `PATCH /api/v1/staff/patients/{patientId}/clinic-profile` — ClinicPatient status only
+- Authorized roles via active staff membership: CLINIC_ADMIN, DOCTOR, NURSE, RECEPTIONIST (clinic-scoped); ORGANIZATION_ADMIN (org clinics); PLATFORM_ADMIN only with `platformAdminBypass=true` + ClinicId
+- Tenant rules: clinic staff locked to `ICurrentStaff.ClinicId` (client ClinicId ignored); org admin uses trusted OrganizationId (optional ClinicId validated in-org); PATIENT denied; no client OrganizationId on contract
+- Searchable: first/middle/last name, local patient number, mobile; filters: patient active, ClinicPatient status; sort whitelist
+- Pagination: default page size 20, max 100, total count/pages, stable secondary sort by ClinicPatient.Id; EF AsNoTracking + DB-side filter/sort/page
+- Editable clinic field: `ClinicPatient.Status` (Active/Inactive) with `expectedVersion` concurrency
+- Protected: credentials, email, UserId/PatientId, local number, org/clinic ownership, demographics via this endpoint, medical notes
+- Scope enforcement remains explicit in `StaffPatientService` (EF global tenant filters still deferred)
+- Migration `AddClinicPatientConcurrencyAndStaffSearchIndex` applied (`ClinicPatient.Version` + `(ClinicId, Status)` index)
+
 ### Verification
 
 - Build: succeeded
-- Unit tests: 62 passed
-- Architecture tests: 9 passed
-- Integration tests: failed (Docker unavailable); tests retained
-- Manual: health 200; PATCH profile + GET reflects changes; stale version 409; clinic-b register `P-000001` then idempotent; invalid code 404; staff PATCH 403
+- Unit tests: 84 passed (including 22 staff patient tests)
+- Architecture tests: 10 passed
+- Integration tests: failed (Docker unavailable); Testcontainers suite retained
+- Manual: health 200; Clinic A search excludes Clinic B local numbers; Clinic B denied A-only detail (403); org admin sees multiple clinics; client ClinicId ignored; status PATCH + restore; stale version 409; PATIENT 403; anonymous 401; pagination metadata OK
 
-### Remaining
+### Remaining (outside Phase 5 acceptance)
 
-- Staff patient search / administration directory
-- Real email provider
+- Real email provider / Hangfire notifications
 - Google auth (Phase 2)
+- Staff UI for patient directory (Phase 8)
 - Integration suite green once Docker is available
+- Appointments (Phase 7)
 
 ---
 
@@ -440,6 +454,7 @@ Authoritative design docs:
 | 2026-07-23 | 5 | Patient foundation + ClinicPatient + self-scope endpoints; migration applied; overall ~34% |
 | 2026-07-23 | 5 / 2 | Patient registration, email confirmation, clinic enroll + local numbers; overall ~37% |
 | 2026-07-23 | 5 | Profile PATCH + patient clinic self-register via slug; concurrency Version; overall ~39% |
+| 2026-07-23 | 5 | Staff patient search + ClinicPatient admin; Phase 5 complete; overall ~40% |
 
 ---
 

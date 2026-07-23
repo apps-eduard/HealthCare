@@ -93,6 +93,7 @@ public sealed class LayerDependencyTests
 
         typeof(IPatientService).Namespace.Should().StartWith("HealthCare.Application.Patients");
         typeof(IPatientAccountLinker).Namespace.Should().StartWith("HealthCare.Application.Patients");
+        typeof(IStaffPatientService).Namespace.Should().StartWith("HealthCare.Application.Patients");
     }
 
     [Fact]
@@ -119,6 +120,23 @@ public sealed class LayerDependencyTests
         typeof(IClinicPublicLookup).Namespace.Should().StartWith("HealthCare.Application");
         typeof(IPatientService).GetMethod(nameof(IPatientService.UpdateCurrentPatientProfileAsync))
             .Should().NotBeNull();
+        typeof(IStaffPatientService).GetMethod(nameof(IStaffPatientService.SearchAsync))
+            .Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Staff_Patient_Search_Uses_Tenant_Abstractions_And_Contracts_Not_Entities()
+    {
+        typeof(IStaffPatientService).Namespace.Should().StartWith("HealthCare.Application.Patients");
+        typeof(ITenantAccessService).Namespace.Should().StartWith("HealthCare.Application");
+        typeof(ICurrentStaff).Namespace.Should().StartWith("HealthCare.Application");
+
+        typeof(Contracts.Patients.StaffPatientSummaryResponse).Assembly
+            .GetName().Name.Should().Be("HealthCare.Contracts");
+        typeof(Contracts.Patients.StaffPatientSummaryResponse)
+            .Should().NotBeAssignableTo(typeof(Domain.Patients.Patient));
+        typeof(Contracts.Patients.StaffPatientSummaryResponse)
+            .Should().NotBeAssignableTo(typeof(Domain.Patients.ClinicPatient));
     }
 
     [Fact]

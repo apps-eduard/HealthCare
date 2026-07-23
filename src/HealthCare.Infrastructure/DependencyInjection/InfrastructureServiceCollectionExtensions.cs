@@ -140,6 +140,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IPatientService, PatientService>();
         services.AddScoped<IClinicEnrollmentService, ClinicEnrollmentService>();
         services.AddScoped<IPatientClinicRegistrationService, PatientClinicRegistrationService>();
+        services.AddScoped<IStaffPatientService, StaffPatientService>();
         services.AddScoped<IClinicPublicLookup, ClinicPublicLookup>();
         services.AddScoped<ILocalPatientNumberGenerator, LocalPatientNumberGenerator>();
         services.AddSingleton<IDevelopmentConfirmationTokenStore, DevelopmentConfirmationTokenStore>();

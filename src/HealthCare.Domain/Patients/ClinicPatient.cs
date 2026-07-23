@@ -18,6 +18,11 @@ public sealed class ClinicPatient
 
     public ClinicPatientStatus Status { get; set; } = ClinicPatientStatus.Active;
 
+    /// <summary>
+    /// Optimistic concurrency token for clinic-profile administration updates.
+    /// </summary>
+    public int Version { get; set; }
+
     public DateTimeOffset RegisteredAtUtc { get; set; }
 
     public DateTimeOffset UpdatedAtUtc { get; set; }

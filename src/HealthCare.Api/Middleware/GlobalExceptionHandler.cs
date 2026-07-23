@@ -76,6 +76,18 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
                 cancellationToken);
         }
 
+        if (exception is ClinicPatientConcurrencyException clinicPatientConcurrencyException)
+        {
+            return await WriteAuthProblemAsync(
+                httpContext,
+                clinicPatientConcurrencyException.StatusCode,
+                clinicPatientConcurrencyException.Title,
+                clinicPatientConcurrencyException.ErrorCode,
+                correlationId,
+                "Clinic patient concurrency conflict",
+                cancellationToken);
+        }
+
         if (exception is PatientClinicRegistrationException clinicRegistrationException)
         {
             return await WriteAuthProblemAsync(

@@ -101,6 +101,7 @@ public sealed class ClinicEnrollmentService : IClinicEnrollmentService
             }
 
             var localNumber = await _numberGenerator.AllocateNextAsync(clinicId, cancellationToken);
+            var now = DateTimeOffset.UtcNow;
             var enrollment = new ClinicPatient
             {
                 Id = Guid.NewGuid(),
@@ -108,6 +109,9 @@ public sealed class ClinicEnrollmentService : IClinicEnrollmentService
                 PatientId = patientId,
                 LocalPatientNumber = localNumber,
                 Status = ClinicPatientStatus.Active,
+                Version = 0,
+                RegisteredAtUtc = now,
+                UpdatedAtUtc = now,
             };
 
             _dbContext.ClinicPatients.Add(enrollment);

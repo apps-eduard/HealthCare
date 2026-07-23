@@ -15,4 +15,6 @@ public static class PatientErrorCodes
     public const string ClinicCodeInvalid = "patient.clinic_code_invalid";
     public const string ClinicInactive = "patient.clinic_inactive";
     public const string OrganizationInactive = "patient.organization_inactive";
+    public const string InvalidSearch = "patient.invalid_search";
+    public const string ClinicPatientConcurrencyConflict = "patient.clinic_patient_concurrency_conflict";
 }
