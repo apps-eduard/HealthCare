@@ -1,0 +1,69 @@
+## .NET
+bin/
+obj/
+[Bb]uild/
+[Ll]og/
+[Ll]ogs/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+*.dbmdl
+*.jfm
+*.pfx
+*.publishsettings
+project.lock.json
+project.fragment.lock.json
+artifacts/
+TestResults/
+*.DotSettings.user
+
+## IDE
+.vs/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+*~
+
+## Secrets and local config
+.env
+*.env.local
+appsettings.*.local.json
+secrets.json
+tools/DbBootstrap/
+create-healthcare-db.csx
+api-stdout.log
+api-stderr.log
+
+## OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+## NuGet
+*.nupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+
+## Coverage
+coverage/
+*.coverage
+*.coveragexml
+coverage.json
+
+## Hangfire / temp
+tmp/
+temp/
+
+## MAUI / Android
+**/obj/
+**/bin/
+*.apk
+*.aab
+*.ipa
+.metro/
+.expo/
