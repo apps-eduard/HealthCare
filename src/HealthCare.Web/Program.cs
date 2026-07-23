@@ -28,6 +28,8 @@ builder.Services.AddHttpClient("HealthCareApi", ConfigureApiClient)
 
 builder.Services.AddScoped<IAuthApiClient, AuthApiClient>();
 builder.Services.AddScoped<IStaffManagementApiClient, StaffManagementApiClient>();
+builder.Services.AddScoped<IClinicDirectoryApiClient, ClinicDirectoryApiClient>();
+builder.Services.AddScoped<IClinicDirectoryCache, ClinicDirectoryCache>();
 
 builder.Services.AddMudServices(config =>
 {

@@ -152,7 +152,7 @@ Doctor directory and available-slots require authentication + `availability.read
 
 ## Staff web application (HealthCare.Web)
 
-MudBlazor Interactive Server app consumes the API. UI permissions (`staff.read` / `staff.manage` / `roles.read` / `roles.assign`) only control presentation; the API enforces authorization.
+MudBlazor Interactive Server app consumes the API. UI permissions (`staff.read` / `staff.manage` / `roles.read` / `roles.assign` / `clinics.read`) only control presentation; the API enforces authorization.
 
 Pages:
 
@@ -160,7 +160,19 @@ Pages:
 - `/dashboard` — authenticated shell home
 - `/staff` — staff list/management (`staff.read` required)
 
-MVP token storage: circuit memory + `ProtectedSessionStorage` (documented limitation; prefer BFF HttpOnly cookies later).
+### Clinic directory
+
+- `GET /api/v1/staff-management/clinics` — tenant-scoped clinic search (`clinics.read`)
+- `GET /api/v1/staff-management/clinics/{clinicId}` — scoped clinic detail (out-of-scope → safe 404)
+
+Tenant behavior:
+
+- Clinic-scoped staff: own clinic only (picker read-only)
+- ORGANIZATION_ADMIN: all clinics in trusted organization; optional clinic filter / “All clinics”
+- PLATFORM_ADMIN: `platformAdminBypass=true` **and** `OrganizationId` required for listing
+- PATIENT: denied on staff clinic directory
+
+Staff UI uses `ClinicPicker` (no free-text ClinicId). MVP token storage: circuit memory + `ProtectedSessionStorage`.
 
 ## Securing new endpoints
 

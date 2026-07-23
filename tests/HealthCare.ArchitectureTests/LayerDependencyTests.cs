@@ -2,6 +2,7 @@ using FluentAssertions;
 using HealthCare.Application;
 using HealthCare.Application.Appointments;
 using HealthCare.Application.Authorization;
+using HealthCare.Application.Clinics;
 using HealthCare.Application.Identity;
 using HealthCare.Application.Patients;
 using HealthCare.Application.Staff;
@@ -289,6 +290,7 @@ public sealed class LayerDependencyTests
         typeof(IRoleAssignmentAuthorizationService).Namespace.Should().StartWith("HealthCare.Application");
         typeof(IStaffManagementService).Namespace.Should().StartWith("HealthCare.Application.Staff");
         typeof(ISecuritySessionInvalidationService).Namespace.Should().StartWith("HealthCare.Application.Identity");
+        typeof(IClinicDirectoryService).Namespace.Should().StartWith("HealthCare.Application.Clinics");
     }
 
     [Fact]

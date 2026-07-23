@@ -16,7 +16,26 @@
             <MudTextField @bind-Value="_phone" Label="Phone" Disabled="_busy" />
             @if (Permissions.CanFilterByClinic)
             {
-                <MudTextField @bind-Value="_clinicIdText" Label="Clinic ID" Required="true" Disabled="_busy" HelperText="Required for organization or platform administrators." />
+                @if (Permissions.IsPlatformAdmin)
+                {
+                    <MudTextField @bind-Value="_platformOrgIdText"
+                                  Label="Organization ID (platform bypass)"
+                                  Disabled="_busy"
+                                  HelperText="Required before selecting a clinic." />
+                }
+                <ClinicPicker @bind-Value="_clinicId"
+                              Label="Clinic"
+                              Required="true"
+                              AllowClear="false"
+                              Disabled="_busy"
+                              ActiveOnly="true"
+                              PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
+                              PlatformOrganizationId="_platformOrganizationId"
+                              HelperText="Choose an authorized clinic." />
+            }
+            else if (Permissions.Has(WebPermissions.ClinicsRead))
+            {
+                <ClinicPicker Label="Clinic" AllowClear="false" Disabled="true" />
             }
             <MudSelect T="string" @bind-Value="_role" Label="Initial role" Required="true" Disabled="_busy || _rolesLoading">
                 @foreach (var role in _roles.Where(r => r.AssignableByCurrentUser))
@@ -53,10 +72,14 @@
     private string? _displayName;
     private string? _jobTitle;
     private string? _phone;
-    private string? _clinicIdText;
+    private Guid? _clinicId;
+    private string? _platformOrgIdText;
     private string? _role;
     private string _temporaryPassword = string.Empty;
     private string _confirmPassword = string.Empty;
+
+    private Guid? _platformOrganizationId =>
+        Guid.TryParse(_platformOrgIdText, out var orgId) && orgId != Guid.Empty ? orgId : null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -106,20 +129,26 @@
         Guid? clinicId = null;
         if (Permissions.CanFilterByClinic)
         {
-            if (!Guid.TryParse(_clinicIdText, out var parsed) || parsed == Guid.Empty)
+            if (_clinicId is null || _clinicId == Guid.Empty)
             {
-                _error = "A valid clinic ID is required.";
+                _error = "Select an authorized clinic.";
                 return;
             }
 
-            clinicId = parsed;
+            if (Permissions.IsPlatformAdmin
+                && (_platformOrganizationId is null || _platformOrganizationId == Guid.Empty))
+            {
+                _error = "Organization scope is required for platform clinic selection.";
+                return;
+            }
+
+            clinicId = _clinicId;
         }
 
         _busy = true;
         try
         {
-            var bypass = Permissions.CurrentUser?.Roles.Contains(WebRoles.PlatformAdmin, StringComparer.Ordinal) == true
-                         && clinicId is not null;
+            var bypass = Permissions.IsPlatformAdmin && clinicId is not null;
 
             await StaffApi.CreateAsync(new CreateStaffRequest
             {

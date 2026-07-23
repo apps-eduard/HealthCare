@@ -80,6 +80,7 @@ dotnet run --project src/HealthCare.Web --launch-profile http
 - Staff UI: http://localhost:5018
 - Configure API base URL via `Api:BaseUrl` in `src/HealthCare.Web/appsettings*.json` (default `http://localhost:5080/`)
 - Sign in with a staff account (for example `clinicadmin@healthcare.local`)
+- Staff clinic filter/create uses the clinic directory API (`/api/v1/staff-management/clinics`) via `ClinicPicker` — not free-text Clinic IDs
 
 MVP token storage uses circuit memory plus ASP.NET Core `ProtectedSessionStorage` (not HttpOnly cookies). Prefer a BFF cookie pattern before production hardening.
 

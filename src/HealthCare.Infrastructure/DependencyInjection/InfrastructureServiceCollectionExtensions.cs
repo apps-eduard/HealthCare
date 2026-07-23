@@ -1,5 +1,6 @@
 using HealthCare.Application.Appointments;
 using HealthCare.Application.Authorization;
+using HealthCare.Application.Clinics;
 using HealthCare.Application.Identity;
 using HealthCare.Application.Patients;
 using HealthCare.Application.Staff;
@@ -153,6 +154,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IPatientClinicRegistrationService, PatientClinicRegistrationService>();
         services.AddScoped<IStaffPatientService, StaffPatientService>();
         services.AddScoped<IStaffManagementService, StaffManagementService>();
+        services.AddScoped<IClinicDirectoryService, ClinicDirectoryService>();
         services.AddScoped<ISecuritySessionInvalidationService, SecuritySessionInvalidationService>();
         services.AddScoped<IAppointmentService, AppointmentService>();
         services.AddScoped<IClinicTimeZoneConverter, ClinicTimeZoneConverter>();

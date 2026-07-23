@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using HealthCare.Application.Appointments;
 using HealthCare.Application.Authorization;
+using HealthCare.Application.Clinics;
 using HealthCare.Application.Identity;
 using HealthCare.Application.Patients;
 using HealthCare.Application.Staff;
@@ -99,6 +100,18 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
                 staffException.ErrorCode,
                 correlationId,
                 "Staff management denied",
+                cancellationToken);
+        }
+
+        if (exception is ClinicDirectoryException clinicDirectoryException)
+        {
+            return await WriteAuthProblemAsync(
+                httpContext,
+                clinicDirectoryException.StatusCode,
+                clinicDirectoryException.Title,
+                clinicDirectoryException.ErrorCode,
+                correlationId,
+                "Clinic directory denied",
                 cancellationToken);
         }
 

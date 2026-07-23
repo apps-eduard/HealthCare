@@ -18,6 +18,10 @@ public interface IPermissionState
 
     bool CanFilterByClinic { get; }
 
+    bool IsOrganizationAdmin { get; }
+
+    bool IsPlatformAdmin { get; }
+
     Task SetFromUserAsync(CurrentUserResponse? user, CancellationToken cancellationToken = default);
 
     Task ClearAsync(CancellationToken cancellationToken = default);
@@ -50,8 +54,15 @@ public sealed class PermissionState : IPermissionState
 
     public bool CanFilterByClinic =>
         CurrentUser is not null
+        && Has(WebPermissions.ClinicsRead)
         && (CurrentUser.Roles.Contains(WebRoles.OrganizationAdmin, StringComparer.Ordinal)
             || CurrentUser.Roles.Contains(WebRoles.PlatformAdmin, StringComparer.Ordinal));
+
+    public bool IsOrganizationAdmin =>
+        CurrentUser?.Roles.Contains(WebRoles.OrganizationAdmin, StringComparer.Ordinal) == true;
+
+    public bool IsPlatformAdmin =>
+        CurrentUser?.Roles.Contains(WebRoles.PlatformAdmin, StringComparer.Ordinal) == true;
 
     public event Action? Changed;
 

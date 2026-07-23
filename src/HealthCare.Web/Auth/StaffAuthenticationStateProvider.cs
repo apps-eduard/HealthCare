@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Security.Claims;
 using HealthCare.Contracts.Identity;
+using HealthCare.Web.Services;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.Logging;
 
@@ -11,6 +12,7 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
     private readonly IApiTokenStore _tokenStore;
     private readonly IPermissionState _permissionState;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IClinicDirectoryCache _clinicCache;
     private readonly ILogger<StaffAuthenticationStateProvider> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -18,11 +20,13 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
         IApiTokenStore tokenStore,
         IPermissionState permissionState,
         IHttpClientFactory httpClientFactory,
+        IClinicDirectoryCache clinicCache,
         ILogger<StaffAuthenticationStateProvider> logger)
     {
         _tokenStore = tokenStore;
         _permissionState = permissionState;
         _httpClientFactory = httpClientFactory;
+        _clinicCache = clinicCache;
         _logger = logger;
     }
 
@@ -105,6 +109,7 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
 
         await _tokenStore.ClearAsync();
         await _permissionState.ClearAsync();
+        _clinicCache.Clear();
         NotifyAuthenticationStateChanged(Task.FromResult(Anonymous()));
     }
 

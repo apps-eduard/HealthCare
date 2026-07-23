@@ -551,7 +551,8 @@ Authoritative design docs:
 - Authenticated MudBlazor shell (app bar, drawer, logout)
 - Dashboard (`/` / `/dashboard`) with session context and permission-aware links
 - Staff management page (`/staff`): server-side search/filter/pagination, detail, create, activate/deactivate, role assign
-- Typed clients: `IAuthApiClient`, `IStaffManagementApiClient`
+- **Clinic directory API + picker:** `GET /api/v1/staff-management/clinics` with tenant scope; MudBlazor `ClinicPicker` replaces free-text ClinicId
+- Typed clients: `IAuthApiClient`, `IStaffManagementApiClient`, `IClinicDirectoryApiClient`
 - Problem Details mapping to safe UI messages
 - PATIENT accounts blocked from staff UI
 - Config: `Api:BaseUrl`
@@ -560,20 +561,20 @@ Authoritative design docs:
 
 - Appointments, patients, notes, settings, audit viewer screens
 - HttpOnly BFF cookie auth (replace ProtectedSessionStorage MVP)
-- Clinic picker API (org admins currently enter ClinicId)
-- Broader automated UI tests
+- Broader automated UI/component coverage (bUnit package restore may be flaky)
 
 ### Known limitations
 
 - Refresh tokens stored in ProtectedSessionStorage (encrypted browser session storage), not HttpOnly cookies
+- PLATFORM_ADMIN clinic picker still needs an OrganizationId scope field (no org directory UI yet)
 - No invitation email UI (temporary-password create only)
 - API remains the authorization authority
 
 ### Verification
 
 - Build: succeeded (`HealthCare.Web` + solution)
-- Unit tests: **224 passed**
-- Architecture tests: **17 passed**
+- Unit / architecture / web support tests: see latest commit notes
+- Integration: clinic directory suite retained (Docker/Testcontainers)
 
 ---
 

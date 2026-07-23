@@ -53,8 +53,30 @@ else
             </MudItem>
             @if (Permissions.CanFilterByClinic)
             {
+                @if (Permissions.IsPlatformAdmin)
+                {
+                    <MudItem xs="12" md="3">
+                        <MudTextField @bind-Value="_platformOrgIdText"
+                                      Label="Organization ID (platform bypass)"
+                                      HelperText="Required with clinic filter for PLATFORM_ADMIN" />
+                    </MudItem>
+                }
                 <MudItem xs="12" md="3">
-                    <MudTextField @bind-Value="_clinicIdText" Label="Clinic ID (optional)" />
+                    <ClinicPicker Value="_clinicId"
+                                  ValueChanged="OnClinicFilterChanged"
+                                  Label="Clinic filter"
+                                  HelperText="Leave empty for all clinics in your organization"
+                                  AllowClear="true"
+                                  Required="false"
+                                  ActiveOnly="null"
+                                  PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
+                                  PlatformOrganizationId="_platformOrganizationId" />
+                </MudItem>
+            }
+            else if (Permissions.Has(WebPermissions.ClinicsRead))
+            {
+                <MudItem xs="12" md="3">
+                    <ClinicPicker Label="Clinic" AllowClear="false" Required="false" />
                 </MudItem>
             }
             <MudItem xs="12" md="1" Class="d-flex align-end">
@@ -135,11 +157,15 @@ else
     private string? _search;
     private string? _role;
     private string? _activeFilter;
-    private string? _clinicIdText;
+    private Guid? _clinicId;
+    private string? _platformOrgIdText;
     private int _page = 1;
     private int _pageSize = 20;
     private int _totalCount;
     private int _totalPages = 1;
+
+    private Guid? _platformOrganizationId =>
+        Guid.TryParse(_platformOrgIdText, out var orgId) && orgId != Guid.Empty ? orgId : null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -159,6 +185,12 @@ else
     }
 
     private Task RefreshClicked() => ReloadAsync(resetPage: true);
+
+    private async Task OnClinicFilterChanged(Guid? clinicId)
+    {
+        _clinicId = clinicId;
+        await ReloadAsync(resetPage: true);
+    }
 
     private async Task OnSearchKeyUp(KeyboardEventArgs args)
     {
@@ -185,13 +217,7 @@ else
         _error = null;
         try
         {
-            Guid? clinicId = null;
-            if (Permissions.CanFilterByClinic
-                && Guid.TryParse(_clinicIdText, out var parsed)
-                && parsed != Guid.Empty)
-            {
-                clinicId = parsed;
-            }
+            Guid? clinicId = Permissions.CanFilterByClinic ? _clinicId : null;
 
             bool? isActive = _activeFilter switch
             {
@@ -200,8 +226,7 @@ else
                 _ => null,
             };
 
-            var bypass = Permissions.CurrentUser?.Roles.Contains(WebRoles.PlatformAdmin, StringComparer.Ordinal) == true
-                         && clinicId is not null;
+            var bypass = Permissions.IsPlatformAdmin && clinicId is not null;
 
             var result = await StaffApi.SearchAsync(new StaffSearchRequest
             {

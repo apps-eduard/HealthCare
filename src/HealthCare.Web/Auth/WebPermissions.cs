@@ -9,6 +9,7 @@ public static class WebPermissions
     public const string StaffManage = "staff.manage";
     public const string RolesRead = "roles.read";
     public const string RolesAssign = "roles.assign";
+    public const string ClinicsRead = "clinics.read";
 }
 
 public static class WebRoles
