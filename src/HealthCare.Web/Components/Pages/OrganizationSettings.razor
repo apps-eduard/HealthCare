@@ -86,10 +86,13 @@ else
                     @if (_concurrencyConflict)
                     {
                         <Alert Type="@AlertType.Error"
-                               Message="Another change was saved first. Reload the latest profile before saving again."
+                               Message="Another change was saved first. Reload the latest profile and try again."
                                ShowIcon="true"
                                Style="margin-bottom:0.75rem;" />
-                        <Button OnClick="LoadAsync" Disabled="_loading || _saving" Style="margin-bottom:0.75rem;" AriaLabel="Reload latest organization profile">
+                        <Button OnClick="LoadAsync"
+                                Disabled="_loading || _saving"
+                                Style="margin-bottom:0.75rem;"
+                                AriaLabel="Reload latest organization profile">
                             Reload latest
                         </Button>
                     }
@@ -402,11 +405,15 @@ else
             if (ex.StatusCode == 409
                 || string.Equals(ex.ErrorCode, OrganizationSettingsErrorCodes.ConcurrencyConflict, StringComparison.Ordinal))
             {
+                // Inline alert + reload CTA; avoid toast noise that can race the Blazor circuit.
                 _concurrencyConflict = true;
+                _validationError = null;
             }
-
-            _validationError = OrganizationSettingsProblemMessages.ToUserMessage(ex);
-            Notify.Error(_validationError);
+            else
+            {
+                _validationError = OrganizationSettingsProblemMessages.ToUserMessage(ex);
+                Notify.Error(_validationError);
+            }
         }
         catch (Exception)
         {

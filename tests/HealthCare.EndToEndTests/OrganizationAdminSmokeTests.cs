@@ -36,9 +36,7 @@ public sealed class OrganizationAdminSmokeTests : E2ePageTestBase
             await Expect(Page).ToHaveURLAsync(new Regex(".*/dashboard.*"));
             await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Organization Dashboard" }))
                 .ToBeVisibleAsync(new() { Timeout = 60_000 });
-            await Expect(Page.GetByRole(AriaRole.Menu).GetByText("Organization Profile")).ToBeVisibleAsync();
-            await Expect(Page.GetByRole(AriaRole.Menu).GetByText("Audit Logs")).ToBeVisibleAsync();
-            await Expect(Page.GetByRole(AriaRole.Menu).GetByText("Usage & Limits")).ToBeVisibleAsync();
+            await AssertOrganizationAdminNavigationAsync();
 
             await LogoutAsync();
             await Expect(Page).ToHaveURLAsync(new Regex(".*/login.*"));
@@ -65,9 +63,10 @@ public sealed class OrganizationAdminSmokeTests : E2ePageTestBase
             await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Organization Dashboard" }))
                 .ToBeVisibleAsync(new() { Timeout = 60_000 });
 
-            await Expect(Page.GetByRole(AriaRole.Menu).GetByText("Organization Profile")).ToBeVisibleAsync();
-            await Expect(Page.GetByRole(AriaRole.Menu).GetByText("Audit Logs")).ToBeVisibleAsync();
-            await Expect(Page.GetByRole(AriaRole.Menu).GetByText("Usage & Limits")).ToBeVisibleAsync();
+            await AssertOrganizationAdminNavigationAsync();
+            await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Organization Profile" })).ToBeVisibleAsync();
+            await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Audit Logs" })).ToBeVisibleAsync();
+            await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Usage & Limits" })).ToBeVisibleAsync();
 
             await Expect(Page.GetByText("Platform context:")).ToHaveCountAsync(0);
             await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Select organization" })).ToHaveCountAsync(0);
@@ -163,9 +162,12 @@ public sealed class OrganizationAdminSmokeTests : E2ePageTestBase
             await Page.GetByRole(AriaRole.Button, new() { Name = "Save organization profile" }).ClickAsync();
             await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Reload latest organization profile" }))
                 .ToBeVisibleAsync(new() { Timeout = 30_000 });
+            await Expect(Page.GetByText("Another change was saved first. Reload the latest profile and try again."))
+                .ToBeVisibleAsync();
             var body = await Page.ContentAsync();
             body.Should().NotContain("StackTrace");
             body.Should().NotContain("at HealthCare.");
+            body.Should().NotContain("An unhandled error has occurred.");
             body.Should().Contain("Reload");
         }
         catch
@@ -221,7 +223,8 @@ public sealed class OrganizationAdminSmokeTests : E2ePageTestBase
             await Page.GetByRole(AriaRole.Button, new() { Name = "Load usage" }).ClickAsync();
             await Expect(Page.GetByText("Max clinics")).ToBeVisibleAsync(new() { Timeout = 60_000 });
             await Expect(Page.GetByText("Max staff")).ToBeVisibleAsync();
-            await Expect(Page.GetByText("Remaining", new() { Exact = false }).First).ToBeVisibleAsync();
+            await Expect(Page.Locator("main").GetByText(new Regex(@"Remaining\s+\d+")).First)
+                .ToBeVisibleAsync();
 
             var pageHtml = (await Page.ContentAsync()).ToLowerInvariant();
             pageHtml.Should().Contain("cannot be changed");

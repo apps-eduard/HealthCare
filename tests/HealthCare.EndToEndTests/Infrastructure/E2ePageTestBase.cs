@@ -47,6 +47,25 @@ public abstract class E2ePageTestBase : PageTest
             new PageWaitForURLOptions { Timeout = 60_000 });
     }
 
+    /// <summary>
+    /// Org Admin nav children live under collapsed Ant Design SubMenus; expand before asserting links.
+    /// </summary>
+    protected async Task AssertOrganizationAdminNavigationAsync()
+    {
+        await Expect(Page.GetByRole(AriaRole.Menuitem, new() { Name = "Governance" })).ToBeVisibleAsync();
+        await Expect(Page.GetByRole(AriaRole.Menuitem, new() { Name = "Organization" })).ToBeVisibleAsync();
+
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Organization" }).ClickAsync();
+        await Expect(Page.GetByRole(AriaRole.Link, new() { Name = "Organization Profile" }))
+            .ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Governance" }).ClickAsync();
+        await Expect(Page.GetByRole(AriaRole.Link, new() { Name = "Audit Logs" }))
+            .ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await Expect(Page.GetByRole(AriaRole.Link, new() { Name = "Usage & Limits" }))
+            .ToBeVisibleAsync(new() { Timeout = 15_000 });
+    }
+
     protected async Task OnFailureCaptureAsync(string testName)
     {
         await Host.CaptureFailureArtifactsAsync(Page, testName);
