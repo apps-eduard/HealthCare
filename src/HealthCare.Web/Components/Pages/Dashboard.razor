@@ -288,6 +288,12 @@ else if (Permissions.Has(WebPermissions.OrganizationDashboardRead))
                             <Icon Type="bar-chart" Theme="IconThemeType.Outline" /> Reports
                         </Button>
                     }
+                    @if (OrganizationSecurityPermissionRules.CanView(Permissions))
+                    {
+                        <Button Type="@ButtonType.Primary" OnClick='() => Navigation.NavigateTo("/security")'>
+                            <Icon Type="safety" Theme="IconThemeType.Outline" /> Security
+                        </Button>
+                    }
                 </Space>
             </Card>
         }

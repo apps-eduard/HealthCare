@@ -18,5 +18,16 @@ window.healthcareShell = {
     anchor.click();
     document.body.removeChild(anchor);
     URL.revokeObjectURL(url);
+  },
+  copyText: async function (text) {
+    if (!text) {
+      return false;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      return false;
+    }
   }
 };

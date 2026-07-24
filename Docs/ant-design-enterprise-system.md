@@ -114,6 +114,12 @@ Shape: **4px** radius, minimal shadow, compact controls, **8px** spacing scale.
 |-------|-------|
 | `/reports` | Organization reports selector + CSV export |
 
+## Org Admin Phase 8 pages
+
+| Route | Notes |
+|-------|-------|
+| `/security` | Sessions, revoke, compromise response, security summaries |
+
 ## NU1900
 
 `Directory.Build.props` keeps `NuGetAudit=true` and adds `NU1900` to `WarningsNotAsErrors` so transient nuget.org vulnerability-feed timeouts do not fail restore under `TreatWarningsAsErrors`. Advisory codes NU1901–NU1904 remain non-fatal as before; audit is not disabled.

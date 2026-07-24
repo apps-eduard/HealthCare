@@ -1,0 +1,76 @@
+@namespace HealthCare.Web.Components.Security
+@inherits FeedbackComponent<SecurityRevokeSessionsDialog.Args>
+@using HealthCare.Contracts.Security
+@using HealthCare.Web.Security
+
+<Alert Type="@AlertType.Warning"
+       Message="All active refresh tokens for this staff member will be revoked and the security stamp updated. Existing access tokens may remain valid until expiry or the next permission/stamp check."
+       ShowIcon="true"
+       Style="margin-bottom:0.75rem;" />
+
+<div style="display:flex;flex-direction:column;gap:12px;">
+    <div><strong>Staff:</strong> @Options.DisplayName</div>
+    @if (!string.IsNullOrWhiteSpace(Options.ClinicName))
+    {
+        <div><strong>Clinic:</strong> @Options.ClinicName</div>
+    }
+    <div>
+        <label class="hc-filter-label" for="revoke-reason">Administrative reason (optional)</label>
+        <Input Id="revoke-reason" @bind-Value="_reason" Disabled="_busy" Style="width:100%;" MaxLength="256" AriaLabel="Revocation reason" />
+    </div>
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" />
+    }
+</div>
+<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;">
+    <Button OnClick="CancelCloseAsync" Disabled="_busy" AriaLabel="Cancel revoke sessions">Cancel</Button>
+    <Button Type="@ButtonType.Primary" Danger OnClick="SubmitAsync" Loading="_busy" Disabled="_busy" AriaLabel="Confirm revoke all sessions">
+        Revoke all sessions
+    </Button>
+</div>
+
+@code {
+    public sealed class Args
+    {
+        public Guid StaffMemberId { get; init; }
+        public string DisplayName { get; init; } = string.Empty;
+        public string? ClinicName { get; init; }
+        public bool PlatformAdminBypass { get; init; }
+    }
+
+    [Inject] private IOrganizationSecurityApiClient SecurityApi { get; set; } = default!;
+
+    private string? _reason;
+    private bool _busy;
+    private string? _error;
+
+    private async Task SubmitAsync()
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _error = null;
+        _busy = true;
+        try
+        {
+            await SecurityApi.RevokeStaffSessionsAsync(
+                Options.StaffMemberId,
+                new RevokeOrganizationSessionsRequest { Reason = string.IsNullOrWhiteSpace(_reason) ? null : _reason.Trim() },
+                Options.PlatformAdminBypass);
+            await OkCancelRef!.OkAsync(new ModalClosingEventArgs());
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = OrganizationSecurityProblemMessages.ToUserMessage(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task CancelCloseAsync() => OkCancelRef!.CancelAsync(new ModalClosingEventArgs());
+}

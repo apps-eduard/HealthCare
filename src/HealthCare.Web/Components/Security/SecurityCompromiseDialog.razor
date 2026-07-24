@@ -1,0 +1,127 @@
+@namespace HealthCare.Web.Components.Security
+@inherits FeedbackComponent<SecurityCompromiseDialog.Args>
+@using HealthCare.Contracts.Security
+@using HealthCare.Web.Security
+
+<Alert Type="@AlertType.Error"
+       Message="High-impact action: the staff account will be deactivated and all sessions revoked. Historical records remain. Reactivation must be done separately in Staff Management. This does not delete the user."
+       ShowIcon="true"
+       Style="margin-bottom:0.75rem;" />
+
+<div style="display:flex;flex-direction:column;gap:12px;">
+    <div><strong>Staff:</strong> @Options.DisplayName</div>
+    @if (!string.IsNullOrWhiteSpace(Options.ClinicName))
+    {
+        <div><strong>Clinic:</strong> @Options.ClinicName</div>
+    }
+    <div class="hc-caption">Expected version: @_expectedVersion</div>
+    <div>
+        <label class="hc-filter-label" for="compromise-reason">@FieldLabel.Mark("Administrative reason")</label>
+        <Input Id="compromise-reason" @bind-Value="_reason" Disabled="_busy || _loading" Style="width:100%;" MaxLength="256" AriaLabel="Compromise response reason" />
+    </div>
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" />
+    }
+</div>
+<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;">
+    <Button OnClick="CancelCloseAsync" Disabled="_busy" AriaLabel="Cancel compromise response">Cancel</Button>
+    <Button Type="@ButtonType.Primary" Danger OnClick="SubmitAsync"
+            Loading="_busy" Disabled="_busy || _loading || _blocked"
+            AriaLabel="Confirm compromised account response">
+        Deactivate and revoke
+    </Button>
+</div>
+
+@code {
+    public sealed class Args
+    {
+        public Guid StaffMemberId { get; init; }
+        public string DisplayName { get; init; } = string.Empty;
+        public string? ClinicName { get; init; }
+        public bool PlatformAdminBypass { get; init; }
+        public Guid? CurrentUserId { get; init; }
+        public Guid? TargetUserId { get; init; }
+    }
+
+    [Inject] private IOrganizationSecurityApiClient SecurityApi { get; set; } = default!;
+    [Inject] private IStaffManagementApiClient StaffApi { get; set; } = default!;
+
+    private string? _reason;
+    private bool _busy;
+    private bool _loading = true;
+    private bool _blocked;
+    private string? _error;
+    private int _expectedVersion;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Options.CurrentUserId is Guid self
+            && Options.TargetUserId is Guid target
+            && self == target)
+        {
+            _blocked = true;
+            _error = "You cannot run compromise response on your own account.";
+            _loading = false;
+            return;
+        }
+
+        try
+        {
+            var detail = await StaffApi.GetByIdAsync(Options.StaffMemberId, Options.PlatformAdminBypass);
+            _expectedVersion = detail.Version;
+            if (!detail.MembershipIsActive)
+            {
+                _blocked = true;
+                _error = "The staff account is already inactive.";
+            }
+        }
+        catch (ApiProblemException ex)
+        {
+            _blocked = true;
+            _error = OrganizationSecurityProblemMessages.ToUserMessage(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_busy || _blocked || string.IsNullOrWhiteSpace(_reason))
+        {
+            if (string.IsNullOrWhiteSpace(_reason) && !_blocked)
+            {
+                _error = "Administrative reason is required.";
+            }
+
+            return;
+        }
+
+        _error = null;
+        _busy = true;
+        try
+        {
+            await SecurityApi.RespondToCompromisedAccountAsync(
+                Options.StaffMemberId,
+                new CompromisedAccountResponseRequest
+                {
+                    ExpectedVersion = _expectedVersion,
+                    Reason = _reason.Trim(),
+                },
+                Options.PlatformAdminBypass);
+            await OkCancelRef!.OkAsync(new ModalClosingEventArgs());
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = OrganizationSecurityProblemMessages.ToUserMessage(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task CancelCloseAsync() => OkCancelRef!.CancelAsync(new ModalClosingEventArgs());
+}

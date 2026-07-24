@@ -1,0 +1,946 @@
+@page "/security"
+@attribute [Authorize]
+@using HealthCare.Contracts.Security
+@using HealthCare.Web.Components.Security
+@using HealthCare.Web.Security
+@implements IDisposable
+@inject IOrganizationSecurityApiClient SecurityApi
+@inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
+@inject IClinicWorkingContext ClinicContext
+@inject IUiModalService Modals
+@inject IUserNotificationService Notify
+@inject IJSRuntime Js
+
+<PageTitle>Security</PageTitle>
+
+@if (Permissions.IsPatientOnly)
+{
+    <Alert Type="@AlertType.Error" Message="Patient accounts cannot use organization security operations." ShowIcon="true" />
+}
+else if (!OrganizationSecurityPermissionRules.CanView(Permissions))
+{
+    <PermissionDeniedState Message="You do not have permission to view organization security operations." />
+}
+else
+{
+    <HcPageHeader Title="Security"
+                  Subtitle="@(_subtitle ?? "Organization sessions and security event summaries")">
+        <Breadcrumb>
+            <Breadcrumb>
+                <BreadcrumbItem Href="/dashboard">Home</BreadcrumbItem>
+                <BreadcrumbItem>Security</BreadcrumbItem>
+            </Breadcrumb>
+        </Breadcrumb>
+        <ChildContent>
+            <Button OnClick="RefreshActiveTabAsync" Disabled="_loading" AriaLabel="Refresh security data">
+                <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
+            </Button>
+        </ChildContent>
+    </HcPageHeader>
+
+    @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+    {
+        <Alert Type="@AlertType.Info"
+               Message="Select an organization in the platform banner before loading security data."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
+    }
+
+    <div class="hc-card">
+        <div class="hc-filter-grid">
+            @if (Permissions.CanFilterByClinic)
+            {
+                <ClinicPicker Value="_clinicId"
+                              ValueChanged="OnClinicFilterChanged"
+                              Label="Clinic"
+                              HelperText="Leave empty for all clinics"
+                              AllowClear="true"
+                              Required="false"
+                              ActiveOnly="null"
+                              PlatformAdminBypass="@PlatformBypass"
+                              PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
+                              Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)" />
+            }
+            <div>
+                <label class="hc-filter-label" for="sec-from">From (UTC)</label>
+                <DatePicker Id="sec-from" TValue="DateTime?" @bind-Value="_fromDate" Style="width:100%;" AriaLabel="Security events from date UTC" />
+            </div>
+            <div>
+                <label class="hc-filter-label" for="sec-to">To (UTC)</label>
+                <DatePicker Id="sec-to" TValue="DateTime?" @bind-Value="_toDate" Style="width:100%;" AriaLabel="Security events to date UTC" />
+            </div>
+            <div style="display:flex;align-items:flex-end;gap:8px;">
+                <div style="display:flex;align-items:center;gap:8px;padding-bottom:4px;">
+                    <Switch @bind-Checked="_includeRevoked" Disabled="_loading" />
+                    <span class="hc-caption">Include revoked sessions</span>
+                </div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:flex-end;">
+                <Button Type="@ButtonType.Primary" OnClick="RefreshActiveTabAsync"
+                        Disabled="_loading || (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)"
+                        AriaLabel="Apply security filters">
+                    Apply
+                </Button>
+                <Button OnClick="ResetFiltersAsync" Disabled="_loading" AriaLabel="Reset security filters">Reset</Button>
+            </div>
+        </div>
+        <div class="hc-caption" style="margin-top:0.75rem;">
+            Event windows use UTC (max @OrganizationSecurityPresentation.MaxInclusiveDays days). Session times are shown in UTC. Browser timezone is not used as the source of truth.
+        </div>
+    </div>
+
+    <Collapse Style="margin-bottom:1rem;">
+        <Panel Header="Session invalidation behavior" Key="help">
+            <ul style="margin:0;padding-left:1.25rem;">
+                <li>Revoke updates the security stamp and invalidates refresh tokens.</li>
+                <li>BFF sessions fail on the next server-side validation after stamp/token checks.</li>
+                <li>An existing access token may remain usable until it expires or the next permission/stamp resolution — not immediate cryptographic cut-off.</li>
+                <li>Role changes, deactivation, password reset, and clinic reassignment also revoke sessions.</li>
+                <li class="hc-caption">Admin note: BFF token sessions use server-side distributed cache; cross-instance persistence depends on shared cache configuration.</li>
+            </ul>
+        </Panel>
+    </Collapse>
+
+    @if (!string.IsNullOrWhiteSpace(_error)) { <ErrorState Message="@_error" /> }
+
+    <Tabs ActiveKey="@_activeTab" OnChange="OnTabChanged">
+        <TabPane Tab="Overview" Key="overview">
+            <div style="padding:1rem 0;">
+                @if (_loading && _overviewLoaded == false) { <PageLoading /> }
+                else if (_overview is not null)
+                {
+                    <AntDesign.Row Gutter="(16, 16)">
+                        <AntDesign.Col Xs="12" Md="6"><Statistic Title="Active sessions" Value="@_overview.ActiveSessions" /></AntDesign.Col>
+                        <AntDesign.Col Xs="12" Md="6"><Statistic Title="Failed login events" Value="@_overview.FailedLoginEvents" /></AntDesign.Col>
+                        <AntDesign.Col Xs="12" Md="6"><Statistic Title="Locked-out users" Value="@_overview.LockedOutUsers" /></AntDesign.Col>
+                        <AntDesign.Col Xs="12" Md="6"><Statistic Title="Users with failures" Value="@_overview.UsersWithFailures" /></AntDesign.Col>
+                        <AntDesign.Col Xs="12" Md="6"><Statistic Title="Authorization denials" Value="@_overview.AuthorizationDenials" /></AntDesign.Col>
+                        <AntDesign.Col Xs="12" Md="6"><Statistic Title="Cross-clinic attempts" Value="@_overview.CrossClinicAttempts" /></AntDesign.Col>
+                    </AntDesign.Row>
+                }
+                else
+                {
+                    <EmptyState Message="Overview metrics are not loaded yet." />
+                }
+            </div>
+        </TabPane>
+        <TabPane Tab="Sessions" Key="sessions">
+            <div style="padding:1rem 0;">
+                @if (_loading) { <PageLoading /> }
+                else if (_sessions is null || _sessions.Items.Count == 0)
+                {
+                    <EmptyState Title="No sessions" Message="No sessions match the current filters." />
+                }
+                else
+                {
+                    <div class="hc-caption" style="margin-bottom:0.5rem;">
+                        Active in scope: @_sessions.ActiveSessionCount · Total rows: @_sessions.TotalCount
+                    </div>
+                    <div class="hc-table-wrap">
+                        <table class="hc-table" aria-label="Organization sessions">
+                            <thead>
+                                <tr>
+                                    <th>Staff</th>
+                                    <th>Role</th>
+                                    <th>Clinic</th>
+                                    <th>Created (UTC)</th>
+                                    <th>Expires (UTC)</th>
+                                    <th>Status</th>
+                                    <th>Client</th>
+                                    <th>IP</th>
+                                    <th class="hc-actions">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            @foreach (var row in _sessions.Items)
+                            {
+                                <tr>
+                                    <td>@(row.StaffDisplayName ?? "—")</td>
+                                    <td>@(row.StaffRole ?? "—")</td>
+                                    <td>@(row.ClinicName ?? "—")</td>
+                                    <td><span class="hc-caption">@row.CreatedAtUtc.UtcDateTime.ToString("u")</span></td>
+                                    <td><span class="hc-caption">@row.ExpiresAtUtc.UtcDateTime.ToString("u")</span></td>
+                                    <td>
+                                        <StatusBadge Text="@OrganizationSecurityPresentation.SessionLabel(row.IsActive)"
+                                                     Tone="@OrganizationSecurityPresentation.SessionTone(row.IsActive)" />
+                                        @if (!string.IsNullOrWhiteSpace(row.RevokedReason))
+                                        {
+                                            <div class="hc-caption">@row.RevokedReason</div>
+                                        }
+                                    </td>
+                                    <td>@OrganizationSecurityPresentation.UserAgentSummary(row.CreatedByUserAgent)</td>
+                                    <td>@OrganizationSecurityPresentation.MaskIp(row.CreatedByIp)</td>
+                                    <td class="hc-actions">
+                                        <Space Wrap>
+                                            <Button Type="@ButtonType.Link" OnClick="@(() => OpenSessionDetailAsync(row))" AriaLabel="View session detail">
+                                                Details
+                                            </Button>
+                                            @if (OrganizationSecurityPermissionRules.CanRevoke(Permissions)
+                                                 && row.StaffMemberId is Guid staffId)
+                                            {
+                                                <Dropdown Class="hc-action-narrow">
+                                                    <Overlay>
+                                                        <Menu>
+                                                            <MenuItem OnClick="@(() => OpenRevokeAsync(row))">Revoke all sessions</MenuItem>
+                                                            @if (CanShowCompromise(row))
+                                                            {
+                                                                <MenuItem OnClick="@(() => OpenCompromiseAsync(row))">Compromise response…</MenuItem>
+                                                            }
+                                                        </Menu>
+                                                    </Overlay>
+                                                    <ChildContent>
+                                                        <Button Type="@ButtonType.Link" AriaLabel="More session actions">More</Button>
+                                                    </ChildContent>
+                                                </Dropdown>
+                                            }
+                                        </Space>
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.75rem;gap:8px;flex-wrap:wrap;">
+                        <span class="hc-caption">Page @_page / @_totalPages</span>
+                        <Space>
+                            <Button Disabled="@(_page <= 1 || _loading)" OnClick="@(() => OnPageChanged(_page - 1))" AriaLabel="Previous page">Prev</Button>
+                            <Button Disabled="@(_page >= _totalPages || _loading)" OnClick="@(() => OnPageChanged(_page + 1))" AriaLabel="Next page">Next</Button>
+                        </Space>
+                    </div>
+                }
+            </div>
+        </TabPane>
+        <TabPane Tab="Failed logins" Key="failed-logins">
+            <div style="padding:1rem 0;">
+                @if (_loading) { <PageLoading /> }
+                else if (_failedLogins is null)
+                {
+                    <EmptyState Message="Failed-login summary is not loaded." />
+                }
+                else
+                {
+                    <AntDesign.Row Gutter="(16, 16)" Style="margin-bottom:1rem;">
+                        <AntDesign.Col Xs="12" Md="8"><Statistic Title="Failed events" Value="@_failedLogins.FailedLoginEventsInRange" /></AntDesign.Col>
+                        <AntDesign.Col Xs="12" Md="8"><Statistic Title="Users with failures" Value="@_failedLogins.UsersWithFailedAttempts" /></AntDesign.Col>
+                        <AntDesign.Col Xs="12" Md="8"><Statistic Title="Locked out" Value="@_failedLogins.CurrentlyLockedOutUsers" /></AntDesign.Col>
+                    </AntDesign.Row>
+                    <Alert Type="@AlertType.Info"
+                           Message="Passwords, raw IPs, and user agents are never shown."
+                           ShowIcon="true"
+                           Style="margin-bottom:0.75rem;" />
+                    @if (_failedLogins.Users.Count == 0)
+                    {
+                        <EmptyState Message="No failed-login users in range." />
+                    }
+                    else
+                    {
+                        <div class="hc-table-wrap">
+                            <table class="hc-table" aria-label="Failed login summary">
+                                <thead>
+                                    <tr>
+                                        <th>Staff</th>
+                                        <th>Clinic</th>
+                                        <th>Access failures</th>
+                                        <th>Recent events</th>
+                                        <th>Lockout</th>
+                                        <th>Lockout end (UTC)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                @foreach (var row in _failedLogins.Users)
+                                {
+                                    <tr>
+                                        <td>@(row.StaffDisplayName ?? "—")</td>
+                                        <td>@(row.ClinicName ?? "—")</td>
+                                        <td>@row.AccessFailedCount</td>
+                                        <td>@row.RecentFailedLoginEvents</td>
+                                        <td>
+                                            <StatusBadge Text="@OrganizationSecurityPresentation.LockoutLabel(row.IsLockedOut)"
+                                                         Tone="@OrganizationSecurityPresentation.LockoutTone(row.IsLockedOut)" />
+                                        </td>
+                                        <td><span class="hc-caption">@(row.LockoutEndUtc?.UtcDateTime.ToString("u") ?? "—")</span></td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+            </div>
+        </TabPane>
+        <TabPane Tab="Authorization denials" Key="auth-denials">
+            @RenderEventSummary(_authDenials, "Authorization denials")
+        </TabPane>
+        <TabPane Tab="Cross-clinic attempts" Key="cross-clinic">
+            @RenderEventSummary(_crossClinic, "Cross-clinic attempts")
+        </TabPane>
+    </Tabs>
+
+    <Drawer Title="@("Session detail")"
+            Visible="_detailVisible"
+            OnClose="CloseDetail"
+            Width="420">
+        @if (_detail is null)
+        {
+            <Empty Description="@("No session selected")" />
+        }
+        else
+        {
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                <div><strong>Staff:</strong> @(_detail.StaffDisplayName ?? "—")</div>
+                <div><strong>Role:</strong> @(_detail.StaffRole ?? "—")</div>
+                <div><strong>Clinic:</strong> @(_detail.ClinicName ?? "—")</div>
+                <div>
+                    <strong>Status:</strong>
+                    <StatusBadge Text="@OrganizationSecurityPresentation.SessionLabel(_detail.IsActive)"
+                                 Tone="@OrganizationSecurityPresentation.SessionTone(_detail.IsActive)" />
+                </div>
+                <div><strong>Created (UTC):</strong> @_detail.CreatedAtUtc.UtcDateTime.ToString("u")</div>
+                <div><strong>Expires (UTC):</strong> @_detail.ExpiresAtUtc.UtcDateTime.ToString("u")</div>
+                <div><strong>Revoked (UTC):</strong> @(_detail.RevokedAtUtc?.UtcDateTime.ToString("u") ?? "—")</div>
+                <div><strong>Revocation reason:</strong> @(_detail.RevokedReason ?? "—")</div>
+                <div><strong>Client:</strong> @OrganizationSecurityPresentation.UserAgentSummary(_detail.CreatedByUserAgent)</div>
+                <div><strong>IP:</strong> @OrganizationSecurityPresentation.MaskIp(_detail.CreatedByIp)</div>
+                <div class="hc-caption">Session support id: @OrganizationSecurityPresentation.TruncateId(_detail.SessionId)</div>
+                <Alert Type="@AlertType.Info"
+                       Message="Tokens, cookies, and security stamps are never displayed. Per-session revoke is not available — revoke all sessions for the staff member instead."
+                       ShowIcon="true" />
+                @if (OrganizationSecurityPermissionRules.CanRevoke(Permissions) && _detail.StaffMemberId is not null)
+                {
+                    <Space Wrap Style="margin-top:0.5rem;">
+                        <Button Danger OnClick="@(() => OpenRevokeAsync(_detail!))" AriaLabel="Revoke all sessions for staff">
+                            Revoke all sessions
+                        </Button>
+                        @if (CanShowCompromise(_detail))
+                        {
+                            <Button Danger Type="@ButtonType.Primary" OnClick="@(() => OpenCompromiseAsync(_detail!))" AriaLabel="Compromised account response">
+                                Compromise response
+                            </Button>
+                        }
+                    </Space>
+                }
+            </div>
+        }
+    </Drawer>
+}
+
+@code {
+    private sealed record OverviewMetrics(
+        int ActiveSessions,
+        int FailedLoginEvents,
+        int LockedOutUsers,
+        int UsersWithFailures,
+        int AuthorizationDenials,
+        int CrossClinicAttempts);
+
+    private string _activeTab = "overview";
+    private Guid? _clinicId;
+    private DateTime? _fromDate = DateTime.UtcNow.Date.AddDays(-7);
+    private DateTime? _toDate = DateTime.UtcNow.Date.AddDays(1);
+    private bool _includeRevoked;
+    private bool _loading;
+    private bool _overviewLoaded;
+    private string? _error;
+    private string? _subtitle;
+    private bool _subscribedPlatform;
+    private bool _subscribedClinic;
+    private CancellationTokenSource? _cts;
+    private int _page = 1;
+    private int _pageSize = 50;
+    private int _totalPages = 1;
+
+    private OverviewMetrics? _overview;
+    private OrganizationSecuritySessionListResponse? _sessions;
+    private OrganizationFailedLoginSummaryResponse? _failedLogins;
+    private OrganizationSecurityEventSummaryResponse? _authDenials;
+    private OrganizationSecurityEventSummaryResponse? _crossClinic;
+    private OrganizationSecuritySessionItem? _detail;
+    private bool _detailVisible;
+
+    private bool PlatformBypass =>
+        Permissions.IsPlatformAdmin && PlatformTenant.ExplicitBypassEnabled;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Permissions.IsPatientOnly || !OrganizationSecurityPermissionRules.CanView(Permissions))
+        {
+            return;
+        }
+
+        if (Permissions.IsPlatformAdmin)
+        {
+            PlatformTenant.Changed += OnPlatformTenantChanged;
+            _subscribedPlatform = true;
+            if (PlatformTenant.HasClinic)
+            {
+                _clinicId = PlatformTenant.SelectedClinicId;
+            }
+        }
+        else if (Permissions.IsOrganizationAdmin)
+        {
+            ClinicContext.Changed += OnClinicContextChanged;
+            _subscribedClinic = true;
+            if (ClinicContext.HasClinic)
+            {
+                _clinicId = ClinicContext.SelectedClinicId;
+            }
+        }
+        else if (!Permissions.CanFilterByClinic && Permissions.CurrentUser?.ClinicId is Guid clinicId)
+        {
+            _clinicId = clinicId;
+        }
+
+        await LoadOverviewAsync();
+    }
+
+    public void Dispose()
+    {
+        if (_subscribedPlatform)
+        {
+            PlatformTenant.Changed -= OnPlatformTenantChanged;
+        }
+
+        if (_subscribedClinic)
+        {
+            ClinicContext.Changed -= OnClinicContextChanged;
+        }
+
+        _cts?.Cancel();
+        _cts?.Dispose();
+    }
+
+    private void OnPlatformTenantChanged() => InvokeAsync(async () =>
+    {
+        if (PlatformTenant.HasClinic)
+        {
+            _clinicId = PlatformTenant.SelectedClinicId;
+        }
+
+        await RefreshActiveTabAsync();
+        StateHasChanged();
+    });
+
+    private void OnClinicContextChanged() => InvokeAsync(async () =>
+    {
+        _clinicId = ClinicContext.SelectedClinicId;
+        _page = 1;
+        await RefreshActiveTabAsync();
+        StateHasChanged();
+    });
+
+    private async Task OnClinicFilterChanged(Guid? clinicId)
+    {
+        _clinicId = clinicId;
+        _page = 1;
+        if (Permissions.IsPlatformAdmin)
+        {
+            if (clinicId is Guid id && id != Guid.Empty)
+            {
+                if (PlatformTenant.SelectedClinicId != id)
+                {
+                    PlatformTenant.SelectClinic(id);
+                }
+            }
+            else if (PlatformTenant.HasClinic)
+            {
+                PlatformTenant.ClearClinic();
+            }
+
+            await RefreshActiveTabAsync();
+            return;
+        }
+
+        if (Permissions.IsOrganizationAdmin)
+        {
+            if (clinicId is Guid id && id != Guid.Empty)
+            {
+                ClinicContext.SelectClinic(id);
+            }
+            else
+            {
+                ClinicContext.ClearClinic();
+            }
+
+            return;
+        }
+
+        await RefreshActiveTabAsync();
+    }
+
+    private async Task ResetFiltersAsync()
+    {
+        _fromDate = DateTime.UtcNow.Date.AddDays(-7);
+        _toDate = DateTime.UtcNow.Date.AddDays(1);
+        _includeRevoked = false;
+        _page = 1;
+        if (Permissions.IsPlatformAdmin)
+        {
+            _clinicId = PlatformTenant.SelectedClinicId;
+        }
+        else if (_subscribedClinic && ClinicContext.HasClinic)
+        {
+            ClinicContext.ClearClinic();
+            return;
+        }
+        else if (Permissions.CanFilterByClinic)
+        {
+            _clinicId = null;
+        }
+
+        await RefreshActiveTabAsync();
+    }
+
+    private async Task OnTabChanged(string key)
+    {
+        _activeTab = key;
+        await RefreshActiveTabAsync();
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        _page = page;
+        await LoadSessionsAsync();
+    }
+
+    private async Task RefreshActiveTabAsync()
+    {
+        switch (_activeTab)
+        {
+            case "overview":
+                await LoadOverviewAsync();
+                break;
+            case "sessions":
+                await LoadSessionsAsync();
+                break;
+            case "failed-logins":
+                await LoadFailedLoginsAsync();
+                break;
+            case "auth-denials":
+                await LoadAuthDenialsAsync();
+                break;
+            case "cross-clinic":
+                await LoadCrossClinicAsync();
+                break;
+        }
+    }
+
+    private OrganizationSecurityQuery BuildQuery(bool forSessions)
+    {
+        return new OrganizationSecurityQuery
+        {
+            OrganizationId = Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null,
+            ClinicId = _clinicId,
+            IncludeRevoked = forSessions && _includeRevoked,
+            FromUtc = forSessions
+                ? null
+                : (_fromDate is DateTime from
+                    ? new DateTimeOffset(DateTime.SpecifyKind(from.Date, DateTimeKind.Utc)).ToString("O")
+                    : null),
+            ToUtc = forSessions
+                ? null
+                : (_toDate is DateTime to
+                    ? new DateTimeOffset(DateTime.SpecifyKind(to.Date, DateTimeKind.Utc)).ToString("O")
+                    : null),
+            Page = forSessions ? _page : 1,
+            PageSize = forSessions ? _pageSize : 50,
+        };
+    }
+
+    private async Task LoadOverviewAsync()
+    {
+        if (!CanQuery())
+        {
+            _overview = null;
+            return;
+        }
+
+        BeginLoad();
+        try
+        {
+            var eventQuery = BuildQuery(forSessions: false);
+            var sessionQuery = new OrganizationSecurityQuery
+            {
+                OrganizationId = Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null,
+                ClinicId = _clinicId,
+                IncludeRevoked = false,
+                Page = 1,
+                PageSize = 1,
+            };
+            var sessionsTask = SecurityApi.ListSessionsAsync(sessionQuery, PlatformBypass, _cts!.Token);
+            var failedTask = SecurityApi.GetFailedLoginSummaryAsync(eventQuery, PlatformBypass, _cts.Token);
+            var denialsTask = SecurityApi.GetAuthorizationDenialSummaryAsync(eventQuery, PlatformBypass, _cts.Token);
+            var crossTask = SecurityApi.GetCrossClinicAttemptSummaryAsync(eventQuery, PlatformBypass, _cts.Token);
+            await Task.WhenAll(sessionsTask, failedTask, denialsTask, crossTask);
+
+            var sessions = await sessionsTask;
+            var failed = await failedTask;
+            var denials = await denialsTask;
+            var cross = await crossTask;
+
+            _overview = new OverviewMetrics(
+                sessions.ActiveSessionCount,
+                failed.FailedLoginEventsInRange,
+                failed.CurrentlyLockedOutUsers,
+                failed.UsersWithFailedAttempts,
+                denials.TotalCount,
+                cross.TotalCount);
+            _subtitle = sessions.OrganizationName;
+            _overviewLoaded = true;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ApiProblemException ex)
+        {
+            _overview = null;
+            _error = OrganizationSecurityProblemMessages.ToUserMessage(ex);
+            Notify.Error(_error);
+        }
+        finally
+        {
+            EndLoad();
+        }
+    }
+
+    private async Task LoadSessionsAsync()
+    {
+        if (!CanQuery())
+        {
+            _sessions = null;
+            return;
+        }
+
+        BeginLoad();
+        try
+        {
+            _sessions = await SecurityApi.ListSessionsAsync(BuildQuery(forSessions: true), PlatformBypass, _cts!.Token);
+            _totalPages = Math.Max(1, (int)Math.Ceiling(_sessions.TotalCount / (double)Math.Max(1, _sessions.PageSize)));
+            _page = _sessions.Page < 1 ? 1 : _sessions.Page;
+            _subtitle = _sessions.OrganizationName;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ApiProblemException ex)
+        {
+            _sessions = null;
+            _error = OrganizationSecurityProblemMessages.ToUserMessage(ex);
+            Notify.Error(_error);
+        }
+        finally
+        {
+            EndLoad();
+        }
+    }
+
+    private async Task LoadFailedLoginsAsync()
+    {
+        if (!CanQuery())
+        {
+            _failedLogins = null;
+            return;
+        }
+
+        BeginLoad();
+        try
+        {
+            _failedLogins = await SecurityApi.GetFailedLoginSummaryAsync(BuildQuery(false), PlatformBypass, _cts!.Token);
+            _subtitle = _failedLogins.OrganizationName;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ApiProblemException ex)
+        {
+            _failedLogins = null;
+            _error = OrganizationSecurityProblemMessages.ToUserMessage(ex);
+            Notify.Error(_error);
+        }
+        finally
+        {
+            EndLoad();
+        }
+    }
+
+    private async Task LoadAuthDenialsAsync()
+    {
+        if (!CanQuery())
+        {
+            _authDenials = null;
+            return;
+        }
+
+        BeginLoad();
+        try
+        {
+            _authDenials = await SecurityApi.GetAuthorizationDenialSummaryAsync(BuildQuery(false), PlatformBypass, _cts!.Token);
+            _subtitle = _authDenials.OrganizationName;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ApiProblemException ex)
+        {
+            _authDenials = null;
+            _error = OrganizationSecurityProblemMessages.ToUserMessage(ex);
+            Notify.Error(_error);
+        }
+        finally
+        {
+            EndLoad();
+        }
+    }
+
+    private async Task LoadCrossClinicAsync()
+    {
+        if (!CanQuery())
+        {
+            _crossClinic = null;
+            return;
+        }
+
+        BeginLoad();
+        try
+        {
+            _crossClinic = await SecurityApi.GetCrossClinicAttemptSummaryAsync(BuildQuery(false), PlatformBypass, _cts!.Token);
+            _subtitle = _crossClinic.OrganizationName;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ApiProblemException ex)
+        {
+            _crossClinic = null;
+            _error = OrganizationSecurityProblemMessages.ToUserMessage(ex);
+            Notify.Error(_error);
+        }
+        finally
+        {
+            EndLoad();
+        }
+    }
+
+    private bool CanQuery()
+    {
+        if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private void BeginLoad()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        _loading = true;
+        _error = null;
+    }
+
+    private void EndLoad()
+    {
+        if (_cts is null || !_cts.IsCancellationRequested)
+        {
+            _loading = false;
+        }
+    }
+
+    private Task OpenSessionDetailAsync(OrganizationSecuritySessionItem row)
+    {
+        _detail = row;
+        _detailVisible = true;
+        return Task.CompletedTask;
+    }
+
+    private void CloseDetail()
+    {
+        _detailVisible = false;
+    }
+
+    private bool CanShowCompromise(OrganizationSecuritySessionItem row)
+    {
+        if (!OrganizationSecurityPermissionRules.CanRevoke(Permissions) || row.StaffMemberId is null)
+        {
+            return false;
+        }
+
+        if (Permissions.CurrentUser?.UserId is Guid self && row.UserId == self)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private async Task OpenRevokeAsync(OrganizationSecuritySessionItem row)
+    {
+        if (row.StaffMemberId is not Guid staffId)
+        {
+            return;
+        }
+
+        CloseDetail();
+        if (await Modals.ShowAsync<SecurityRevokeSessionsDialog, SecurityRevokeSessionsDialog.Args>(
+                "Revoke all sessions",
+                new SecurityRevokeSessionsDialog.Args
+                {
+                    StaffMemberId = staffId,
+                    DisplayName = row.StaffDisplayName ?? staffId.ToString("D"),
+                    ClinicName = row.ClinicName,
+                    PlatformAdminBypass = PlatformBypass,
+                }))
+        {
+            Notify.Success("Sessions revoked.");
+            await LoadSessionsAsync();
+            if (_activeTab == "overview")
+            {
+                await LoadOverviewAsync();
+            }
+        }
+    }
+
+    private async Task OpenCompromiseAsync(OrganizationSecuritySessionItem row)
+    {
+        if (row.StaffMemberId is not Guid staffId || !CanShowCompromise(row))
+        {
+            return;
+        }
+
+        CloseDetail();
+        if (await Modals.ShowAsync<SecurityCompromiseDialog, SecurityCompromiseDialog.Args>(
+                "Compromised account response",
+                new SecurityCompromiseDialog.Args
+                {
+                    StaffMemberId = staffId,
+                    DisplayName = row.StaffDisplayName ?? staffId.ToString("D"),
+                    ClinicName = row.ClinicName,
+                    PlatformAdminBypass = PlatformBypass,
+                    CurrentUserId = Permissions.CurrentUser?.UserId,
+                    TargetUserId = row.UserId,
+                }))
+        {
+            Notify.Success("Account deactivated and sessions revoked.");
+            await LoadSessionsAsync();
+            if (_activeTab == "overview")
+            {
+                await LoadOverviewAsync();
+            }
+        }
+    }
+
+    private async Task CopyCorrelationAsync(string? correlationId)
+    {
+        if (string.IsNullOrWhiteSpace(correlationId))
+        {
+            return;
+        }
+
+        try
+        {
+            var ok = await Js.InvokeAsync<bool>("healthcareShell.copyText", correlationId);
+            if (ok)
+            {
+                Notify.Success("Correlation ID copied.");
+            }
+        }
+        catch
+        {
+            // Clipboard may be unavailable.
+        }
+    }
+
+    private RenderFragment RenderEventSummary(OrganizationSecurityEventSummaryResponse? summary, string title) => __builder =>
+    {
+        <div style="padding:1rem 0;">
+            @if (_loading) { <PageLoading /> }
+            else if (summary is null)
+            {
+                <EmptyState Message="@($"{title} are not loaded.")" />
+            }
+            else
+            {
+                <AntDesign.Row Gutter="(16, 16)" Style="margin-bottom:1rem;">
+                    <AntDesign.Col Xs="12" Md="8"><Statistic Title="Total" Value="@summary.TotalCount" /></AntDesign.Col>
+                    <AntDesign.Col Xs="12" Md="8"><Statistic Title="Operations" Value="@summary.ByOperation.Count" /></AntDesign.Col>
+                    <AntDesign.Col Xs="12" Md="8"><Statistic Title="Clinics" Value="@summary.ByClinic.Count" /></AntDesign.Col>
+                </AntDesign.Row>
+                <Alert Type="@AlertType.Info"
+                       Message="Safe operational fields only — no route payloads, stack traces, or foreign organization details."
+                       ShowIcon="true"
+                       Style="margin-bottom:0.75rem;" />
+                <h3 style="font-size:1rem;margin:0 0 0.5rem;">By operation</h3>
+                <div class="hc-table-wrap" style="margin-bottom:1rem;">
+                    <table class="hc-table" aria-label="@($"{title} by operation")">
+                        <thead><tr><th>Operation</th><th>Reason</th><th>Count</th></tr></thead>
+                        <tbody>
+                        @foreach (var row in summary.ByOperation)
+                        {
+                            <tr>
+                                <td>@row.Operation</td>
+                                <td>@row.ReasonCode</td>
+                                <td>@row.Count</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+                <h3 style="font-size:1rem;margin:0 0 0.5rem;">By clinic</h3>
+                <div class="hc-table-wrap" style="margin-bottom:1rem;">
+                    <table class="hc-table" aria-label="@($"{title} by clinic")">
+                        <thead><tr><th>Clinic</th><th>Count</th></tr></thead>
+                        <tbody>
+                        @foreach (var row in summary.ByClinic)
+                        {
+                            <tr>
+                                <td>@(row.ClinicName ?? "—")</td>
+                                <td>@row.Count</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+                <h3 style="font-size:1rem;margin:0 0 0.5rem;">Recent events</h3>
+                <div class="hc-table-wrap">
+                    <table class="hc-table" aria-label="@($"{title} recent events")">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Operation</th>
+                                <th>Reason</th>
+                                <th>Occurred (UTC)</th>
+                                <th>Correlation</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var row in summary.RecentItems)
+                        {
+                            <tr>
+                                <td>@row.EventType</td>
+                                <td>@row.Operation</td>
+                                <td>@row.ReasonCode</td>
+                                <td><span class="hc-caption">@row.OccurredAtUtc.UtcDateTime.ToString("u")</span></td>
+                                <td>
+                                    <Space>
+                                        <span class="hc-caption">@OrganizationSecurityPresentation.TruncateCorrelation(row.CorrelationId)</span>
+                                        @if (!string.IsNullOrWhiteSpace(row.CorrelationId))
+                                        {
+                                            <Button Type="@ButtonType.Link"
+                                                    OnClick="@(() => CopyCorrelationAsync(row.CorrelationId))"
+                                                    AriaLabel="Copy correlation ID">
+                                                Copy
+                                            </Button>
+                                        }
+                                    </Space>
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    };
+}
