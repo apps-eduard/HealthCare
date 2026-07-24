@@ -50,10 +50,16 @@ export HEALTHCARE_END_TO_END_TEST_HOST=true
 dotnet restore
 dotnet build
 
-# Install Chromium once per machine/agent (after build so playwright.ps1 exists):
-pwsh bin/Debug/net10.0/playwright.ps1 install chromium
-# If the script is under the E2E project output:
-pwsh ./tests/HealthCare.EndToEndTests/bin/Debug/net10.0/playwright.ps1 install chromium
+# Install Chromium once per machine/agent (after build so Playwright assets exist).
+# Prefer PowerShell when available:
+#   pwsh ./tests/HealthCare.EndToEndTests/bin/Debug/net10.0/playwright.ps1 install chromium
+# On Ubuntu without pwsh / without root `install-deps`, use the bundled Node CLI + optional user-space libs:
+cd ./tests/HealthCare.EndToEndTests/bin/Debug/net10.0
+./.playwright/node/linux-x64/node .playwright/package/cli.js install chromium
+cd /home/speed/projects/HealthCare
+# If `ldd` reports missing ATK/X11 libraries and sudo is unavailable:
+bash ./tests/HealthCare.EndToEndTests/scripts/install-chromium-user-libs.sh
+# Prefer root deps when available: `.../cli.js install-deps chromium`
 
 dotnet test ./tests/HealthCare.IntegrationTests/HealthCare.IntegrationTests.csproj -m:1
 dotnet test ./tests/HealthCare.EndToEndTests/HealthCare.EndToEndTests.csproj --logger "console;verbosity=normal"
