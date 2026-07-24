@@ -81,6 +81,7 @@ public static class Permissions
 
     public static class SecuritySessions
     {
+        public const string Read = "security_sessions.read";
         public const string Revoke = "security_sessions.revoke";
     }
 
@@ -136,6 +137,7 @@ public static class Permissions
         Staff.PasswordReset,
         Roles.Read,
         Roles.Assign,
+        SecuritySessions.Read,
         SecuritySessions.Revoke,
         Hangfire.Dashboard,
         MedicalNotes.Read,

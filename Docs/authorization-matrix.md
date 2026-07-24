@@ -33,9 +33,10 @@ Resolution uses server-side Identity roles (DB) + active staff membership + pati
 | `organizations.select` | PLATFORM_ADMIN UI tenant selection (Web usability aid; API remains authoritative) |
 | `organization_dashboard.read` | Organization Admin (and PLATFORM_ADMIN with explicit tenant bypass) operational dashboard aggregates |
 | `organization_reports.read` | Organization Admin (and PLATFORM_ADMIN with explicit tenant bypass) operational reports + safe CSV export |
+| `security_sessions.read` | Organization Admin (and PLATFORM_ADMIN with explicit tenant bypass) session visibility + security event summaries |
+| `security_sessions.revoke` | Staff managers / Org Admin: revoke sessions; Org Admin security compromise-response |
 | `staff.read` / `staff.manage` / `staff.password_reset` | Staff list/detail/create/update/activate + admin password-reset initiation |
 | `roles.read` / `roles.assign` | Assignable-role catalog and role assignment |
-| `security_sessions.revoke` | Explicit refresh-token / security-stamp revocation for in-scope staff |
 | `hangfire.dashboard` | Hangfire dashboard (with PLATFORM_ADMIN) |
 | `medical_notes.read` | Read authorized clinic note summaries/detail |
 | `medical_notes.create` | Create draft notes for eligible appointments |
@@ -216,6 +217,10 @@ Staff UI uses `ClinicPicker` / `OrganizationPicker` (no free-text ClinicId or Or
 - `GET /api/v1/organization/dashboard` — org-scoped operational aggregates (`organization_dashboard.read`)
 - `GET /api/v1/organization/reports/{appointments|staff|patients|availability|reminder-failures|summary-failures}` — org-scoped operational reports (`organization_reports.read`)
 - `GET /api/v1/organization/reports/{type}/export.csv` — safe CSV export of approved operational aggregates/failure rows
+- `GET /api/v1/organization/security/sessions` — org-scoped session visibility (no token secrets) (`security_sessions.read`)
+- `POST /api/v1/organization/security/staff/{id}/sessions/revoke` — org-scoped session revocation (`security_sessions.revoke`)
+- `POST /api/v1/organization/security/staff/{id}/compromise-response` — deactivate + revoke compromised staff
+- `GET /api/v1/organization/security/failed-logins|authorization-denials|cross-clinic-attempts` — security summaries
 - Optional `ClinicId`, `Date` (yyyy-MM-dd); optional `OrganizationId` **only** for PLATFORM_ADMIN with `platformAdminBypass=true`
 - ORGANIZATION_ADMIN: trusted membership organization; client OrganizationId overrides rejected
 - Appointment “today” uses each clinic’s local calendar date when no date is supplied and multiple clinics are in scope

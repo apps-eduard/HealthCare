@@ -5,6 +5,7 @@ using HealthCare.Application.Identity;
 using HealthCare.Application.MedicalNotes;
 using HealthCare.Application.Organizations;
 using HealthCare.Application.Patients;
+using HealthCare.Application.Security;
 using HealthCare.Application.Staff;
 using HealthCare.Domain.Identity;
 using HealthCare.Infrastructure.Appointments;
@@ -15,6 +16,7 @@ using HealthCare.Infrastructure.MedicalNotes;
 using HealthCare.Infrastructure.Organizations;
 using HealthCare.Infrastructure.Patients;
 using HealthCare.Infrastructure.Persistence;
+using HealthCare.Infrastructure.Security;
 using HealthCare.Infrastructure.Staff;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -109,6 +111,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<ICurrentPatient>(sp => sp.GetRequiredService<CurrentUserContext>());
         services.AddScoped<ITenantAccessService, TenantAccessService>();
         services.AddScoped<IAuthorizationAuditLogger, AuthorizationAuditLogger>();
+        services.AddScoped<ISecurityEventRecorder, SecurityEventRecorder>();
         services.AddScoped<IPermissionService, PermissionService>();
         services.AddScoped<IRoleAssignmentAuthorizationService, RoleAssignmentAuthorizationService>();
 
@@ -163,6 +166,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IOrganizationDirectoryService, OrganizationDirectoryService>();
         services.AddScoped<IOrganizationDashboardService, OrganizationDashboardService>();
         services.AddScoped<IOrganizationReportService, OrganizationReportService>();
+        services.AddScoped<IOrganizationSecurityService, OrganizationSecurityService>();
         services.AddScoped<ISecuritySessionInvalidationService, SecuritySessionInvalidationService>();
         services.AddScoped<IAppointmentService, AppointmentService>();
         services.AddScoped<IClinicTimeZoneConverter, ClinicTimeZoneConverter>();

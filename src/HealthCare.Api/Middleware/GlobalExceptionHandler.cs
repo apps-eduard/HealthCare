@@ -6,6 +6,7 @@ using HealthCare.Application.Identity;
 using HealthCare.Application.MedicalNotes;
 using HealthCare.Application.Organizations;
 using HealthCare.Application.Patients;
+using HealthCare.Application.Security;
 using HealthCare.Application.Staff;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -162,6 +163,18 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
                 organizationReportException.ErrorCode,
                 correlationId,
                 "Organization reports denied",
+                cancellationToken);
+        }
+
+        if (exception is OrganizationSecurityException organizationSecurityException)
+        {
+            return await WriteAuthProblemAsync(
+                httpContext,
+                organizationSecurityException.StatusCode,
+                organizationSecurityException.Title,
+                organizationSecurityException.ErrorCode,
+                correlationId,
+                "Organization security denied",
                 cancellationToken);
         }
 

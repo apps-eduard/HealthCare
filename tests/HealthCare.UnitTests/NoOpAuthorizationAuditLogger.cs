@@ -90,4 +90,13 @@ internal sealed class NoOpAuthorizationAuditLogger : IAuthorizationAuditLogger
         string? reportType = null)
     {
     }
+
+    public void SecurityOperation(
+        string operation,
+        string resultCode,
+        Guid? organizationId = null,
+        Guid? clinicId = null,
+        Guid? targetUserId = null)
+    {
+    }
 }

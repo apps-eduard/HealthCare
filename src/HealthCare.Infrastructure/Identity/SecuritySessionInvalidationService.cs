@@ -23,7 +23,7 @@ public sealed class SecuritySessionInvalidationService : ISecuritySessionInvalid
         _logger = logger;
     }
 
-    public async Task InvalidateUserSessionsAsync(
+    public async Task<int> InvalidateUserSessionsAsync(
         Guid userId,
         string reason,
         CancellationToken cancellationToken = default)
@@ -52,5 +52,7 @@ public sealed class SecuritySessionInvalidationService : ISecuritySessionInvalid
             userId,
             tokens.Count,
             reason);
+
+        return tokens.Count;
     }
 }

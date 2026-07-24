@@ -83,4 +83,14 @@ public interface IAuthorizationAuditLogger
         Guid? organizationId = null,
         Guid? clinicId = null,
         string? reportType = null);
+
+    /// <summary>
+    /// Organization security operational audit. Must never include tokens, passwords, or PHI.
+    /// </summary>
+    void SecurityOperation(
+        string operation,
+        string resultCode,
+        Guid? organizationId = null,
+        Guid? clinicId = null,
+        Guid? targetUserId = null);
 }

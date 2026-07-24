@@ -48,6 +48,7 @@ public static class RolePermissionMatrix
                 Permissions.Staff.PasswordReset,
                 Permissions.Roles.Read,
                 Permissions.Roles.Assign,
+                Permissions.SecuritySessions.Read,
                 Permissions.SecuritySessions.Revoke,
                 Permissions.Hangfire.Dashboard),
 
@@ -82,6 +83,7 @@ public static class RolePermissionMatrix
                 Permissions.Staff.PasswordReset,
                 Permissions.Roles.Read,
                 Permissions.Roles.Assign,
+                Permissions.SecuritySessions.Read,
                 Permissions.SecuritySessions.Revoke),
 
             [AppRoles.ClinicAdmin] = Set(

@@ -23,6 +23,7 @@ public sealed class AuthService : IAuthService
     private readonly TimeProvider _timeProvider;
     private readonly ISecuritySessionInvalidationService _sessions;
     private readonly IDevelopmentPasswordResetTokenStore _passwordResetTokenStore;
+    private readonly ISecurityEventRecorder _securityEvents;
     private readonly ILogger<AuthService> _logger;
 
     public AuthService(
@@ -36,6 +37,7 @@ public sealed class AuthService : IAuthService
         TimeProvider timeProvider,
         ISecuritySessionInvalidationService sessions,
         IDevelopmentPasswordResetTokenStore passwordResetTokenStore,
+        ISecurityEventRecorder securityEvents,
         ILogger<AuthService> logger)
     {
         _userManager = userManager;
@@ -48,6 +50,7 @@ public sealed class AuthService : IAuthService
         _timeProvider = timeProvider;
         _sessions = sessions;
         _passwordResetTokenStore = passwordResetTokenStore;
+        _securityEvents = securityEvents;
         _logger = logger;
     }
 
@@ -73,6 +76,7 @@ public sealed class AuthService : IAuthService
 
         if (signInResult.IsLockedOut)
         {
+            await RecordFailedLoginAsync(user.Id, cancellationToken);
             throw AuthenticationException.AccountLocked();
         }
 
@@ -92,6 +96,7 @@ public sealed class AuthService : IAuthService
         {
             // Do not reveal whether the account exists or which factor failed.
             _logger.LogInformation("Login failed for user {UserId}", user.Id);
+            await RecordFailedLoginAsync(user.Id, cancellationToken);
             throw AuthenticationException.InvalidCredentials();
         }
 
@@ -355,6 +360,25 @@ public sealed class AuthService : IAuthService
         }
 
         return staff;
+    }
+
+    private async Task RecordFailedLoginAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var staff = await _dbContext.StaffMembers.AsNoTracking()
+            .Where(s => s.UserId == userId)
+            .Select(s => new { s.OrganizationId, s.ClinicId, s.Id })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        _securityEvents.TryRecord(new SecurityEventWrite
+        {
+            EventType = SecurityEventType.FailedLogin,
+            Operation = "auth_login",
+            ReasonCode = AuthErrorCodes.InvalidCredentials,
+            OrganizationId = staff?.OrganizationId,
+            ClinicId = staff?.ClinicId,
+            TargetUserId = userId,
+            TargetStaffMemberId = staff?.Id,
+        });
     }
 
     private static string? Truncate(string? value, int maxLength)

@@ -1,4 +1,6 @@
 using HealthCare.Application.Authorization;
+using HealthCare.Application.Identity;
+using HealthCare.Domain.Identity;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
@@ -13,19 +15,24 @@ public sealed class AuthorizationAuditLogger : IAuthorizationAuditLogger
 
     private readonly ICurrentUser _currentUser;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly ISecurityEventRecorder _securityEvents;
     private readonly ILogger<AuthorizationAuditLogger> _logger;
 
     public AuthorizationAuditLogger(
         ICurrentUser currentUser,
         IHttpContextAccessor httpContextAccessor,
+        ISecurityEventRecorder securityEvents,
         ILogger<AuthorizationAuditLogger> logger)
     {
         _currentUser = currentUser;
         _httpContextAccessor = httpContextAccessor;
+        _securityEvents = securityEvents;
         _logger = logger;
     }
 
-    public void PermissionDenied(string permission, string operation, string reasonCode) =>
+    public void PermissionDenied(string permission, string operation, string reasonCode)
+    {
+        var correlationId = CorrelationId();
         _logger.LogInformation(
             "Authorization denied. Event=permission_denied UserId={UserId} Permission={Permission} Operation={Operation} OrganizationId={OrganizationId} ClinicId={ClinicId} CorrelationId={CorrelationId} ReasonCode={ReasonCode}",
             _currentUser.UserId,
@@ -33,18 +40,46 @@ public sealed class AuthorizationAuditLogger : IAuthorizationAuditLogger
             operation,
             _currentUser.OrganizationId,
             _currentUser.ClinicId,
-            CorrelationId(),
+            correlationId,
             reasonCode);
 
-    public void CrossTenantDenied(string operation, string reasonCode, Guid? organizationId = null, Guid? clinicId = null) =>
+        _securityEvents.TryRecord(new SecurityEventWrite
+        {
+            EventType = SecurityEventType.PermissionDenied,
+            Operation = Truncate(operation, 128),
+            ReasonCode = Truncate(reasonCode, 128),
+            OrganizationId = _currentUser.OrganizationId,
+            ClinicId = _currentUser.ClinicId,
+            ActorUserId = _currentUser.UserId,
+            CorrelationId = correlationId,
+        });
+    }
+
+    public void CrossTenantDenied(string operation, string reasonCode, Guid? organizationId = null, Guid? clinicId = null)
+    {
+        var orgId = organizationId ?? _currentUser.OrganizationId;
+        var clinic = clinicId ?? _currentUser.ClinicId;
+        var correlationId = CorrelationId();
         _logger.LogInformation(
             "Authorization denied. Event=cross_tenant_denied UserId={UserId} Operation={Operation} OrganizationId={OrganizationId} ClinicId={ClinicId} CorrelationId={CorrelationId} ReasonCode={ReasonCode}",
             _currentUser.UserId,
             operation,
-            organizationId ?? _currentUser.OrganizationId,
-            clinicId ?? _currentUser.ClinicId,
-            CorrelationId(),
+            orgId,
+            clinic,
+            correlationId,
             reasonCode);
+
+        _securityEvents.TryRecord(new SecurityEventWrite
+        {
+            EventType = SecurityEventType.CrossTenantDenied,
+            Operation = Truncate(operation, 128),
+            ReasonCode = Truncate(reasonCode, 128),
+            OrganizationId = orgId,
+            ClinicId = clinic,
+            ActorUserId = _currentUser.UserId,
+            CorrelationId = correlationId,
+        });
+    }
 
     public void ExplicitPlatformBypassUsed(string operation, Guid? organizationId = null, Guid? clinicId = null) =>
         _logger.LogInformation(
@@ -192,6 +227,22 @@ public sealed class AuthorizationAuditLogger : IAuthorizationAuditLogger
             reportType,
             CorrelationId());
 
+    public void SecurityOperation(
+        string operation,
+        string resultCode,
+        Guid? organizationId = null,
+        Guid? clinicId = null,
+        Guid? targetUserId = null) =>
+        _logger.LogInformation(
+            "Security operation. Event=security_operation UserId={UserId} Operation={Operation} ResultCode={ResultCode} OrganizationId={OrganizationId} ClinicId={ClinicId} TargetUserId={TargetUserId} CorrelationId={CorrelationId}",
+            _currentUser.UserId,
+            operation,
+            resultCode,
+            organizationId ?? _currentUser.OrganizationId,
+            clinicId ?? _currentUser.ClinicId,
+            targetUserId,
+            CorrelationId());
+
     private string CorrelationId()
     {
         var http = _httpContextAccessor.HttpContext;
@@ -203,5 +254,15 @@ public sealed class AuthorizationAuditLogger : IAuthorizationAuditLogger
         }
 
         return http?.TraceIdentifier ?? string.Empty;
+    }
+
+    private static string Truncate(string? value, int max)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        return value.Length <= max ? value : value[..max];
     }
 }

@@ -5,7 +5,8 @@ namespace HealthCare.Application.Identity;
 /// </summary>
 public interface ISecuritySessionInvalidationService
 {
-    Task InvalidateUserSessionsAsync(
+    /// <returns>Number of refresh tokens revoked.</returns>
+    Task<int> InvalidateUserSessionsAsync(
         Guid userId,
         string reason,
         CancellationToken cancellationToken = default);

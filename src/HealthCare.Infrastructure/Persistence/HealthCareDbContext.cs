@@ -31,6 +31,8 @@ public sealed class HealthCareDbContext : IdentityDbContext<ApplicationUser, Ide
 
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
+    public DbSet<SecurityEvent> SecurityEvents => Set<SecurityEvent>();
+
     public DbSet<Patient> Patients => Set<Patient>();
 
     public DbSet<ClinicPatient> ClinicPatients => Set<ClinicPatient>();
@@ -58,7 +60,7 @@ public sealed class HealthCareDbContext : IdentityDbContext<ApplicationUser, Ide
         base.OnModelCreating(modelBuilder);
 
         modelBuilder.HasDefaultSchema("public");
-        modelBuilder.HasAnnotation("HealthCare:SchemaVersion", "10");
+        modelBuilder.HasAnnotation("HealthCare:SchemaVersion", "11");
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(HealthCareDbContext).Assembly);
     }
