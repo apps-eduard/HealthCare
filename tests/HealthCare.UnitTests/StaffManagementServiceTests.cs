@@ -1,5 +1,6 @@
 using FluentAssertions;
 using HealthCare.Application.Authorization;
+using HealthCare.Application.Identity;
 using HealthCare.Application.Staff;
 using HealthCare.Contracts.Staff;
 using HealthCare.Domain.Identity;
@@ -9,6 +10,7 @@ using HealthCare.Infrastructure.Authorization;
 using HealthCare.Infrastructure.Identity;
 using HealthCare.Infrastructure.Persistence;
 using HealthCare.Infrastructure.Staff;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -190,6 +192,130 @@ public sealed class StaffManagementServiceTests
         RolePermissionMatrix.RoleHasPermission(AppRoles.Patient, Permissions.Staff.Manage).Should().BeFalse();
         AppRoles.All.Should().Contain(AppRoles.Patient);
     }
+
+    [Fact]
+    public async Task Organization_Admin_Can_Change_Clinic_For_Doctor()
+    {
+        await using var h = await StaffHarness.CreateAsync();
+        var orgAdmin = await h.SeedStaffAsync(AppRoles.OrganizationAdmin, h.ClinicA.Id, "oa-move@test.local");
+        var doctor = await h.SeedStaffAsync(AppRoles.Doctor, h.ClinicA.Id, "doc-move@test.local");
+        var sut = h.CreateService(orgAdmin);
+
+        var updated = await sut.ChangeClinicAsync(doctor.Staff.Id, new ChangeStaffClinicRequest
+        {
+            NewClinicId = h.ClinicB.Id,
+            ExpectedVersion = doctor.Staff.Version,
+            AdministrativeReason = "Coverage rotation",
+        });
+
+        updated.ClinicId.Should().Be(h.ClinicB.Id);
+        updated.ClinicName.Should().Be(h.ClinicB.Name);
+        (await h.Db.StaffMembers.SingleAsync(s => s.Id == doctor.Staff.Id)).ClinicId.Should().Be(h.ClinicB.Id);
+    }
+
+    [Fact]
+    public async Task Clinic_Admin_Cannot_Change_Clinic()
+    {
+        await using var h = await StaffHarness.CreateAsync();
+        var clinicAdmin = await h.SeedStaffAsync(AppRoles.ClinicAdmin, h.ClinicA.Id, "ca-move@test.local");
+        var doctor = await h.SeedStaffAsync(AppRoles.Doctor, h.ClinicA.Id, "doc-move2@test.local");
+        var sut = h.CreateService(clinicAdmin);
+
+        var act = () => sut.ChangeClinicAsync(doctor.Staff.Id, new ChangeStaffClinicRequest
+        {
+            NewClinicId = h.ClinicB.Id,
+            ExpectedVersion = doctor.Staff.Version,
+            AdministrativeReason = "Attempt",
+        });
+        await act.Should().ThrowAsync<StaffManagementException>()
+            .Where(e => e.ErrorCode == StaffErrorCodes.ClinicChangeNotAllowed);
+    }
+
+    [Fact]
+    public async Task Organization_Admin_Cannot_Change_Clinic_For_Organization_Admin()
+    {
+        await using var h = await StaffHarness.CreateAsync();
+        var orgAdmin = await h.SeedStaffAsync(AppRoles.OrganizationAdmin, h.ClinicA.Id, "oa1@test.local");
+        var otherAdmin = await h.SeedStaffAsync(AppRoles.OrganizationAdmin, h.ClinicA.Id, "oa2@test.local");
+        var sut = h.CreateService(orgAdmin);
+
+        var act = () => sut.ChangeClinicAsync(otherAdmin.Staff.Id, new ChangeStaffClinicRequest
+        {
+            NewClinicId = h.ClinicB.Id,
+            ExpectedVersion = otherAdmin.Staff.Version,
+            AdministrativeReason = "Attempt",
+        });
+        await act.Should().ThrowAsync<StaffManagementException>()
+            .Where(e => e.ErrorCode == StaffErrorCodes.ClinicChangeNotAllowed);
+    }
+
+    [Fact]
+    public async Task Self_Deactivation_Uses_Dedicated_Error()
+    {
+        await using var h = await StaffHarness.CreateAsync();
+        var orgAdmin = await h.SeedStaffAsync(AppRoles.OrganizationAdmin, h.ClinicA.Id, "oa-self@test.local");
+        await h.SeedStaffAsync(AppRoles.OrganizationAdmin, h.ClinicA.Id, "oa-peer@test.local");
+        var sut = h.CreateService(orgAdmin);
+
+        var act = () => sut.DeactivateAsync(orgAdmin.Staff.Id, new StaffActivationRequest
+        {
+            ExpectedVersion = orgAdmin.Staff.Version,
+        });
+        await act.Should().ThrowAsync<StaffManagementException>()
+            .Where(e => e.ErrorCode == StaffErrorCodes.SelfDeactivationDenied);
+    }
+
+    [Fact]
+    public async Task Revoke_Sessions_Is_Idempotent()
+    {
+        await using var h = await StaffHarness.CreateAsync();
+        var orgAdmin = await h.SeedStaffAsync(AppRoles.OrganizationAdmin, h.ClinicA.Id, "oa-rev@test.local");
+        var doctor = await h.SeedStaffAsync(AppRoles.Doctor, h.ClinicA.Id, "doc-rev@test.local");
+        h.Db.RefreshTokens.Add(new RefreshToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = doctor.User.Id,
+            TokenHash = "rev-hash",
+            FamilyId = Guid.NewGuid(),
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            ExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(7),
+        });
+        await h.Db.SaveChangesAsync();
+        var sut = h.CreateService(orgAdmin);
+
+        var first = await sut.RevokeSessionsAsync(doctor.Staff.Id, new RevokeStaffSessionsRequest());
+        var second = await sut.RevokeSessionsAsync(doctor.Staff.Id, new RevokeStaffSessionsRequest());
+        first.Message.Should().NotBeNullOrWhiteSpace();
+        second.Message.Should().NotBeNullOrWhiteSpace();
+        (await h.Db.RefreshTokens.SingleAsync(t => t.UserId == doctor.User.Id)).RevokedAtUtc.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Password_Reset_Captures_Development_Token()
+    {
+        await using var h = await StaffHarness.CreateAsync();
+        var store = new DevelopmentPasswordResetTokenStore();
+        var orgAdmin = await h.SeedStaffAsync(AppRoles.OrganizationAdmin, h.ClinicA.Id, "oa-pwd@test.local");
+        var doctor = await h.SeedStaffAsync(AppRoles.Doctor, h.ClinicA.Id, "doc-pwd@test.local");
+        var email = new DevelopmentAccountEmailSender(
+            new DevelopmentConfirmationTokenStore(),
+            store,
+            NullLogger<DevelopmentAccountEmailSender>.Instance);
+        var sut = h.CreateServiceWithEmail(orgAdmin, email);
+
+        var response = await sut.RequestPasswordResetAsync(doctor.Staff.Id, new StaffPasswordResetRequest());
+        response.Message.Should().Contain("password reset");
+        store.TryGet("doc-pwd@test.local", out var token).Should().BeTrue();
+        token.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public void Permissions_Include_Password_Reset_And_Session_Revoke_For_Org_Admin()
+    {
+        RolePermissionMatrix.GetPermissionsForRole(AppRoles.OrganizationAdmin)
+            .Should().Contain(Permissions.Staff.PasswordReset)
+            .And.Contain(Permissions.SecuritySessions.Revoke);
+    }
 }
 
 internal sealed class StaffHarness : IAsyncDisposable
@@ -205,9 +331,11 @@ internal sealed class StaffHarness : IAsyncDisposable
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddDataProtection();
         services.AddIdentityCore<ApplicationUser>()
             .AddRoles<IdentityRole<Guid>>()
-            .AddEntityFrameworkStores<HealthCareDbContext>();
+            .AddEntityFrameworkStores<HealthCareDbContext>()
+            .AddDefaultTokenProviders();
         services.AddDbContext<HealthCareDbContext>(o =>
             o.UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
                 .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning)));
@@ -322,7 +450,15 @@ internal sealed class StaffHarness : IAsyncDisposable
         return user;
     }
 
-    public StaffManagementService CreateService((ApplicationUser User, StaffMember Staff) actor)
+    public StaffManagementService CreateService((ApplicationUser User, StaffMember Staff) actor) =>
+        CreateServiceWithEmail(actor, new DevelopmentAccountEmailSender(
+            new DevelopmentConfirmationTokenStore(),
+            new DevelopmentPasswordResetTokenStore(),
+            NullLogger<DevelopmentAccountEmailSender>.Instance));
+
+    public StaffManagementService CreateServiceWithEmail(
+        (ApplicationUser User, StaffMember Staff) actor,
+        IAccountEmailSender emailSender)
     {
         var currentUser = new FakeCurrentUser
         {
@@ -342,7 +478,7 @@ internal sealed class StaffHarness : IAsyncDisposable
             ClinicId = actor.Staff.ClinicId,
             Role = actor.Staff.Role,
         };
-        return BuildService(currentUser, currentStaff);
+        return BuildService(currentUser, currentStaff, emailSender);
     }
 
     public StaffManagementService CreatePlatformService(ApplicationUser platformUser)
@@ -358,7 +494,10 @@ internal sealed class StaffHarness : IAsyncDisposable
         return BuildService(currentUser, currentStaff);
     }
 
-    private StaffManagementService BuildService(FakeCurrentUser currentUser, FakeCurrentStaff currentStaff)
+    private StaffManagementService BuildService(
+        FakeCurrentUser currentUser,
+        FakeCurrentStaff currentStaff,
+        IAccountEmailSender? emailSender = null)
     {
         var audit = new NoOpAuthorizationAuditLogger();
         var permissions = new PermissionService(
@@ -368,6 +507,10 @@ internal sealed class StaffHarness : IAsyncDisposable
             audit);
         var roleAssignment = new RoleAssignmentAuthorizationService(audit);
         var sessions = new SecuritySessionInvalidationService(Db, Users, NullLogger<SecuritySessionInvalidationService>.Instance);
+        var email = emailSender ?? new DevelopmentAccountEmailSender(
+            new DevelopmentConfirmationTokenStore(),
+            new DevelopmentPasswordResetTokenStore(),
+            NullLogger<DevelopmentAccountEmailSender>.Instance);
 
         return new StaffManagementService(
             Db,
@@ -377,6 +520,7 @@ internal sealed class StaffHarness : IAsyncDisposable
             permissions,
             roleAssignment,
             sessions,
+            email,
             audit,
             TimeProvider.System,
             NullLogger<StaffManagementService>.Instance);

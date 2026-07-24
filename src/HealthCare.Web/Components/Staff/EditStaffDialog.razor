@@ -1,0 +1,125 @@
+@inherits FeedbackComponent<EditStaffDialog.Args>
+@inject IStaffManagementApiClient StaffApi
+@inject IPermissionState Permissions
+
+@if (_loading)
+{
+    <PageLoading />
+}
+else
+{
+    <div style="display:flex;flex-direction:column;gap:12px;">
+        <div>
+            <label>@FieldLabel.Mark("First name")</label>
+            <Input @bind-Value="_firstName" Disabled="_busy" Style="width:100%;" />
+        </div>
+        <div>
+            <label>@FieldLabel.Mark("Last name")</label>
+            <Input @bind-Value="_lastName" Disabled="_busy" Style="width:100%;" />
+        </div>
+        <div>
+            <label>Display name</label>
+            <Input @bind-Value="_displayName" Disabled="_busy" Style="width:100%;" />
+        </div>
+        <div>
+            <label>Job title</label>
+            <Input @bind-Value="_jobTitle" Disabled="_busy" Style="width:100%;" />
+        </div>
+        <div>
+            <label>Phone</label>
+            <Input @bind-Value="_phone" Disabled="_busy" Style="width:100%;" />
+        </div>
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" />
+        }
+    </div>
+}
+<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;">
+    <Button OnClick="CancelCloseAsync" Disabled="_busy">Cancel</Button>
+    <Button Type="@ButtonType.Primary" OnClick="SubmitAsync" Loading="_busy" Disabled="_busy || _loading">Save</Button>
+</div>
+
+@code {
+    public sealed class Args
+    {
+        public Guid StaffMemberId { get; init; }
+        public int ExpectedVersion { get; init; }
+        public string FirstName { get; init; } = string.Empty;
+        public string LastName { get; init; } = string.Empty;
+        public string? DisplayName { get; init; }
+        public string? JobTitle { get; init; }
+        public string? PhoneNumber { get; init; }
+    }
+
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+    private string _firstName = string.Empty;
+    private string _lastName = string.Empty;
+    private string? _displayName;
+    private string? _jobTitle;
+    private string? _phone;
+    private int _version;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var bypass = Permissions.IsPlatformAdmin;
+            var detail = await StaffApi.GetByIdAsync(Options.StaffMemberId, platformAdminBypass: bypass);
+            _firstName = detail.FirstName;
+            _lastName = detail.LastName;
+            _displayName = detail.DisplayName;
+            _jobTitle = detail.JobTitle;
+            _phone = detail.PhoneNumber;
+            _version = detail.Version;
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = ex.ToUserMessage();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_firstName) || string.IsNullOrWhiteSpace(_lastName))
+        {
+            _error = "First and last name are required.";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await StaffApi.UpdateAsync(
+                Options.StaffMemberId,
+                new UpdateStaffRequest
+                {
+                    FirstName = _firstName.Trim(),
+                    LastName = _lastName.Trim(),
+                    DisplayName = _displayName,
+                    JobTitle = _jobTitle,
+                    PhoneNumber = _phone,
+                    ExpectedVersion = _version,
+                },
+                platformAdminBypass: Permissions.IsPlatformAdmin);
+            await OkCancelRef!.OkAsync(new ModalClosingEventArgs());
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = ex.ToUserMessage();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task CancelCloseAsync() => OkCancelRef!.CancelAsync(new ModalClosingEventArgs());
+}

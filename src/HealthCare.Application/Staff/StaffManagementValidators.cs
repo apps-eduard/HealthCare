@@ -12,7 +12,7 @@ public sealed class StaffSearchRequestValidator : AbstractValidator<StaffSearchR
     private static readonly HashSet<string> AllowedSort =
         new(StringComparer.OrdinalIgnoreCase)
         {
-            "lastname", "firstname", "email", "role", "createdatutc", "displayname",
+            "lastname", "firstname", "email", "role", "createdatutc", "displayname", "updatedatutc", "jobtitle",
         };
 
     public StaffSearchRequestValidator()
@@ -76,6 +76,32 @@ public sealed class StaffActivationRequestValidator : AbstractValidator<StaffAct
     public StaffActivationRequestValidator()
     {
         RuleFor(x => x.ExpectedVersion).GreaterThanOrEqualTo(0);
+        RuleFor(x => x.Reason).MaximumLength(250);
+    }
+}
+
+public sealed class ChangeStaffClinicRequestValidator : AbstractValidator<ChangeStaffClinicRequest>
+{
+    public ChangeStaffClinicRequestValidator()
+    {
+        RuleFor(x => x.NewClinicId).NotEmpty();
+        RuleFor(x => x.ExpectedVersion).GreaterThanOrEqualTo(0);
+        RuleFor(x => x.AdministrativeReason).NotEmpty().MaximumLength(250);
+    }
+}
+
+public sealed class StaffPasswordResetRequestValidator : AbstractValidator<StaffPasswordResetRequest>
+{
+    public StaffPasswordResetRequestValidator()
+    {
+        RuleFor(x => x.Reason).MaximumLength(250);
+    }
+}
+
+public sealed class RevokeStaffSessionsRequestValidator : AbstractValidator<RevokeStaffSessionsRequest>
+{
+    public RevokeStaffSessionsRequestValidator()
+    {
         RuleFor(x => x.Reason).MaximumLength(250);
     }
 }

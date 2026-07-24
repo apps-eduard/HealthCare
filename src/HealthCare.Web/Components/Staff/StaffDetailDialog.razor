@@ -19,7 +19,7 @@ else if (_detail is not null)
         <div><b>Job title:</b> @(_detail.JobTitle ?? "—")</div>
         <div><b>Phone:</b> @(_detail.PhoneNumber ?? "—")</div>
         <div><b>Organization:</b> @_detail.OrganizationId</div>
-        <div><b>Clinic:</b> @_detail.ClinicId</div>
+        <div><b>Clinic:</b> @(_detail.ClinicName ?? _detail.ClinicId.ToString())</div>
         <div><b>Role:</b> @_detail.Role</div>
         <div><b>Membership:</b> @(_detail.MembershipIsActive ? "Active" : "Inactive")</div>
         <div><b>Account enabled:</b> @(_detail.AccountIsActive ? "Yes" : "No")</div>

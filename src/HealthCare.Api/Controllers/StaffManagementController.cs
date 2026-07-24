@@ -131,4 +131,43 @@ public sealed class StaffManagementController : ControllerBase
         await _staff.RemoveRoleAsync(staffMemberId, roleName, bypass, cancellationToken);
         return NoContent();
     }
+
+    [AuthorizePermission(Permissions.Staff.Manage)]
+    [HttpPost("staff/{staffMemberId:guid}/change-clinic")]
+    [ProducesResponseType(typeof(StaffDetailResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<StaffDetailResponse>> ChangeClinic(
+        Guid staffMemberId,
+        [FromBody] ChangeStaffClinicRequest request,
+        [FromQuery] bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default)
+    {
+        var bypass = platformAdminBypass ? PlatformAdminBypass.Explicit : PlatformAdminBypass.None;
+        return Ok(await _staff.ChangeClinicAsync(staffMemberId, request, bypass, cancellationToken));
+    }
+
+    [AuthorizePermission(Permissions.Staff.PasswordReset)]
+    [HttpPost("staff/{staffMemberId:guid}/password-reset")]
+    [ProducesResponseType(typeof(StaffPasswordResetResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<StaffPasswordResetResponse>> RequestPasswordReset(
+        Guid staffMemberId,
+        [FromBody] StaffPasswordResetRequest request,
+        [FromQuery] bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default)
+    {
+        var bypass = platformAdminBypass ? PlatformAdminBypass.Explicit : PlatformAdminBypass.None;
+        return Ok(await _staff.RequestPasswordResetAsync(staffMemberId, request, bypass, cancellationToken));
+    }
+
+    [AuthorizePermission(Permissions.SecuritySessions.Revoke)]
+    [HttpPost("staff/{staffMemberId:guid}/revoke-sessions")]
+    [ProducesResponseType(typeof(RevokeStaffSessionsResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<RevokeStaffSessionsResponse>> RevokeSessions(
+        Guid staffMemberId,
+        [FromBody] RevokeStaffSessionsRequest request,
+        [FromQuery] bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default)
+    {
+        var bypass = platformAdminBypass ? PlatformAdminBypass.Explicit : PlatformAdminBypass.None;
+        return Ok(await _staff.RevokeSessionsAsync(staffMemberId, request, bypass, cancellationToken));
+    }
 }

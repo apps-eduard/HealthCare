@@ -54,6 +54,9 @@ public sealed class StaffManagementException : Exception
     public static StaffManagementException DeactivationNotAllowed() =>
         new(StaffErrorCodes.DeactivationNotAllowed, "Staff deactivation is not allowed.", 409);
 
+    public static StaffManagementException SelfDeactivationDenied() =>
+        new(StaffErrorCodes.SelfDeactivationDenied, "You cannot deactivate your own staff membership.", 403);
+
     public static StaffManagementException AlreadyActive() =>
         new(StaffErrorCodes.AlreadyActive, "The staff membership is already active.", 409);
 
@@ -65,4 +68,16 @@ public sealed class StaffManagementException : Exception
 
     public static StaffManagementException CreationFailed(string detail) =>
         new(StaffErrorCodes.CreationFailed, detail, 400);
+
+    public static StaffManagementException ClinicChangeNotAllowed(string? detail = null) =>
+        new(StaffErrorCodes.ClinicChangeNotAllowed, detail ?? "Clinic reassignment is not allowed for this staff member.", 409);
+
+    public static StaffManagementException PasswordResetNotAllowed() =>
+        new(StaffErrorCodes.PasswordResetNotAllowed, "Password reset is not allowed for this account.", 403);
+
+    public static StaffManagementException PasswordResetFailed(string detail) =>
+        new(StaffErrorCodes.PasswordResetFailed, detail, 400);
+
+    public static StaffManagementException SessionRevocationFailed(string detail) =>
+        new(StaffErrorCodes.SessionRevocationFailed, detail, 400);
 }

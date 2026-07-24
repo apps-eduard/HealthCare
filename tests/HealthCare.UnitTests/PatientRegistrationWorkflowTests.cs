@@ -304,6 +304,7 @@ internal sealed class RegistrationTestHarness : IAsyncDisposable
             .AddEntityFrameworkStores<HealthCareDbContext>()
             .AddDefaultTokenProviders();
         services.AddSingleton<IDevelopmentConfirmationTokenStore, DevelopmentConfirmationTokenStore>();
+        services.AddSingleton<IDevelopmentPasswordResetTokenStore, DevelopmentPasswordResetTokenStore>();
         services.AddScoped<IAccountEmailSender, DevelopmentAccountEmailSender>();
         services.AddScoped<IPatientRegistrationService, PatientRegistrationService>();
 

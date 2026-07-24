@@ -21,6 +21,8 @@ public sealed class AuthService : IAuthService
     private readonly IRefreshTokenHasher _refreshTokenHasher;
     private readonly JwtOptions _jwtOptions;
     private readonly TimeProvider _timeProvider;
+    private readonly ISecuritySessionInvalidationService _sessions;
+    private readonly IDevelopmentPasswordResetTokenStore _passwordResetTokenStore;
     private readonly ILogger<AuthService> _logger;
 
     public AuthService(
@@ -32,6 +34,8 @@ public sealed class AuthService : IAuthService
         IRefreshTokenHasher refreshTokenHasher,
         IOptions<JwtOptions> jwtOptions,
         TimeProvider timeProvider,
+        ISecuritySessionInvalidationService sessions,
+        IDevelopmentPasswordResetTokenStore passwordResetTokenStore,
         ILogger<AuthService> logger)
     {
         _userManager = userManager;
@@ -42,6 +46,8 @@ public sealed class AuthService : IAuthService
         _refreshTokenHasher = refreshTokenHasher;
         _jwtOptions = jwtOptions.Value;
         _timeProvider = timeProvider;
+        _sessions = sessions;
+        _passwordResetTokenStore = passwordResetTokenStore;
         _logger = logger;
     }
 
@@ -219,6 +225,37 @@ public sealed class AuthService : IAuthService
         existing.RevokedAtUtc = utcNow;
         existing.RevokedReason = "Logout";
         await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<CompletePasswordResetResponse> CompletePasswordResetAsync(
+        CompletePasswordResetRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var email = request.Email.Trim();
+        var user = await _userManager.FindByEmailAsync(email);
+        if (user is null)
+        {
+            // Do not reveal whether the account exists.
+            throw AuthenticationException.InvalidPasswordResetToken();
+        }
+
+        var result = await _userManager.ResetPasswordAsync(user, request.Token.Trim(), request.NewPassword);
+        if (!result.Succeeded)
+        {
+            throw AuthenticationException.InvalidPasswordResetToken();
+        }
+
+        user.UpdatedAtUtc = _timeProvider.GetUtcNow();
+        await _userManager.UpdateAsync(user);
+        await _sessions.InvalidateUserSessionsAsync(user.Id, "PasswordResetCompleted", cancellationToken);
+        _passwordResetTokenStore.Clear(email);
+
+        _logger.LogInformation("Password reset completed. UserId={UserId}", user.Id);
+
+        return new CompletePasswordResetResponse
+        {
+            Message = "Password has been updated. You can sign in with the new password.",
+        };
     }
 
     private async Task<AuthTokenResponse> IssueTokenPairAsync(

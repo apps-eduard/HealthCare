@@ -44,8 +44,10 @@ public static class RolePermissionMatrix
                 Permissions.Organizations.DashboardRead,
                 Permissions.Staff.Read,
                 Permissions.Staff.Manage,
+                Permissions.Staff.PasswordReset,
                 Permissions.Roles.Read,
                 Permissions.Roles.Assign,
+                Permissions.SecuritySessions.Revoke,
                 Permissions.Hangfire.Dashboard),
 
             [AppRoles.OrganizationAdmin] = Set(
@@ -76,8 +78,10 @@ public static class RolePermissionMatrix
                 Permissions.Organizations.DashboardRead,
                 Permissions.Staff.Read,
                 Permissions.Staff.Manage,
+                Permissions.Staff.PasswordReset,
                 Permissions.Roles.Read,
-                Permissions.Roles.Assign),
+                Permissions.Roles.Assign,
+                Permissions.SecuritySessions.Revoke),
 
             [AppRoles.ClinicAdmin] = Set(
                 Permissions.Patients.Read,
@@ -100,8 +104,10 @@ public static class RolePermissionMatrix
                 Permissions.Clinics.Read,
                 Permissions.Staff.Read,
                 Permissions.Staff.Manage,
+                Permissions.Staff.PasswordReset,
                 Permissions.Roles.Read,
-                Permissions.Roles.Assign),
+                Permissions.Roles.Assign,
+                Permissions.SecuritySessions.Revoke),
 
             [AppRoles.Doctor] = Set(
                 Permissions.Patients.Read,

@@ -32,8 +32,9 @@ Resolution uses server-side Identity roles (DB) + active staff membership + pati
 | `organizations.read` | PLATFORM_ADMIN organization directory search/detail |
 | `organizations.select` | PLATFORM_ADMIN UI tenant selection (Web usability aid; API remains authoritative) |
 | `organization_dashboard.read` | Organization Admin (and PLATFORM_ADMIN with explicit tenant bypass) operational dashboard aggregates |
-| `staff.read` / `staff.manage` | Staff-management list/detail/create/update/activate |
+| `staff.read` / `staff.manage` / `staff.password_reset` | Staff list/detail/create/update/activate + admin password-reset initiation |
 | `roles.read` / `roles.assign` | Assignable-role catalog and role assignment |
+| `security_sessions.revoke` | Explicit refresh-token / security-stamp revocation for in-scope staff |
 | `hangfire.dashboard` | Hangfire dashboard (with PLATFORM_ADMIN) |
 | `medical_notes.read` | Read authorized clinic note summaries/detail |
 | `medical_notes.create` | Create draft notes for eligible appointments |
@@ -51,7 +52,7 @@ Resolution uses server-side Identity roles (DB) + active staff membership + pati
 - **RECEPTIONIST:** scheduling + search + confirm/cancel/check-in/reschedule; **no** complete/no-show; **no** availability admin.
 - **PATIENT:** own profile/appointments + availability read + clinic register; no staff ops.
 
-`staff.read` / `staff.manage` / `roles.read` / `roles.assign` are granted to **PLATFORM_ADMIN**, **ORGANIZATION_ADMIN**, and **CLINIC_ADMIN** only (not DOCTOR/NURSE/RECEPTIONIST/PATIENT).
+`staff.read` / `staff.manage` / `staff.password_reset` / `roles.read` / `roles.assign` / `security_sessions.revoke` are granted to **PLATFORM_ADMIN**, **ORGANIZATION_ADMIN**, and **CLINIC_ADMIN** only (not DOCTOR/NURSE/RECEPTIONIST/PATIENT).
 
 ## Tenant / resource rules
 
@@ -77,10 +78,20 @@ Route prefix: `/api/v1/staff-management`
 | POST | `/staff` | `staff.manage` | Temporary-password create (transactional) |
 | PATCH | `/staff/{staffMemberId}` | `staff.manage` | Profile fields + optimistic concurrency |
 | POST | `/staff/{id}/activate` | `staff.manage` | Reactivates membership; revokes sessions |
-| POST | `/staff/{id}/deactivate` | `staff.manage` | Deactivates; revokes sessions |
+| POST | `/staff/{id}/deactivate` | `staff.manage` | Deactivates; revokes sessions; self-deactivation denied |
+| POST | `/staff/{id}/change-clinic` | `staff.manage` | Org/Platform Admin only; same-org active clinic; revokes sessions |
+| POST | `/staff/{id}/password-reset` | `staff.password_reset` | Identity reset token via email abstraction; revokes sessions |
+| POST | `/staff/{id}/revoke-sessions` | `security_sessions.revoke` | Explicit session invalidation |
 | GET | `/roles` | `roles.read` | Roles caller may view/assign |
 | POST | `/staff/{id}/roles/{roleName}` | `roles.assign` | Hierarchy-checked assignment |
-| DELETE | `/staff/{id}/roles/{roleName}` | `roles.assign` | Hierarchy-checked removal |
+| DELETE | `/staff/{id}/roles/{roleName}` | `roles.assign` | Hierarchy-checked removal (MVP requires reassignment; sole-role removal denied) |
+
+Related auth endpoints:
+
+| Method | Path | Notes |
+|--------|------|-------|
+| POST | `/api/v1/auth/complete-password-reset` | Anonymous completion with email + token + new password |
+| GET | `/api/v1/auth/dev/password-reset-token` | Development-only token capture |
 
 Require `Authenticated` plus permission attributes. Active staff membership (or PLATFORM_ADMIN with explicit bypass) is enforced in `StaffManagementService` — not by role-name strings in the controller. `StaffUser` alone would block platform admins who have no membership.
 
@@ -162,7 +173,7 @@ Doctor directory and available-slots require authentication + `availability.read
 
 ## Staff web application (HealthCare.Web)
 
-Ant Design Interactive Server app consumes the API. UI permissions (`staff.read` / `staff.manage` / `roles.read` / `roles.assign` / `clinics.read` / `organizations.read` / `organizations.select` / `organization_dashboard.read`) only control presentation; the API enforces authorization.
+Ant Design Interactive Server app consumes the API. UI permissions (`staff.read` / `staff.manage` / `staff.password_reset` / `roles.read` / `roles.assign` / `security_sessions.revoke` / `clinics.read` / `organizations.read` / `organizations.select` / `organization_dashboard.read`) only control presentation; the API enforces authorization.
 
 Pages:
 

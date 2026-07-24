@@ -1002,6 +1002,7 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 | 2026-07-23 | 9 | Medical notes secure backend foundation + migration; overall ~64% |
 | 2026-07-24 | 8 / 4 | Organization Admin dashboard foundation (`organization_dashboard.read` + aggregates UI) |
 | 2026-07-24 | 4 | Organization clinic CRUD + `/clinics` UI + soft activate/deactivate |
+| 2026-07-24 | 4 | Org Admin staff + Clinic Admin management (change-clinic, password-reset, revoke-sessions, `/staff` tabs) |
 
 ---
 

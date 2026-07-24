@@ -1,0 +1,100 @@
+@inherits FeedbackComponent<ChangeStaffClinicDialog.Args>
+@inject IStaffManagementApiClient StaffApi
+@inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
+
+<p style="margin-top:0">Move <b>@Options.DisplayName</b> to another clinic in the same organization.</p>
+<div class="hc-caption" style="margin-bottom:0.75rem;">Historical appointments keep their original clinic.</div>
+
+<div style="display:flex;flex-direction:column;gap:12px;">
+    <ClinicPicker Value="_clinicId"
+                  ValueChanged="OnClinicChanged"
+                  Label="New clinic"
+                  Required="true"
+                  AllowClear="false"
+                  ActiveOnly="true"
+                  PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
+                  PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
+                  HelperText="Target clinic must be active."
+                  Disabled="_busy" />
+    <div>
+        <label>@FieldLabel.Mark("Administrative reason")</label>
+        <Input @bind-Value="_reason" Disabled="_busy" Style="width:100%;" />
+    </div>
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" />
+    }
+</div>
+<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;">
+    <Button OnClick="CancelCloseAsync" Disabled="_busy">Cancel</Button>
+    <Button Type="@ButtonType.Primary" OnClick="SubmitAsync" Loading="_busy" Disabled="_busy">Change clinic</Button>
+</div>
+
+@code {
+    public sealed class Args
+    {
+        public Guid StaffMemberId { get; init; }
+        public int ExpectedVersion { get; init; }
+        public Guid CurrentClinicId { get; init; }
+        public string DisplayName { get; init; } = string.Empty;
+        public string Role { get; init; } = string.Empty;
+    }
+
+    private Guid? _clinicId;
+    private string _reason = string.Empty;
+    private bool _busy;
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        _clinicId = Options.CurrentClinicId;
+    }
+
+    private Task OnClinicChanged(Guid? clinicId)
+    {
+        _clinicId = clinicId;
+        return Task.CompletedTask;
+    }
+
+    private async Task SubmitAsync()
+    {
+        _error = null;
+        if (_clinicId is null || _clinicId == Guid.Empty)
+        {
+            _error = "Select a clinic.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_reason))
+        {
+            _error = "Administrative reason is required.";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await StaffApi.ChangeClinicAsync(
+                Options.StaffMemberId,
+                new ChangeStaffClinicRequest
+                {
+                    NewClinicId = _clinicId.Value,
+                    ExpectedVersion = Options.ExpectedVersion,
+                    AdministrativeReason = _reason.Trim(),
+                },
+                platformAdminBypass: Permissions.IsPlatformAdmin);
+            await OkCancelRef!.OkAsync(new ModalClosingEventArgs());
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = ex.ToUserMessage();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task CancelCloseAsync() => OkCancelRef!.CancelAsync(new ModalClosingEventArgs());
+}

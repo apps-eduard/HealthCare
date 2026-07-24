@@ -51,6 +51,9 @@ public sealed class AuthenticationException : Exception
     public static AuthenticationException InvalidConfirmationToken() =>
         new(AuthErrorCodes.InvalidConfirmationToken, "The email confirmation token is invalid or has expired.");
 
+    public static AuthenticationException InvalidPasswordResetToken() =>
+        new(AuthErrorCodes.InvalidPasswordResetToken, "The password reset token is invalid or has expired.");
+
     public static AuthenticationException RegistrationFailed() =>
         new(AuthErrorCodes.RegistrationFailed, "Registration could not be completed.", StatusCodes.Status400BadRequest);
 }

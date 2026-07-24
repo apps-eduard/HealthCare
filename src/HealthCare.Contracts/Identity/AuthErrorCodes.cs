@@ -16,5 +16,6 @@ public static class AuthErrorCodes
     public const string ReusedRefreshToken = "auth.reused_refresh_token";
     public const string EmailNotConfirmed = "auth.email_not_confirmed";
     public const string InvalidConfirmationToken = "auth.invalid_confirmation_token";
+    public const string InvalidPasswordResetToken = "auth.invalid_password_reset_token";
     public const string RegistrationFailed = "auth.registration_failed";
 }

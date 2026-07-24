@@ -37,3 +37,13 @@ public sealed class LogoutRequestValidator : AbstractValidator<LogoutRequest>
             .MaximumLength(1024);
     }
 }
+
+public sealed class CompletePasswordResetRequestValidator : AbstractValidator<CompletePasswordResetRequest>
+{
+    public CompletePasswordResetRequestValidator()
+    {
+        RuleFor(x => x.Email).NotEmpty().EmailAddress().MaximumLength(256);
+        RuleFor(x => x.Token).NotEmpty().MaximumLength(2048);
+        RuleFor(x => x.NewPassword).NotEmpty().MinimumLength(10).MaximumLength(128);
+    }
+}

@@ -69,12 +69,18 @@ public static class Permissions
     {
         public const string Read = "staff.read";
         public const string Manage = "staff.manage";
+        public const string PasswordReset = "staff.password_reset";
     }
 
     public static class Roles
     {
         public const string Read = "roles.read";
         public const string Assign = "roles.assign";
+    }
+
+    public static class SecuritySessions
+    {
+        public const string Revoke = "security_sessions.revoke";
     }
 
     public static class Hangfire
@@ -125,8 +131,10 @@ public static class Permissions
         Organizations.DashboardRead,
         Staff.Read,
         Staff.Manage,
+        Staff.PasswordReset,
         Roles.Read,
         Roles.Assign,
+        SecuritySessions.Revoke,
         Hangfire.Dashboard,
         MedicalNotes.Read,
         MedicalNotes.Create,

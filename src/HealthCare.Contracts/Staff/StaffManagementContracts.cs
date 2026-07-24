@@ -33,15 +33,21 @@ public sealed class StaffSummaryResponse
 
     public string? DisplayName { get; init; }
 
+    public string? JobTitle { get; init; }
+
     public required Guid OrganizationId { get; init; }
 
     public required Guid ClinicId { get; init; }
+
+    public string? ClinicName { get; init; }
 
     public required string Role { get; init; }
 
     public required bool MembershipIsActive { get; init; }
 
     public required bool AccountIsActive { get; init; }
+
+    public required DateTimeOffset UpdatedAtUtc { get; init; }
 
     public required int Version { get; init; }
 }
@@ -67,6 +73,8 @@ public sealed class StaffDetailResponse
     public required Guid OrganizationId { get; init; }
 
     public required Guid ClinicId { get; init; }
+
+    public string? ClinicName { get; init; }
 
     public required string Role { get; init; }
 
@@ -144,4 +152,33 @@ public sealed class StaffRoleInfoResponse
     public required string DisplayLabel { get; init; }
 
     public required bool AssignableByCurrentUser { get; init; }
+}
+
+public sealed class ChangeStaffClinicRequest
+{
+    public required Guid NewClinicId { get; init; }
+
+    public required int ExpectedVersion { get; init; }
+
+    public required string AdministrativeReason { get; init; }
+}
+
+public sealed class StaffPasswordResetRequest
+{
+    public string? Reason { get; init; }
+}
+
+public sealed class StaffPasswordResetResponse
+{
+    public required string Message { get; init; }
+}
+
+public sealed class RevokeStaffSessionsRequest
+{
+    public string? Reason { get; init; }
+}
+
+public sealed class RevokeStaffSessionsResponse
+{
+    public required string Message { get; init; }
 }

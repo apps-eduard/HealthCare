@@ -284,16 +284,34 @@ public sealed class DevelopmentConfirmationTokenStore : IDevelopmentConfirmation
         _tokens.TryRemove(email.Trim(), out _);
 }
 
+public sealed class DevelopmentPasswordResetTokenStore : IDevelopmentPasswordResetTokenStore
+{
+    private readonly ConcurrentDictionary<string, string> _tokens =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    public void Store(string email, string token) =>
+        _tokens[email.Trim()] = token;
+
+    public bool TryGet(string email, out string? token) =>
+        _tokens.TryGetValue(email.Trim(), out token);
+
+    public void Clear(string email) =>
+        _tokens.TryRemove(email.Trim(), out _);
+}
+
 public sealed class DevelopmentAccountEmailSender : IAccountEmailSender
 {
-    private readonly IDevelopmentConfirmationTokenStore _store;
+    private readonly IDevelopmentConfirmationTokenStore _confirmationStore;
+    private readonly IDevelopmentPasswordResetTokenStore _passwordResetStore;
     private readonly ILogger<DevelopmentAccountEmailSender> _logger;
 
     public DevelopmentAccountEmailSender(
-        IDevelopmentConfirmationTokenStore store,
+        IDevelopmentConfirmationTokenStore confirmationStore,
+        IDevelopmentPasswordResetTokenStore passwordResetStore,
         ILogger<DevelopmentAccountEmailSender> logger)
     {
-        _store = store;
+        _confirmationStore = confirmationStore;
+        _passwordResetStore = passwordResetStore;
         _logger = logger;
     }
 
@@ -302,9 +320,20 @@ public sealed class DevelopmentAccountEmailSender : IAccountEmailSender
         string confirmationToken,
         CancellationToken cancellationToken = default)
     {
-        _store.Store(email, confirmationToken);
+        _confirmationStore.Store(email, confirmationToken);
         // Never log the token or full confirmation link.
         _logger.LogInformation("Development confirmation token captured for email delivery simulation");
+        return Task.CompletedTask;
+    }
+
+    public Task SendPasswordResetAsync(
+        string email,
+        string resetToken,
+        CancellationToken cancellationToken = default)
+    {
+        _passwordResetStore.Store(email, resetToken);
+        // Never log the token or full reset link.
+        _logger.LogInformation("Development password-reset token captured for email delivery simulation");
         return Task.CompletedTask;
     }
 }

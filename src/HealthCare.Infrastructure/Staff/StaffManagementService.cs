@@ -29,9 +29,13 @@ public sealed class StaffManagementService : IStaffManagementService
     private readonly IPermissionService _permissions;
     private readonly IRoleAssignmentAuthorizationService _roleAssignment;
     private readonly ISecuritySessionInvalidationService _sessions;
+    private readonly IAccountEmailSender _emailSender;
     private readonly IAuthorizationAuditLogger _audit;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<StaffManagementService> _logger;
+
+    private const string PasswordResetGenericMessage =
+        "If the account is eligible, a password reset message has been sent.";
 
     public StaffManagementService(
         HealthCareDbContext dbContext,
@@ -41,6 +45,7 @@ public sealed class StaffManagementService : IStaffManagementService
         IPermissionService permissions,
         IRoleAssignmentAuthorizationService roleAssignment,
         ISecuritySessionInvalidationService sessions,
+        IAccountEmailSender emailSender,
         IAuthorizationAuditLogger audit,
         TimeProvider timeProvider,
         ILogger<StaffManagementService> logger)
@@ -52,6 +57,7 @@ public sealed class StaffManagementService : IStaffManagementService
         _permissions = permissions;
         _roleAssignment = roleAssignment;
         _sessions = sessions;
+        _emailSender = emailSender;
         _audit = audit;
         _timeProvider = timeProvider;
         _logger = logger;
@@ -68,7 +74,8 @@ public sealed class StaffManagementService : IStaffManagementService
         var query =
             from s in ApplyStaffScope(_dbContext.StaffMembers.AsNoTracking(), scope)
             join u in _dbContext.Users.AsNoTracking() on s.UserId equals u.Id
-            select new { Staff = s, User = u };
+            join c in _dbContext.Clinics.AsNoTracking() on s.ClinicId equals c.Id
+            select new { Staff = s, User = u, Clinic = c };
 
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
@@ -108,6 +115,12 @@ public sealed class StaffManagementService : IStaffManagementService
             "createdatutc" => desc
                 ? query.OrderByDescending(x => x.Staff.CreatedAtUtc).ThenBy(x => x.Staff.Id)
                 : query.OrderBy(x => x.Staff.CreatedAtUtc).ThenBy(x => x.Staff.Id),
+            "updatedatutc" => desc
+                ? query.OrderByDescending(x => x.Staff.UpdatedAtUtc).ThenBy(x => x.Staff.Id)
+                : query.OrderBy(x => x.Staff.UpdatedAtUtc).ThenBy(x => x.Staff.Id),
+            "jobtitle" => desc
+                ? query.OrderByDescending(x => x.Staff.JobTitle).ThenBy(x => x.Staff.Id)
+                : query.OrderBy(x => x.Staff.JobTitle).ThenBy(x => x.Staff.Id),
             "displayname" => desc
                 ? query.OrderByDescending(x => x.Staff.DisplayName).ThenBy(x => x.Staff.Id)
                 : query.OrderBy(x => x.Staff.DisplayName).ThenBy(x => x.Staff.Id),
@@ -132,11 +145,14 @@ public sealed class StaffManagementService : IStaffManagementService
                 FirstName = x.Staff.FirstName,
                 LastName = x.Staff.LastName,
                 DisplayName = x.Staff.DisplayName,
+                JobTitle = x.Staff.JobTitle,
                 OrganizationId = x.Staff.OrganizationId,
                 ClinicId = x.Staff.ClinicId,
+                ClinicName = x.Clinic.Name,
                 Role = x.Staff.Role,
                 MembershipIsActive = x.Staff.IsActive,
                 AccountIsActive = x.User.IsActive,
+                UpdatedAtUtc = x.Staff.UpdatedAtUtc,
                 Version = x.Staff.Version,
             })
             .ToListAsync(cancellationToken);
@@ -152,7 +168,11 @@ public sealed class StaffManagementService : IStaffManagementService
         EnsureAuthenticatedStaffManager(Permissions.Staff.Read);
         var staff = await LoadScopedStaffAsync(staffMemberId, bypass, track: false, cancellationToken);
         var user = await _dbContext.Users.AsNoTracking().SingleAsync(u => u.Id == staff.UserId, cancellationToken);
-        return MapDetail(staff, user);
+        var clinicName = await _dbContext.Clinics.AsNoTracking()
+            .Where(c => c.Id == staff.ClinicId)
+            .Select(c => c.Name)
+            .SingleOrDefaultAsync(cancellationToken);
+        return MapDetail(staff, user, clinicName);
     }
 
     public async Task<CreateStaffResponse> CreateAsync(
@@ -259,7 +279,7 @@ public sealed class StaffManagementService : IStaffManagementService
                 staff.ClinicId,
                 staff.Role);
 
-            return new CreateStaffResponse { Staff = MapDetail(staff, createdUser) };
+            return new CreateStaffResponse { Staff = MapDetail(staff, createdUser, clinic.Name) };
         }
         catch
         {
@@ -330,7 +350,7 @@ public sealed class StaffManagementService : IStaffManagementService
             _currentUser.UserId,
             staff.Id);
 
-        return MapDetail(staff, user);
+        return await MapDetailAsync(staff, user, cancellationToken);
     }
 
     public async Task<StaffDetailResponse> ActivateAsync(
@@ -375,7 +395,7 @@ public sealed class StaffManagementService : IStaffManagementService
             staff.Id,
             request.Reason);
 
-        return MapDetail(staff, user);
+        return await MapDetailAsync(staff, user, cancellationToken);
     }
 
     public async Task<StaffDetailResponse> DeactivateAsync(
@@ -396,7 +416,7 @@ public sealed class StaffManagementService : IStaffManagementService
 
         if (_currentUser.UserId == staff.UserId)
         {
-            throw StaffManagementException.DeactivationNotAllowed();
+            throw StaffManagementException.SelfDeactivationDenied();
         }
 
         await EnsureNotLastAdminAsync(staff, cancellationToken);
@@ -427,7 +447,7 @@ public sealed class StaffManagementService : IStaffManagementService
             staff.Id,
             request.Reason);
 
-        return MapDetail(staff, user);
+        return await MapDetailAsync(staff, user, cancellationToken);
     }
 
     public Task<IReadOnlyList<StaffRoleInfoResponse>> ListAssignableRolesAsync(
@@ -584,6 +604,144 @@ public sealed class StaffManagementService : IStaffManagementService
         // MVP: membership requires a staff role — removing the sole membership role is not supported.
         // Callers should reassign to another permitted role instead of leaving staff without a role.
         throw StaffManagementException.RoleAssignmentDenied();
+    }
+
+    public async Task<StaffDetailResponse> ChangeClinicAsync(
+        Guid staffMemberId,
+        ChangeStaffClinicRequest request,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureAuthenticatedStaffManager(Permissions.Staff.Manage);
+        EnsureCanChangeClinicActor();
+
+        var staff = await LoadScopedStaffAsync(staffMemberId, bypass, track: true, cancellationToken);
+        EnsureExpectedVersion(staff, request.ExpectedVersion);
+        EnsureCanMutateTarget(staff);
+
+        if (staff.Role is AppRoles.PlatformAdmin or AppRoles.OrganizationAdmin)
+        {
+            throw StaffManagementException.ClinicChangeNotAllowed(
+                "Organization and platform administrators cannot be reassigned via clinic change.");
+        }
+
+        if (staff.ClinicId == request.NewClinicId)
+        {
+            var currentUser = await _userManager.FindByIdAsync(staff.UserId.ToString())
+                ?? throw StaffManagementException.NotFound();
+            return await MapDetailAsync(staff, currentUser, cancellationToken);
+        }
+
+        var targetClinic = await ResolveClinicInOrganizationAsync(
+            request.NewClinicId,
+            staff.OrganizationId,
+            bypass,
+            cancellationToken);
+
+        if (!targetClinic.IsActive)
+        {
+            throw StaffManagementException.InactiveClinic();
+        }
+
+        if (targetClinic.Organization is null || targetClinic.Organization.Status != OrganizationStatus.Active)
+        {
+            throw StaffManagementException.InactiveOrganization();
+        }
+
+        if (staff.Role == AppRoles.ClinicAdmin)
+        {
+            await EnsureNotLastAdminAsync(staff, cancellationToken);
+        }
+
+        var previousClinicId = staff.ClinicId;
+        staff.ClinicId = targetClinic.Id;
+        staff.Version++;
+        staff.UpdatedAtUtc = _timeProvider.GetUtcNow();
+
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw StaffManagementException.ConcurrencyConflict();
+        }
+
+        await _sessions.InvalidateUserSessionsAsync(staff.UserId, "StaffClinicChanged", cancellationToken);
+
+        _logger.LogInformation(
+            "Staff clinic changed. ActorUserId={ActorUserId} StaffMemberId={StaffMemberId} FromClinicId={FromClinicId} ToClinicId={ToClinicId} Reason={Reason}",
+            _currentUser.UserId,
+            staff.Id,
+            previousClinicId,
+            staff.ClinicId,
+            request.AdministrativeReason);
+
+        var user = await _userManager.FindByIdAsync(staff.UserId.ToString())
+            ?? throw StaffManagementException.NotFound();
+        return MapDetail(staff, user, targetClinic.Name);
+    }
+
+    public async Task<StaffPasswordResetResponse> RequestPasswordResetAsync(
+        Guid staffMemberId,
+        StaffPasswordResetRequest request,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default)
+    {
+        EnsurePasswordResetPermission();
+        var staff = await LoadScopedStaffAsync(staffMemberId, bypass, track: false, cancellationToken);
+        EnsureCanMutateTarget(staff);
+
+        if (staff.Role == AppRoles.PlatformAdmin
+            && !(_currentUser.IsInRole(AppRoles.PlatformAdmin) && bypass == PlatformAdminBypass.Explicit))
+        {
+            throw StaffManagementException.PasswordResetNotAllowed();
+        }
+
+        var user = await _userManager.FindByIdAsync(staff.UserId.ToString())
+            ?? throw StaffManagementException.NotFound();
+
+        var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+        await _emailSender.SendPasswordResetAsync(user.Email ?? string.Empty, token, cancellationToken);
+        await _sessions.InvalidateUserSessionsAsync(staff.UserId, "StaffPasswordResetRequested", cancellationToken);
+
+        _logger.LogInformation(
+            "Staff password reset initiated. ActorUserId={ActorUserId} StaffMemberId={StaffMemberId} Reason={Reason}",
+            _currentUser.UserId,
+            staff.Id,
+            request.Reason);
+
+        return new StaffPasswordResetResponse { Message = PasswordResetGenericMessage };
+    }
+
+    public async Task<RevokeStaffSessionsResponse> RevokeSessionsAsync(
+        Guid staffMemberId,
+        RevokeStaffSessionsRequest request,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureAuthenticatedStaffManager(Permissions.SecuritySessions.Revoke);
+        var staff = await LoadScopedStaffAsync(staffMemberId, bypass, track: false, cancellationToken);
+        EnsureCanMutateTarget(staff);
+
+        if (staff.Role == AppRoles.PlatformAdmin
+            && !(_currentUser.IsInRole(AppRoles.PlatformAdmin) && bypass == PlatformAdminBypass.Explicit))
+        {
+            throw StaffManagementException.DeactivationNotAllowed();
+        }
+
+        await _sessions.InvalidateUserSessionsAsync(staff.UserId, "StaffSessionsRevoked", cancellationToken);
+
+        _logger.LogInformation(
+            "Staff sessions revoked. ActorUserId={ActorUserId} StaffMemberId={StaffMemberId} Reason={Reason}",
+            _currentUser.UserId,
+            staff.Id,
+            request.Reason);
+
+        return new RevokeStaffSessionsResponse
+        {
+            Message = "Active sessions were revoked.",
+        };
     }
 
     private void EnsureAuthenticatedStaffManager(string permission)
@@ -816,6 +974,65 @@ public sealed class StaffManagementService : IStaffManagementService
         }
     }
 
+    private void EnsurePasswordResetPermission()
+    {
+        if (!_currentUser.IsAuthenticated)
+        {
+            throw AuthorizationException.NotAuthenticated();
+        }
+
+        if (!_currentStaff.HasActiveMembership && !_currentUser.IsInRole(AppRoles.PlatformAdmin))
+        {
+            throw AuthorizationException.MissingStaffMembership();
+        }
+
+        if (!_permissions.HasPermission(Permissions.Staff.PasswordReset)
+            && !_permissions.HasPermission(Permissions.Staff.Manage))
+        {
+            _permissions.RequirePermission(Permissions.Staff.PasswordReset);
+        }
+    }
+
+    private void EnsureCanChangeClinicActor()
+    {
+        if (_currentUser.IsInRole(AppRoles.PlatformAdmin))
+        {
+            return;
+        }
+
+        if (_currentStaff.HasActiveMembership && _currentStaff.Role == AppRoles.OrganizationAdmin)
+        {
+            return;
+        }
+
+        throw StaffManagementException.ClinicChangeNotAllowed(
+            "Only Organization Admin or Platform Admin may reassign staff clinics.");
+    }
+
+    private async Task<Domain.Clinics.Clinic> ResolveClinicInOrganizationAsync(
+        Guid clinicId,
+        Guid organizationId,
+        PlatformAdminBypass bypass,
+        CancellationToken cancellationToken)
+    {
+        if (bypass == PlatformAdminBypass.Explicit && _currentUser.IsInRole(AppRoles.PlatformAdmin))
+        {
+            return await _dbContext.Clinics
+                .Include(c => c.Organization)
+                .SingleOrDefaultAsync(c => c.Id == clinicId && c.OrganizationId == organizationId, cancellationToken)
+                ?? throw StaffManagementException.NotFound();
+        }
+
+        return await _dbContext.Clinics
+            .Include(c => c.Organization)
+            .SingleOrDefaultAsync(
+                c => c.Id == clinicId
+                     && c.OrganizationId == organizationId
+                     && c.OrganizationId == _currentStaff.OrganizationId,
+                cancellationToken)
+            ?? throw StaffManagementException.NotFound();
+    }
+
     private async Task EnsureNotLastAdminAsync(StaffMember staff, CancellationToken cancellationToken)
     {
         if (!AdminRoles.Contains(staff.Role) || !staff.IsActive)
@@ -863,7 +1080,19 @@ public sealed class StaffManagementService : IStaffManagementService
     private static bool IsAssignableStaffRole(string role) =>
         AppRoles.All.Contains(role, StringComparer.Ordinal) && role != AppRoles.Patient;
 
-    private static StaffDetailResponse MapDetail(StaffMember staff, ApplicationUser user) =>
+    private async Task<StaffDetailResponse> MapDetailAsync(
+        StaffMember staff,
+        ApplicationUser user,
+        CancellationToken cancellationToken)
+    {
+        var clinicName = await _dbContext.Clinics.AsNoTracking()
+            .Where(c => c.Id == staff.ClinicId)
+            .Select(c => c.Name)
+            .SingleOrDefaultAsync(cancellationToken);
+        return MapDetail(staff, user, clinicName);
+    }
+
+    private static StaffDetailResponse MapDetail(StaffMember staff, ApplicationUser user, string? clinicName) =>
         new()
         {
             StaffMemberId = staff.Id,
@@ -876,6 +1105,7 @@ public sealed class StaffManagementService : IStaffManagementService
             PhoneNumber = user.PhoneNumber,
             OrganizationId = staff.OrganizationId,
             ClinicId = staff.ClinicId,
+            ClinicName = clinicName,
             Role = staff.Role,
             MembershipIsActive = staff.IsActive,
             AccountIsActive = user.IsActive,

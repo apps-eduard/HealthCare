@@ -21,6 +21,12 @@ public interface IStaffManagementApiClient
         bool platformAdminBypass = false,
         CancellationToken cancellationToken = default);
 
+    Task<StaffDetailResponse> UpdateAsync(
+        Guid staffMemberId,
+        UpdateStaffRequest request,
+        bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default);
+
     Task<StaffDetailResponse> ActivateAsync(
         Guid staffMemberId,
         StaffActivationRequest request,
@@ -30,6 +36,24 @@ public interface IStaffManagementApiClient
     Task<StaffDetailResponse> DeactivateAsync(
         Guid staffMemberId,
         StaffActivationRequest request,
+        bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default);
+
+    Task<StaffDetailResponse> ChangeClinicAsync(
+        Guid staffMemberId,
+        ChangeStaffClinicRequest request,
+        bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default);
+
+    Task<StaffPasswordResetResponse> RequestPasswordResetAsync(
+        Guid staffMemberId,
+        StaffPasswordResetRequest request,
+        bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default);
+
+    Task<RevokeStaffSessionsResponse> RevokeSessionsAsync(
+        Guid staffMemberId,
+        RevokeStaffSessionsRequest request,
         bool platformAdminBypass = false,
         CancellationToken cancellationToken = default);
 
@@ -96,6 +120,20 @@ public sealed class StaffManagementApiClient : IStaffManagementApiClient
                ?? throw new ApiProblemException(500, "Invalid create staff response", null, null);
     }
 
+    public async Task<StaffDetailResponse> UpdateAsync(
+        Guid staffMemberId,
+        UpdateStaffRequest request,
+        bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default)
+    {
+        var client = _httpClientFactory.CreateClient("HealthCareApi");
+        var url = AppendBypass($"api/v1/staff-management/staff/{staffMemberId:D}", platformAdminBypass);
+        using var response = await client.PatchAsJsonAsync(url, request, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return (await response.Content.ReadFromJsonAsync<StaffDetailResponse>(cancellationToken))
+               ?? throw new ApiProblemException(500, "Invalid update staff response", null, null);
+    }
+
     public async Task<StaffDetailResponse> ActivateAsync(
         Guid staffMemberId,
         StaffActivationRequest request,
@@ -122,6 +160,48 @@ public sealed class StaffManagementApiClient : IStaffManagementApiClient
         await EnsureSuccessAsync(response, cancellationToken);
         return (await response.Content.ReadFromJsonAsync<StaffDetailResponse>(cancellationToken))
                ?? throw new ApiProblemException(500, "Invalid deactivation response", null, null);
+    }
+
+    public async Task<StaffDetailResponse> ChangeClinicAsync(
+        Guid staffMemberId,
+        ChangeStaffClinicRequest request,
+        bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default)
+    {
+        var client = _httpClientFactory.CreateClient("HealthCareApi");
+        var url = AppendBypass($"api/v1/staff-management/staff/{staffMemberId:D}/change-clinic", platformAdminBypass);
+        using var response = await client.PostAsJsonAsync(url, request, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return (await response.Content.ReadFromJsonAsync<StaffDetailResponse>(cancellationToken))
+               ?? throw new ApiProblemException(500, "Invalid change-clinic response", null, null);
+    }
+
+    public async Task<StaffPasswordResetResponse> RequestPasswordResetAsync(
+        Guid staffMemberId,
+        StaffPasswordResetRequest request,
+        bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default)
+    {
+        var client = _httpClientFactory.CreateClient("HealthCareApi");
+        var url = AppendBypass($"api/v1/staff-management/staff/{staffMemberId:D}/password-reset", platformAdminBypass);
+        using var response = await client.PostAsJsonAsync(url, request, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return (await response.Content.ReadFromJsonAsync<StaffPasswordResetResponse>(cancellationToken))
+               ?? throw new ApiProblemException(500, "Invalid password-reset response", null, null);
+    }
+
+    public async Task<RevokeStaffSessionsResponse> RevokeSessionsAsync(
+        Guid staffMemberId,
+        RevokeStaffSessionsRequest request,
+        bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default)
+    {
+        var client = _httpClientFactory.CreateClient("HealthCareApi");
+        var url = AppendBypass($"api/v1/staff-management/staff/{staffMemberId:D}/revoke-sessions", platformAdminBypass);
+        using var response = await client.PostAsJsonAsync(url, request, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return (await response.Content.ReadFromJsonAsync<RevokeStaffSessionsResponse>(cancellationToken))
+               ?? throw new ApiProblemException(500, "Invalid revoke-sessions response", null, null);
     }
 
     public async Task<IReadOnlyList<StaffRoleInfoResponse>> ListRolesAsync(CancellationToken cancellationToken = default)

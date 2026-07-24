@@ -7,8 +7,10 @@ public static class WebPermissions
 {
     public const string StaffRead = "staff.read";
     public const string StaffManage = "staff.manage";
+    public const string StaffPasswordReset = "staff.password_reset";
     public const string RolesRead = "roles.read";
     public const string RolesAssign = "roles.assign";
+    public const string SecuritySessionsRevoke = "security_sessions.revoke";
     public const string ClinicsRead = "clinics.read";
     public const string ClinicsManage = "clinics.manage";
     public const string ClinicsCreate = "clinics.create";

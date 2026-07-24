@@ -1,4 +1,4 @@
-@inherits FeedbackComponent<object?>
+@inherits FeedbackComponent<CreateStaffDialog.Args>
 @inject IStaffManagementApiClient StaffApi
 @inject IPermissionState Permissions
 @inject IPlatformTenantContext PlatformTenant
@@ -84,6 +84,11 @@
 </div>
 
 @code {
+    public sealed class Args
+    {
+        public string? PreferredRole { get; init; }
+    }
+
     private List<StaffRoleInfoResponse> _roles = [];
     private bool _rolesLoading = true;
     private bool _busy;
@@ -117,7 +122,13 @@
         try
         {
             _roles = (await StaffApi.ListRolesAsync()).ToList();
-            _role = _roles.FirstOrDefault(r => r.AssignableByCurrentUser)?.Name;
+            var preferred = Options?.PreferredRole;
+            _role = _roles.FirstOrDefault(r =>
+                         r.AssignableByCurrentUser
+                         && preferred is not null
+                         && string.Equals(r.Name, preferred, StringComparison.Ordinal))
+                     ?.Name
+                 ?? _roles.FirstOrDefault(r => r.AssignableByCurrentUser)?.Name;
         }
         catch (ApiProblemException ex)
         {

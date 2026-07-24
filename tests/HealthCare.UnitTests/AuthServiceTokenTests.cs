@@ -211,8 +211,11 @@ public sealed class AuthServiceTokenTests
         services.AddScoped<IAccessTokenService, AccessTokenService>();
         services.AddScoped<IRefreshTokenHasher, RefreshTokenHasher>();
         services.AddScoped<IRefreshTokenGenerator, RefreshTokenGenerator>();
+        services.AddScoped<ISecuritySessionInvalidationService, SecuritySessionInvalidationService>();
+        services.AddSingleton<IDevelopmentPasswordResetTokenStore, DevelopmentPasswordResetTokenStore>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddSingleton(typeof(Microsoft.Extensions.Logging.ILogger<AuthService>), NullLogger<AuthService>.Instance);
+        services.AddSingleton(typeof(Microsoft.Extensions.Logging.ILogger<SecuritySessionInvalidationService>), NullLogger<SecuritySessionInvalidationService>.Instance);
 
         var provider = services.BuildServiceProvider();
 

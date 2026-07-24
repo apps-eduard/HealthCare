@@ -1,4 +1,5 @@
 @page "/staff"
+@page "/staff/clinic-admins"
 @attribute [Authorize]
 @implements IDisposable
 @inject IStaffManagementApiClient StaffApi
@@ -9,7 +10,7 @@
 @inject NavigationManager Navigation
 @inject StaffAuthenticationStateProvider AuthState
 
-<PageTitle>Staff</PageTitle>
+<PageTitle>Staff Management</PageTitle>
 
 @if (!Permissions.Has(WebPermissions.StaffRead))
 {
@@ -17,7 +18,8 @@
 }
 else
 {
-    <HcPageHeader Title="Staff Management">
+    <HcPageHeader Title="Staff Management"
+                  Subtitle="Manage organization staff, Clinic Admins, and clinical roles">
         <Button OnClick="RefreshClicked" Disabled="_loading">
             <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
         </Button>
@@ -26,7 +28,7 @@ else
             <Button Type="@ButtonType.Primary"
                     OnClick="OpenCreateAsync"
                     Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !PlatformTenant.HasClinic))">
-                <Icon Type="user-add" Theme="IconThemeType.Outline" /> Create staff
+                <Icon Type="user-add" Theme="IconThemeType.Outline" /> Create Staff
             </Button>
         }
     </HcPageHeader>
@@ -46,23 +48,34 @@ else
                Style="margin-bottom:1rem;" />
     }
 
-    <div class="hc-card">
+    <Tabs ActiveKey="@_activeTab" OnChange="OnTabChanged">
+        <TabPane Tab="All Staff" Key="all" />
+        <TabPane Tab="Clinic Admins" Key="clinic-admins" />
+        <TabPane Tab="Doctors" Key="doctors" />
+        <TabPane Tab="Nurses" Key="nurses" />
+        <TabPane Tab="Receptionists" Key="receptionists" />
+    </Tabs>
+
+    <div class="hc-card" style="margin-top:0.75rem;">
         <div class="hc-filter-grid">
             <div>
                 <span class="hc-filter-label">Search</span>
                 <Input @bind-Value="_search" Disabled="_loading" Style="width:100%;" @onkeyup="OnSearchKeyUp" />
             </div>
-            <div>
-                <span class="hc-filter-label">Role</span>
-                <Select TItemValue="string" TItem="string" @bind-Value="_role" Style="width:100%;" AllowClear>
-                    <SelectOptions>
-                        @foreach (var role in _roleOptions)
-                        {
-                            <SelectOption TItemValue="string" TItem="string" Value="@role" Label="@role" />
-                        }
-                    </SelectOptions>
-                </Select>
-            </div>
+            @if (_activeTab == "all")
+            {
+                <div>
+                    <span class="hc-filter-label">Role</span>
+                    <Select TItemValue="string" TItem="string" @bind-Value="_role" Style="width:100%;" AllowClear>
+                        <SelectOptions>
+                            @foreach (var role in _roleOptions)
+                            {
+                                <SelectOption TItemValue="string" TItem="string" Value="@role" Label="@role" />
+                            }
+                        </SelectOptions>
+                    </Select>
+                </div>
+            }
             <div>
                 <span class="hc-filter-label">Status</span>
                 <Select TItemValue="string" TItem="string" @bind-Value="_activeFilter" Style="width:100%;" AllowClear>
@@ -89,12 +102,12 @@ else
             {
                 <ClinicPicker Label="Clinic" AllowClear="false" Required="false" />
             }
-            <div>
-                <span class="hc-filter-label">&nbsp;</span>
+            <div style="display:flex;gap:8px;align-items:flex-end;">
                 <Button Type="@ButtonType.Primary" OnClick="RefreshClicked"
                         Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !_clinicId.HasValue))">
-                    Apply
+                    Search
                 </Button>
+                <Button OnClick="ResetFiltersAsync" Disabled="_loading">Reset</Button>
             </div>
         </div>
     </div>
@@ -120,9 +133,11 @@ else
                     <tr>
                         <th>Name</th>
                         <th>Email</th>
-                        <th>Role</th>
-                        <th>Status</th>
                         <th>Clinic</th>
+                        <th>Role</th>
+                        <th>Job Title</th>
+                        <th>Status</th>
+                        <th>Last Updated</th>
                         <th class="hc-actions">Actions</th>
                     </tr>
                 </thead>
@@ -132,18 +147,23 @@ else
                         <tr>
                             <td>@DisplayName(row)</td>
                             <td>@row.Email</td>
+                            <td>@(row.ClinicName ?? row.ClinicId.ToString())</td>
                             <td><StatusBadge Text="@row.Role" Tone="StatusTone.Neutral" /></td>
+                            <td>@(row.JobTitle ?? "—")</td>
                             <td>
                                 <StatusBadge Text="@(row.MembershipIsActive ? "Active" : "Inactive")"
                                              Tone="@(row.MembershipIsActive ? StatusTone.Success : StatusTone.Default)" />
                             </td>
-                            <td><span class="hc-caption">@row.ClinicId</span></td>
+                            <td><span class="hc-caption">@row.UpdatedAtUtc.ToString("u")</span></td>
                             <td class="hc-actions">
                                 <Button Type="@ButtonType.Text" OnClick="@(() => OpenDetailAsync(row))" AriaLabel="Details">
                                     <Icon Type="eye" Theme="IconThemeType.Outline" />
                                 </Button>
                                 @if (Permissions.Has(WebPermissions.StaffManage))
                                 {
+                                    <Button Type="@ButtonType.Text" OnClick="@(() => OpenEditAsync(row))" AriaLabel="Edit">
+                                        <Icon Type="edit" Theme="IconThemeType.Outline" />
+                                    </Button>
                                     @if (row.MembershipIsActive)
                                     {
                                         <Button Type="@ButtonType.Text" OnClick="@(() => OpenActivationAsync(row, activate: false))" AriaLabel="Deactivate">
@@ -156,11 +176,29 @@ else
                                             <Icon Type="check" Theme="IconThemeType.Outline" />
                                         </Button>
                                     }
+                                    @if (CanChangeClinic(row))
+                                    {
+                                        <Button Type="@ButtonType.Text" OnClick="@(() => OpenChangeClinicAsync(row))" AriaLabel="Change clinic">
+                                            <Icon Type="swap" Theme="IconThemeType.Outline" />
+                                        </Button>
+                                    }
                                 }
                                 @if (Permissions.Has(WebPermissions.RolesAssign))
                                 {
                                     <Button Type="@ButtonType.Text" OnClick="@(() => OpenRolesAsync(row))" AriaLabel="Roles">
                                         <Icon Type="safety" Theme="IconThemeType.Outline" />
+                                    </Button>
+                                }
+                                @if (Permissions.Has(WebPermissions.StaffPasswordReset))
+                                {
+                                    <Button Type="@ButtonType.Text" OnClick="@(() => OpenPasswordResetAsync(row))" AriaLabel="Password reset">
+                                        <Icon Type="key" Theme="IconThemeType.Outline" />
+                                    </Button>
+                                }
+                                @if (Permissions.Has(WebPermissions.SecuritySessionsRevoke))
+                                {
+                                    <Button Type="@ButtonType.Text" OnClick="@(() => OpenRevokeSessionsAsync(row))" AriaLabel="Revoke sessions">
+                                        <Icon Type="logout" Theme="IconThemeType.Outline" />
                                     </Button>
                                 }
                             </td>
@@ -198,10 +236,12 @@ else
     private int _totalCount;
     private int _totalPages = 1;
     private Guid? _boundOrganizationId;
+    private string _activeTab = "all";
 
     protected override async Task OnInitializedAsync()
     {
         PlatformTenant.Changed += OnPlatformTenantChanged;
+        ApplyRouteTab();
 
         if (!Permissions.IsStaffUser || Permissions.IsPatientOnly)
         {
@@ -220,6 +260,42 @@ else
     }
 
     public void Dispose() => PlatformTenant.Changed -= OnPlatformTenantChanged;
+
+    private void ApplyRouteTab()
+    {
+        var path = Navigation.ToBaseRelativePath(Navigation.Uri);
+        if (path.StartsWith("staff/clinic-admins", StringComparison.OrdinalIgnoreCase))
+        {
+            _activeTab = "clinic-admins";
+            _role = "CLINIC_ADMIN";
+        }
+    }
+
+    private async Task OnTabChanged(string key)
+    {
+        _activeTab = key;
+        _role = key switch
+        {
+            "clinic-admins" => "CLINIC_ADMIN",
+            "doctors" => "DOCTOR",
+            "nurses" => "NURSE",
+            "receptionists" => "RECEPTIONIST",
+            _ => null,
+        };
+
+        if (key == "clinic-admins"
+            && !Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("staff/clinic-admins", StringComparison.OrdinalIgnoreCase))
+        {
+            Navigation.NavigateTo("/staff/clinic-admins");
+        }
+        else if (key != "clinic-admins"
+                 && Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("staff/clinic-admins", StringComparison.OrdinalIgnoreCase))
+        {
+            Navigation.NavigateTo("/staff");
+        }
+
+        await ReloadAsync(resetPage: true);
+    }
 
     private void OnPlatformTenantChanged() => InvokeAsync(async () =>
     {
@@ -246,6 +322,23 @@ else
     }
 
     private Task RefreshClicked() => ReloadAsync(resetPage: true);
+
+    private async Task ResetFiltersAsync()
+    {
+        _search = null;
+        _activeFilter = null;
+        if (_activeTab == "all")
+        {
+            _role = null;
+        }
+
+        if (!Permissions.IsPlatformAdmin)
+        {
+            _clinicId = null;
+        }
+
+        await ReloadAsync(resetPage: true);
+    }
 
     private async Task OnClinicFilterChanged(Guid? clinicId)
     {
@@ -312,12 +405,21 @@ else
                 _ => null,
             };
 
+            var roleFilter = _activeTab switch
+            {
+                "clinic-admins" => "CLINIC_ADMIN",
+                "doctors" => "DOCTOR",
+                "nurses" => "NURSE",
+                "receptionists" => "RECEPTIONIST",
+                _ => string.IsNullOrWhiteSpace(_role) ? null : _role,
+            };
+
             var bypass = Permissions.IsPlatformAdmin && clinicId is not null;
 
             var result = await StaffApi.SearchAsync(new StaffSearchRequest
             {
                 Search = string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(),
-                Role = string.IsNullOrWhiteSpace(_role) ? null : _role,
+                Role = roleFilter,
                 IsActive = isActive,
                 ClinicId = clinicId,
                 Page = _page,
@@ -361,7 +463,18 @@ else
             return;
         }
 
-        if (await Modals.ShowAsync<CreateStaffDialog, object?>("Create staff", null))
+        var preferred = _activeTab switch
+        {
+            "clinic-admins" => "CLINIC_ADMIN",
+            "doctors" => "DOCTOR",
+            "nurses" => "NURSE",
+            "receptionists" => "RECEPTIONIST",
+            _ => null,
+        };
+
+        if (await Modals.ShowAsync<CreateStaffDialog, CreateStaffDialog.Args>(
+                "Create staff",
+                new CreateStaffDialog.Args { PreferredRole = preferred }))
         {
             Notify.Success("Staff member created.");
             await ReloadAsync();
@@ -373,6 +486,25 @@ else
         await Modals.ShowAsync<StaffDetailDialog, StaffDetailDialog.Args>(
             "Staff details",
             new StaffDetailDialog.Args { StaffMemberId = row.StaffMemberId });
+    }
+
+    private async Task OpenEditAsync(StaffSummaryResponse row)
+    {
+        if (await Modals.ShowAsync<EditStaffDialog, EditStaffDialog.Args>(
+                "Edit staff",
+                new EditStaffDialog.Args
+                {
+                    StaffMemberId = row.StaffMemberId,
+                    ExpectedVersion = row.Version,
+                    FirstName = row.FirstName,
+                    LastName = row.LastName,
+                    DisplayName = row.DisplayName,
+                    JobTitle = row.JobTitle,
+                }))
+        {
+            Notify.Success("Staff updated.");
+            await ReloadAsync(resetPage: false);
+        }
     }
 
     private async Task OpenActivationAsync(StaffSummaryResponse row, bool activate)
@@ -388,6 +520,24 @@ else
                 }))
         {
             Notify.Success(activate ? "Staff activated." : "Staff deactivated.");
+            await ReloadAsync(resetPage: false);
+        }
+    }
+
+    private async Task OpenChangeClinicAsync(StaffSummaryResponse row)
+    {
+        if (await Modals.ShowAsync<ChangeStaffClinicDialog, ChangeStaffClinicDialog.Args>(
+                "Change clinic",
+                new ChangeStaffClinicDialog.Args
+                {
+                    StaffMemberId = row.StaffMemberId,
+                    ExpectedVersion = row.Version,
+                    CurrentClinicId = row.ClinicId,
+                    DisplayName = DisplayName(row),
+                    Role = row.Role,
+                }))
+        {
+            Notify.Success("Clinic assignment updated. Sessions were revoked.");
             await ReloadAsync(resetPage: false);
         }
     }
@@ -413,6 +563,39 @@ else
             await ReloadAsync(resetPage: false);
         }
     }
+
+    private async Task OpenPasswordResetAsync(StaffSummaryResponse row)
+    {
+        if (await Modals.ShowAsync<StaffPasswordResetDialog, StaffPasswordResetDialog.Args>(
+                "Password reset",
+                new StaffPasswordResetDialog.Args
+                {
+                    StaffMemberId = row.StaffMemberId,
+                    DisplayName = DisplayName(row),
+                }))
+        {
+            Notify.Success("Password reset initiated.");
+        }
+    }
+
+    private async Task OpenRevokeSessionsAsync(StaffSummaryResponse row)
+    {
+        if (await Modals.ShowAsync<StaffRevokeSessionsDialog, StaffRevokeSessionsDialog.Args>(
+                "Revoke sessions",
+                new StaffRevokeSessionsDialog.Args
+                {
+                    StaffMemberId = row.StaffMemberId,
+                    DisplayName = DisplayName(row),
+                }))
+        {
+            Notify.Success("Sessions revoked.");
+        }
+    }
+
+    private bool CanChangeClinic(StaffSummaryResponse row) =>
+        Permissions.Has(WebPermissions.StaffManage)
+        && (Permissions.IsOrganizationAdmin || Permissions.IsPlatformAdmin)
+        && row.Role is not ("ORGANIZATION_ADMIN" or "PLATFORM_ADMIN");
 
     private static string DisplayName(StaffSummaryResponse row) =>
         string.IsNullOrWhiteSpace(row.DisplayName)

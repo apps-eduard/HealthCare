@@ -17,6 +17,7 @@ public sealed class AuthController : ApiControllerBase
     private readonly ICurrentPatient _currentPatient;
     private readonly IPermissionService _permissionService;
     private readonly IDevelopmentConfirmationTokenStore _confirmationTokenStore;
+    private readonly IDevelopmentPasswordResetTokenStore _passwordResetTokenStore;
     private readonly IHostEnvironment _environment;
 
     public AuthController(
@@ -27,6 +28,7 @@ public sealed class AuthController : ApiControllerBase
         ICurrentPatient currentPatient,
         IPermissionService permissionService,
         IDevelopmentConfirmationTokenStore confirmationTokenStore,
+        IDevelopmentPasswordResetTokenStore passwordResetTokenStore,
         IHostEnvironment environment)
     {
         _authService = authService;
@@ -36,6 +38,7 @@ public sealed class AuthController : ApiControllerBase
         _currentPatient = currentPatient;
         _permissionService = permissionService;
         _confirmationTokenStore = confirmationTokenStore;
+        _passwordResetTokenStore = passwordResetTokenStore;
         _environment = environment;
     }
 
@@ -95,6 +98,41 @@ public sealed class AuthController : ApiControllerBase
         }
 
         return Ok(new { email, token });
+    }
+
+    /// <summary>
+    /// Development-only helper to retrieve the last captured password-reset token for manual testing.
+    /// Never enabled outside Development.
+    /// </summary>
+    [AllowAnonymous]
+    [HttpGet("dev/password-reset-token")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public IActionResult GetDevelopmentPasswordResetToken([FromQuery] string email)
+    {
+        if (!_environment.IsDevelopment())
+        {
+            return NotFound();
+        }
+
+        if (string.IsNullOrWhiteSpace(email) || !_passwordResetTokenStore.TryGet(email, out var token))
+        {
+            return NotFound();
+        }
+
+        return Ok(new { email, token });
+    }
+
+    [AllowAnonymous]
+    [HttpPost("complete-password-reset")]
+    [ProducesResponseType(typeof(CompletePasswordResetResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<CompletePasswordResetResponse>> CompletePasswordReset(
+        [FromBody] CompletePasswordResetRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _authService.CompletePasswordResetAsync(request, cancellationToken);
+        return Ok(result);
     }
 
     [AllowAnonymous]

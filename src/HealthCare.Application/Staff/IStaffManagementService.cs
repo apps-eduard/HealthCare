@@ -53,4 +53,22 @@ public interface IStaffManagementService
         string roleName,
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default);
+
+    Task<StaffDetailResponse> ChangeClinicAsync(
+        Guid staffMemberId,
+        ChangeStaffClinicRequest request,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default);
+
+    Task<StaffPasswordResetResponse> RequestPasswordResetAsync(
+        Guid staffMemberId,
+        StaffPasswordResetRequest request,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default);
+
+    Task<RevokeStaffSessionsResponse> RevokeSessionsAsync(
+        Guid staffMemberId,
+        RevokeStaffSessionsRequest request,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default);
 }

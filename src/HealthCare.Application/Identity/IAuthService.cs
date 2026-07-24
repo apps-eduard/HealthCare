@@ -19,4 +19,8 @@ public interface IAuthService
     Task LogoutAsync(
         LogoutRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<CompletePasswordResetResponse> CompletePasswordResetAsync(
+        CompletePasswordResetRequest request,
+        CancellationToken cancellationToken = default);
 }

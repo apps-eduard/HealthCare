@@ -174,6 +174,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IClinicPublicLookup, ClinicPublicLookup>();
         services.AddScoped<ILocalPatientNumberGenerator, LocalPatientNumberGenerator>();
         services.AddSingleton<IDevelopmentConfirmationTokenStore, DevelopmentConfirmationTokenStore>();
+        services.AddSingleton<IDevelopmentPasswordResetTokenStore, DevelopmentPasswordResetTokenStore>();
         services.AddScoped<IAccountEmailSender, DevelopmentAccountEmailSender>();
         services.AddScoped<IRoleSeeder, RoleSeeder>();
         services.AddScoped<IDevelopmentAdminSeeder, DevelopmentAdminSeeder>();
