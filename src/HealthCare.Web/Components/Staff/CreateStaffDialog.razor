@@ -82,7 +82,12 @@
 </div>
 <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;">
     <Button OnClick="CancelCloseAsync" Disabled="_busy">Cancel</Button>
-    <Button Type="@ButtonType.Primary" OnClick="SubmitAsync" Loading="_busy" Disabled="_busy">Create</Button>
+    <Button Type="@ButtonType.Primary"
+            OnClick="SubmitAsync"
+            Loading="_busy"
+            Disabled="@(_busy || _rolesLoading || string.IsNullOrWhiteSpace(_role))">
+        Create
+    </Button>
 </div>
 
 @code {

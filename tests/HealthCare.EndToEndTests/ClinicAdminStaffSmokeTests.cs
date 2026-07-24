@@ -30,21 +30,22 @@ public sealed class ClinicAdminStaffSmokeTests : E2ePageTestBase
             await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Change clinic" })).ToHaveCountAsync(0);
             await Expect(Page.GetByText("Leave empty for all clinics", new() { Exact = false })).ToHaveCountAsync(0);
 
-            // Role filter must not offer Org/Platform admin options.
             await Page.Locator("#staff-role").ClickAsync();
             await Expect(Page.Locator(".ant-select-dropdown:visible").GetByText("ORGANIZATION_ADMIN")).ToHaveCountAsync(0);
             await Expect(Page.Locator(".ant-select-dropdown:visible").GetByText("PLATFORM_ADMIN")).ToHaveCountAsync(0);
             await Page.Keyboard.PressAsync("Escape");
 
-            // Receptionists tab presets PreferredRole = RECEPTIONIST (avoids modal/page select clash).
-            await Page.GotoAsync("/staff/receptionists");
-            await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Staff Management" }))
-                .ToBeVisibleAsync(new() { Timeout = 60_000 });
+            await Page.GetByRole(AriaRole.Tab, new() { Name = "Receptionists" }).ClickAsync();
+            await Expect(Page.GetByRole(AriaRole.Tab, new() { Name = "Receptionists" })).ToHaveAttributeAsync("aria-selected", "true");
 
             await Page.GetByRole(AriaRole.Button, new() { Name = "Create staff" }).ClickAsync();
             var modal = Page.Locator(".ant-modal").Filter(new() { HasText = "Temporary password" });
             await Expect(modal.GetByText("New staff will be created in your membership clinic."))
                 .ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+            // Wait until assignable roles finish loading (Create enabled).
+            await Expect(modal.GetByRole(AriaRole.Button, new() { Name = "Create" }))
+                .ToBeEnabledAsync(new() { Timeout = 15_000 });
 
             var email = $"ca3.recv.{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}@healthcare.local";
             await modal.Locator("input").Nth(0).FillAsync(email);
