@@ -72,7 +72,12 @@ public sealed class OrganizationSettingsService : IOrganizationSettingsService
 
         if (request.NameSpecified)
         {
-            organization.Name = request.Name!.Trim();
+            if (string.IsNullOrWhiteSpace(request.Name))
+            {
+                throw OrganizationSettingsException.EmptyUpdate();
+            }
+
+            organization.Name = request.Name.Trim();
         }
 
         if (request.ContactEmailSpecified)

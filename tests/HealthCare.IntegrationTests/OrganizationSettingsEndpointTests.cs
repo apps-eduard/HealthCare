@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using FluentAssertions;
 using HealthCare.Contracts.Identity;
 using HealthCare.Contracts.Organizations;
@@ -18,6 +20,11 @@ namespace HealthCare.IntegrationTests;
 
 public sealed class OrganizationSettingsEndpointTests : IAsyncLifetime
 {
+    private static readonly JsonSerializerOptions PatchJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
     private PostgreSqlContainer? _postgres;
     private string _connectionString = string.Empty;
 
@@ -99,7 +106,8 @@ public sealed class OrganizationSettingsEndpointTests : IAsyncLifetime
                 Country = "SA",
                 DefaultTimeZoneId = "Asia/Riyadh",
                 BrandingPlaceholder = "Demo Org",
-            });
+            },
+            PatchJsonOptions);
         patch.StatusCode.Should().Be(HttpStatusCode.OK);
         var updated = await patch.Content.ReadFromJsonAsync<OrganizationSettingsResponse>();
         updated.Should().NotBeNull();
@@ -139,7 +147,8 @@ public sealed class OrganizationSettingsEndpointTests : IAsyncLifetime
             {
                 ExpectedVersion = current!.Version + 50,
                 ContactPhone = "+10000000000",
-            });
+            },
+            PatchJsonOptions);
         conflict.StatusCode.Should().Be(HttpStatusCode.Conflict);
         var problemJson = await conflict.Content.ReadAsStringAsync();
         problemJson.Should().Contain(OrganizationSettingsErrorCodes.ConcurrencyConflict);

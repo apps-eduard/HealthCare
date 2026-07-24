@@ -234,6 +234,7 @@ public sealed class OrganizationAdminSettingsUiTests
 
         source.Should().Contain("api/v1/organization/settings");
         source.Should().Contain("PatchAsJsonAsync");
+        source.Should().Contain("WhenWritingNull");
         source.Should().Contain("platformAdminBypass");
         source.Should().Contain("organizationId");
     }

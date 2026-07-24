@@ -1,4 +1,6 @@
 using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using HealthCare.Contracts.Organizations;
 
 namespace HealthCare.Web.Services;
@@ -19,6 +21,11 @@ public interface IOrganizationSettingsApiClient
 
 public sealed class OrganizationSettingsApiClient : IOrganizationSettingsApiClient
 {
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
     private readonly IHttpClientFactory _httpClientFactory;
 
     public OrganizationSettingsApiClient(IHttpClientFactory httpClientFactory)
@@ -51,7 +58,7 @@ public sealed class OrganizationSettingsApiClient : IOrganizationSettingsApiClie
     {
         var client = _httpClientFactory.CreateClient("HealthCareApi");
         var url = BuildQuery("api/v1/organization/settings", query, platformAdminBypass);
-        using var response = await client.PatchAsJsonAsync(url, request, cancellationToken);
+        using var response = await client.PatchAsJsonAsync(url, request, SerializerOptions, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
             throw await ApiProblemException.FromResponseAsync(response, cancellationToken);
