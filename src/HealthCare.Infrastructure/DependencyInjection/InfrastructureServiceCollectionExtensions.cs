@@ -75,6 +75,8 @@ public static class InfrastructureServiceCollectionExtensions
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
         services.Configure<DevelopmentAdminOptions>(configuration.GetSection(DevelopmentAdminOptions.SectionName));
         services.Configure<DevelopmentPatientOptions>(configuration.GetSection(DevelopmentPatientOptions.SectionName));
+        services.Configure<OrganizationLimitsOptions>(configuration.GetSection(OrganizationLimitsOptions.SectionName));
+        services.Configure<AuditRetentionOptions>(configuration.GetSection(AuditRetentionOptions.SectionName));
 
         var jwtOptions = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
             ?? throw new InvalidOperationException("Jwt configuration section is required.");
@@ -112,6 +114,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<ITenantAccessService, TenantAccessService>();
         services.AddScoped<IAuthorizationAuditLogger, AuthorizationAuditLogger>();
         services.AddScoped<ISecurityEventRecorder, SecurityEventRecorder>();
+        services.AddScoped<IOrganizationAuditRecorder, OrganizationAuditRecorder>();
         services.AddScoped<IPermissionService, PermissionService>();
         services.AddScoped<IRoleAssignmentAuthorizationService, RoleAssignmentAuthorizationService>();
 
@@ -167,6 +170,9 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IOrganizationDashboardService, OrganizationDashboardService>();
         services.AddScoped<IOrganizationReportService, OrganizationReportService>();
         services.AddScoped<IOrganizationSecurityService, OrganizationSecurityService>();
+        services.AddScoped<IOrganizationAuditLogService, OrganizationAuditLogService>();
+        services.AddScoped<IOrganizationUsageService, OrganizationUsageService>();
+        services.AddScoped<IOrganizationLimitService, OrganizationLimitService>();
         services.AddScoped<ISecuritySessionInvalidationService, SecuritySessionInvalidationService>();
         services.AddScoped<IAppointmentService, AppointmentService>();
         services.AddScoped<IClinicTimeZoneConverter, ClinicTimeZoneConverter>();

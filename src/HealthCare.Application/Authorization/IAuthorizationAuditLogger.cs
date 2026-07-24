@@ -15,6 +15,15 @@ public interface IAuthorizationAuditLogger
     void UnknownPermissionRequested(string permission);
 
     /// <summary>
+    /// Clinic management operation audit. Must never include passwords, tokens, or PHI.
+    /// </summary>
+    void ClinicOperation(
+        string operation,
+        string resultCode,
+        Guid? organizationId = null,
+        Guid? clinicId = null);
+
+    /// <summary>
     /// Staff security/admin operation audit. Must never include passwords, tokens, or PHI.
     /// </summary>
     void StaffOperation(

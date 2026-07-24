@@ -56,4 +56,7 @@ public sealed class ClinicManagementException : Exception
 
     public static ClinicManagementException SlugInvalid() =>
         new(ClinicManagementErrorCodes.SlugInvalid, "Clinic slug format is invalid.", 400);
+
+    public static ClinicManagementException LimitReached() =>
+        new(ClinicManagementErrorCodes.LimitReached, "The organization clinic limit has been reached.", 409);
 }

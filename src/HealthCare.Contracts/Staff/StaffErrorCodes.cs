@@ -25,4 +25,5 @@ public static class StaffErrorCodes
     public const string ClinicChangeNotAllowed = "staff.clinic_change_not_allowed";
     public const string PasswordResetFailed = "staff.password_reset_failed";
     public const string PasswordResetNotAllowed = "staff.password_reset_not_allowed";
+    public const string LimitReached = "staff.limit_reached";
 }

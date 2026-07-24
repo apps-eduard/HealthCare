@@ -8,6 +8,7 @@ namespace HealthCare.Infrastructure.Authorization;
 
 /// <summary>
 /// Structured authorization audit events. Never logs tokens, passwords, or clinical payloads.
+/// Persists organization-scoped operational events via <see cref="IOrganizationAuditRecorder"/>.
 /// </summary>
 public sealed class AuthorizationAuditLogger : IAuthorizationAuditLogger
 {
@@ -16,17 +17,20 @@ public sealed class AuthorizationAuditLogger : IAuthorizationAuditLogger
     private readonly ICurrentUser _currentUser;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ISecurityEventRecorder _securityEvents;
+    private readonly IOrganizationAuditRecorder _organizationAudits;
     private readonly ILogger<AuthorizationAuditLogger> _logger;
 
     public AuthorizationAuditLogger(
         ICurrentUser currentUser,
         IHttpContextAccessor httpContextAccessor,
         ISecurityEventRecorder securityEvents,
+        IOrganizationAuditRecorder organizationAudits,
         ILogger<AuthorizationAuditLogger> logger)
     {
         _currentUser = currentUser;
         _httpContextAccessor = httpContextAccessor;
         _securityEvents = securityEvents;
+        _organizationAudits = organizationAudits;
         _logger = logger;
     }
 
@@ -53,6 +57,16 @@ public sealed class AuthorizationAuditLogger : IAuthorizationAuditLogger
             ActorUserId = _currentUser.UserId,
             CorrelationId = correlationId,
         });
+
+        TryPersistOrgAudit(
+            category: "security",
+            action: "permission_denied",
+            resultCode: reasonCode,
+            organizationId: _currentUser.OrganizationId,
+            clinicId: _currentUser.ClinicId,
+            resourceType: "permission",
+            resourceId: null,
+            correlationId: correlationId);
     }
 
     public void CrossTenantDenied(string operation, string reasonCode, Guid? organizationId = null, Guid? clinicId = null)
@@ -79,16 +93,39 @@ public sealed class AuthorizationAuditLogger : IAuthorizationAuditLogger
             ActorUserId = _currentUser.UserId,
             CorrelationId = correlationId,
         });
+
+        TryPersistOrgAudit(
+            category: "security",
+            action: "cross_clinic_denied",
+            resultCode: reasonCode,
+            organizationId: orgId,
+            clinicId: clinic,
+            resourceType: "operation",
+            resourceId: null,
+            correlationId: correlationId);
     }
 
-    public void ExplicitPlatformBypassUsed(string operation, Guid? organizationId = null, Guid? clinicId = null) =>
+    public void ExplicitPlatformBypassUsed(string operation, Guid? organizationId = null, Guid? clinicId = null)
+    {
+        var correlationId = CorrelationId();
         _logger.LogInformation(
             "Authorization event. Event=platform_bypass_used UserId={UserId} Operation={Operation} OrganizationId={OrganizationId} ClinicId={ClinicId} CorrelationId={CorrelationId}",
             _currentUser.UserId,
             operation,
             organizationId,
             clinicId,
-            CorrelationId());
+            correlationId);
+
+        TryPersistOrgAudit(
+            category: "security",
+            action: "platform_bypass_used",
+            resultCode: "succeeded",
+            organizationId: organizationId,
+            clinicId: clinicId,
+            resourceType: "operation",
+            resourceId: null,
+            correlationId: correlationId);
+    }
 
     public void RoleAssignmentDenied(string actorRole, string targetRole, string reasonCode) =>
         _logger.LogInformation(
@@ -115,133 +152,311 @@ public sealed class AuthorizationAuditLogger : IAuthorizationAuditLogger
             CorrelationId(),
             Contracts.Identity.AuthorizationErrorCodes.InvalidPermission);
 
+    public void ClinicOperation(
+        string operation,
+        string resultCode,
+        Guid? organizationId = null,
+        Guid? clinicId = null)
+    {
+        var orgId = organizationId ?? _currentUser.OrganizationId;
+        var clinic = clinicId ?? _currentUser.ClinicId;
+        var correlationId = CorrelationId();
+        _logger.LogInformation(
+            "Clinic operation. Event=clinic_operation UserId={UserId} Operation={Operation} ResultCode={ResultCode} OrganizationId={OrganizationId} ClinicId={ClinicId} CorrelationId={CorrelationId}",
+            _currentUser.UserId,
+            operation,
+            resultCode,
+            orgId,
+            clinic,
+            correlationId);
+
+        TryPersistOrgAudit(
+            category: "clinic",
+            action: operation,
+            resultCode: resultCode,
+            organizationId: orgId,
+            clinicId: clinic,
+            resourceType: "clinic",
+            resourceId: clinic,
+            correlationId: correlationId);
+    }
+
     public void StaffOperation(
         string operation,
         string resultCode,
         Guid? organizationId = null,
         Guid? clinicId = null,
-        Guid? staffMemberId = null) =>
+        Guid? staffMemberId = null)
+    {
+        var orgId = organizationId ?? _currentUser.OrganizationId;
+        var clinic = clinicId ?? _currentUser.ClinicId;
+        var correlationId = CorrelationId();
         _logger.LogInformation(
             "Staff operation. Event=staff_operation UserId={UserId} Operation={Operation} ResultCode={ResultCode} OrganizationId={OrganizationId} ClinicId={ClinicId} StaffMemberId={StaffMemberId} CorrelationId={CorrelationId}",
             _currentUser.UserId,
             operation,
             resultCode,
-            organizationId ?? _currentUser.OrganizationId,
-            clinicId ?? _currentUser.ClinicId,
+            orgId,
+            clinic,
             staffMemberId,
-            CorrelationId());
+            correlationId);
+
+        TryPersistOrgAudit(
+            category: "staff",
+            action: operation,
+            resultCode: resultCode,
+            organizationId: orgId,
+            clinicId: clinic,
+            resourceType: "staff",
+            resourceId: staffMemberId,
+            correlationId: correlationId);
+    }
 
     public void PatientOperation(
         string operation,
         string resultCode,
         Guid? organizationId = null,
         Guid? clinicId = null,
-        Guid? patientId = null) =>
+        Guid? patientId = null)
+    {
+        var orgId = organizationId ?? _currentUser.OrganizationId;
+        var clinic = clinicId ?? _currentUser.ClinicId;
+        var correlationId = CorrelationId();
         _logger.LogInformation(
             "Patient operation. Event=patient_operation UserId={UserId} Operation={Operation} ResultCode={ResultCode} OrganizationId={OrganizationId} ClinicId={ClinicId} PatientId={PatientId} CorrelationId={CorrelationId}",
             _currentUser.UserId,
             operation,
             resultCode,
-            organizationId ?? _currentUser.OrganizationId,
-            clinicId ?? _currentUser.ClinicId,
+            orgId,
+            clinic,
             patientId,
-            CorrelationId());
+            correlationId);
+
+        TryPersistOrgAudit(
+            category: "patient",
+            action: operation,
+            resultCode: resultCode,
+            organizationId: orgId,
+            clinicId: clinic,
+            resourceType: "patient",
+            resourceId: patientId,
+            correlationId: correlationId);
+    }
 
     public void AppointmentOperation(
         string operation,
         string resultCode,
         Guid? organizationId = null,
         Guid? clinicId = null,
-        Guid? appointmentId = null) =>
+        Guid? appointmentId = null)
+    {
+        var orgId = organizationId ?? _currentUser.OrganizationId;
+        var clinic = clinicId ?? _currentUser.ClinicId;
+        var correlationId = CorrelationId();
         _logger.LogInformation(
             "Appointment operation. Event=appointment_operation UserId={UserId} Operation={Operation} ResultCode={ResultCode} OrganizationId={OrganizationId} ClinicId={ClinicId} AppointmentId={AppointmentId} CorrelationId={CorrelationId}",
             _currentUser.UserId,
             operation,
             resultCode,
-            organizationId ?? _currentUser.OrganizationId,
-            clinicId ?? _currentUser.ClinicId,
+            orgId,
+            clinic,
             appointmentId,
-            CorrelationId());
+            correlationId);
+
+        TryPersistOrgAudit(
+            category: "appointment",
+            action: operation,
+            resultCode: resultCode,
+            organizationId: orgId,
+            clinicId: clinic,
+            resourceType: "appointment",
+            resourceId: appointmentId,
+            correlationId: correlationId);
+    }
 
     public void AvailabilityOperation(
         string operation,
         string resultCode,
         Guid? organizationId = null,
         Guid? clinicId = null,
-        Guid? doctorStaffMemberId = null) =>
+        Guid? doctorStaffMemberId = null)
+    {
+        var orgId = organizationId ?? _currentUser.OrganizationId;
+        var clinic = clinicId ?? _currentUser.ClinicId;
+        var correlationId = CorrelationId();
         _logger.LogInformation(
             "Availability operation. Event=availability_operation UserId={UserId} Operation={Operation} ResultCode={ResultCode} OrganizationId={OrganizationId} ClinicId={ClinicId} DoctorStaffMemberId={DoctorStaffMemberId} CorrelationId={CorrelationId}",
             _currentUser.UserId,
             operation,
             resultCode,
-            organizationId ?? _currentUser.OrganizationId,
-            clinicId ?? _currentUser.ClinicId,
+            orgId,
+            clinic,
             doctorStaffMemberId,
-            CorrelationId());
+            correlationId);
+
+        TryPersistOrgAudit(
+            category: "availability",
+            action: operation,
+            resultCode: resultCode,
+            organizationId: orgId,
+            clinicId: clinic,
+            resourceType: "doctor",
+            resourceId: doctorStaffMemberId,
+            correlationId: correlationId);
+    }
 
     public void ReminderOperation(
         string operation,
         string resultCode,
         Guid? organizationId = null,
         Guid? clinicId = null,
-        Guid? reminderId = null) =>
+        Guid? reminderId = null)
+    {
+        var orgId = organizationId ?? _currentUser.OrganizationId;
+        var clinic = clinicId ?? _currentUser.ClinicId;
+        var correlationId = CorrelationId();
         _logger.LogInformation(
             "Reminder operation. Event=reminder_operation UserId={UserId} Operation={Operation} ResultCode={ResultCode} OrganizationId={OrganizationId} ClinicId={ClinicId} ReminderId={ReminderId} CorrelationId={CorrelationId}",
             _currentUser.UserId,
             operation,
             resultCode,
-            organizationId ?? _currentUser.OrganizationId,
-            clinicId ?? _currentUser.ClinicId,
+            orgId,
+            clinic,
             reminderId,
-            CorrelationId());
+            correlationId);
+
+        TryPersistOrgAudit(
+            category: "reminder",
+            action: operation,
+            resultCode: resultCode,
+            organizationId: orgId,
+            clinicId: clinic,
+            resourceType: "reminder",
+            resourceId: reminderId,
+            correlationId: correlationId);
+    }
 
     public void SummaryOperation(
         string operation,
         string resultCode,
         Guid? organizationId = null,
         Guid? clinicId = null,
-        Guid? runId = null) =>
+        Guid? runId = null)
+    {
+        var orgId = organizationId ?? _currentUser.OrganizationId;
+        var clinic = clinicId ?? _currentUser.ClinicId;
+        var correlationId = CorrelationId();
         _logger.LogInformation(
             "Summary operation. Event=summary_operation UserId={UserId} Operation={Operation} ResultCode={ResultCode} OrganizationId={OrganizationId} ClinicId={ClinicId} RunId={RunId} CorrelationId={CorrelationId}",
             _currentUser.UserId,
             operation,
             resultCode,
-            organizationId ?? _currentUser.OrganizationId,
-            clinicId ?? _currentUser.ClinicId,
+            orgId,
+            clinic,
             runId,
-            CorrelationId());
+            correlationId);
+
+        TryPersistOrgAudit(
+            category: "summary",
+            action: operation,
+            resultCode: resultCode,
+            organizationId: orgId,
+            clinicId: clinic,
+            resourceType: "summary_run",
+            resourceId: runId,
+            correlationId: correlationId);
+    }
 
     public void ReportOperation(
         string operation,
         string resultCode,
         Guid? organizationId = null,
         Guid? clinicId = null,
-        string? reportType = null) =>
+        string? reportType = null)
+    {
+        var orgId = organizationId ?? _currentUser.OrganizationId;
+        var clinic = clinicId ?? _currentUser.ClinicId;
+        var correlationId = CorrelationId();
         _logger.LogInformation(
             "Report operation. Event=report_operation UserId={UserId} Operation={Operation} ResultCode={ResultCode} OrganizationId={OrganizationId} ClinicId={ClinicId} ReportType={ReportType} CorrelationId={CorrelationId}",
             _currentUser.UserId,
             operation,
             resultCode,
-            organizationId ?? _currentUser.OrganizationId,
-            clinicId ?? _currentUser.ClinicId,
+            orgId,
+            clinic,
             reportType,
-            CorrelationId());
+            correlationId);
+
+        TryPersistOrgAudit(
+            category: "report",
+            action: operation,
+            resultCode: resultCode,
+            organizationId: orgId,
+            clinicId: clinic,
+            resourceType: reportType,
+            resourceId: null,
+            correlationId: correlationId);
+    }
 
     public void SecurityOperation(
         string operation,
         string resultCode,
         Guid? organizationId = null,
         Guid? clinicId = null,
-        Guid? targetUserId = null) =>
+        Guid? targetUserId = null)
+    {
+        var orgId = organizationId ?? _currentUser.OrganizationId;
+        var clinic = clinicId ?? _currentUser.ClinicId;
+        var correlationId = CorrelationId();
         _logger.LogInformation(
             "Security operation. Event=security_operation UserId={UserId} Operation={Operation} ResultCode={ResultCode} OrganizationId={OrganizationId} ClinicId={ClinicId} TargetUserId={TargetUserId} CorrelationId={CorrelationId}",
             _currentUser.UserId,
             operation,
             resultCode,
-            organizationId ?? _currentUser.OrganizationId,
-            clinicId ?? _currentUser.ClinicId,
+            orgId,
+            clinic,
             targetUserId,
-            CorrelationId());
+            correlationId);
+
+        TryPersistOrgAudit(
+            category: "security",
+            action: operation,
+            resultCode: resultCode,
+            organizationId: orgId,
+            clinicId: clinic,
+            resourceType: "user",
+            resourceId: targetUserId,
+            correlationId: correlationId);
+    }
+
+    private void TryPersistOrgAudit(
+        string category,
+        string action,
+        string resultCode,
+        Guid? organizationId,
+        Guid? clinicId,
+        string? resourceType,
+        Guid? resourceId,
+        string? correlationId)
+    {
+        if (organizationId is null || organizationId == Guid.Empty)
+        {
+            return;
+        }
+
+        _organizationAudits.TryRecord(new OrganizationAuditWrite
+        {
+            OrganizationId = organizationId.Value,
+            ClinicId = clinicId,
+            ActorUserId = _currentUser.UserId,
+            Category = Truncate(category, 64),
+            Action = Truncate(action, 128),
+            ResultCode = Truncate(resultCode, 64),
+            ResourceType = TruncateNullable(resourceType, 64),
+            ResourceId = resourceId,
+            CorrelationId = TruncateNullable(correlationId, 64),
+        });
+    }
 
     private string CorrelationId()
     {
@@ -261,6 +476,16 @@ public sealed class AuthorizationAuditLogger : IAuthorizationAuditLogger
         if (string.IsNullOrEmpty(value))
         {
             return string.Empty;
+        }
+
+        return value.Length <= max ? value : value[..max];
+    }
+
+    private static string? TruncateNullable(string? value, int max)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return null;
         }
 
         return value.Length <= max ? value : value[..max];

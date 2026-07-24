@@ -33,6 +33,8 @@ public sealed class HealthCareDbContext : IdentityDbContext<ApplicationUser, Ide
 
     public DbSet<SecurityEvent> SecurityEvents => Set<SecurityEvent>();
 
+    public DbSet<OrganizationAuditEvent> OrganizationAuditEvents => Set<OrganizationAuditEvent>();
+
     public DbSet<Patient> Patients => Set<Patient>();
 
     public DbSet<ClinicPatient> ClinicPatients => Set<ClinicPatient>();

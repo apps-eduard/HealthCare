@@ -86,4 +86,7 @@ public sealed class StaffManagementException : Exception
 
     public static StaffManagementException SessionRevocationFailed(string detail) =>
         new(StaffErrorCodes.SessionRevocationFailed, detail, 400);
+
+    public static StaffManagementException LimitReached() =>
+        new(StaffErrorCodes.LimitReached, "The organization staff limit has been reached.", 409);
 }

@@ -1,12 +1,14 @@
 using FluentAssertions;
 using HealthCare.Application.Authorization;
 using HealthCare.Application.Clinics;
+using HealthCare.Application.Organizations;
 using HealthCare.Contracts.Clinics;
 using HealthCare.Domain.Identity;
 using HealthCare.Domain.Organizations;
 using HealthCare.Infrastructure.Appointments;
 using HealthCare.Infrastructure.Authorization;
 using HealthCare.Infrastructure.Clinics;
+using HealthCare.Infrastructure.Organizations;
 using HealthCare.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -263,6 +265,10 @@ internal sealed class ClinicMgmtHarness : IAsyncDisposable
             permissions,
             roleAssignment,
             audit,
+            new OrganizationLimitService(
+                Db,
+                Microsoft.Extensions.Options.Options.Create(new OrganizationLimitsOptions()),
+                Clock),
             new ClinicTimeZoneConverter(NullLogger<ClinicTimeZoneConverter>.Instance),
             Clock,
             NullLogger<ClinicManagementService>.Instance);

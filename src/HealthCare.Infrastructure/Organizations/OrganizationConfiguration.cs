@@ -25,6 +25,10 @@ public sealed class OrganizationConfiguration : IEntityTypeConfiguration<Organiz
             .HasConversion<string>()
             .HasMaxLength(32);
 
+        builder.Property(x => x.MaxClinics);
+
+        builder.Property(x => x.MaxStaff);
+
         builder.Property(x => x.CreatedAtUtc)
             .IsRequired();
 

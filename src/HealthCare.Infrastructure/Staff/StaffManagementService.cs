@@ -1,5 +1,6 @@
 using HealthCare.Application.Authorization;
 using HealthCare.Application.Identity;
+using HealthCare.Application.Organizations;
 using HealthCare.Application.Staff;
 using HealthCare.Contracts.Common;
 using HealthCare.Contracts.Staff;
@@ -31,6 +32,7 @@ public sealed class StaffManagementService : IStaffManagementService
     private readonly ISecuritySessionInvalidationService _sessions;
     private readonly IAccountEmailSender _emailSender;
     private readonly IAuthorizationAuditLogger _audit;
+    private readonly IOrganizationLimitService _limits;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<StaffManagementService> _logger;
 
@@ -47,6 +49,7 @@ public sealed class StaffManagementService : IStaffManagementService
         ISecuritySessionInvalidationService sessions,
         IAccountEmailSender emailSender,
         IAuthorizationAuditLogger audit,
+        IOrganizationLimitService limits,
         TimeProvider timeProvider,
         ILogger<StaffManagementService> logger)
     {
@@ -59,6 +62,7 @@ public sealed class StaffManagementService : IStaffManagementService
         _sessions = sessions;
         _emailSender = emailSender;
         _audit = audit;
+        _limits = limits;
         _timeProvider = timeProvider;
         _logger = logger;
     }
@@ -224,6 +228,8 @@ public sealed class StaffManagementService : IStaffManagementService
         {
             throw StaffManagementException.InactiveClinic();
         }
+
+        await _limits.EnsureStaffCapacityAsync(clinic.OrganizationId, cancellationToken);
 
         var role = request.Role.Trim();
         if (!IsAssignableStaffRole(role))

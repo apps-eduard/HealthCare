@@ -1,6 +1,7 @@
 using FluentAssertions;
 using HealthCare.Application.Authorization;
 using HealthCare.Application.Identity;
+using HealthCare.Application.Organizations;
 using HealthCare.Application.Staff;
 using HealthCare.Contracts.Staff;
 using HealthCare.Domain.Identity;
@@ -8,6 +9,7 @@ using HealthCare.Domain.Organizations;
 using HealthCare.Domain.Staff;
 using HealthCare.Infrastructure.Authorization;
 using HealthCare.Infrastructure.Identity;
+using HealthCare.Infrastructure.Organizations;
 using HealthCare.Infrastructure.Persistence;
 using HealthCare.Infrastructure.Staff;
 using Microsoft.AspNetCore.DataProtection;
@@ -764,6 +766,10 @@ internal sealed class StaffHarness : IAsyncDisposable
             sessions,
             email,
             audit,
+            new OrganizationLimitService(
+                Db,
+                Microsoft.Extensions.Options.Options.Create(new OrganizationLimitsOptions()),
+                TimeProvider.System),
             TimeProvider.System,
             NullLogger<StaffManagementService>.Instance);
     }

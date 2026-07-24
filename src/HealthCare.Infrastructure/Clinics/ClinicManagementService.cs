@@ -1,6 +1,7 @@
 using HealthCare.Application.Appointments;
 using HealthCare.Application.Authorization;
 using HealthCare.Application.Clinics;
+using HealthCare.Application.Organizations;
 using HealthCare.Contracts.Clinics;
 using HealthCare.Contracts.Common;
 using HealthCare.Domain.Appointments;
@@ -30,6 +31,7 @@ public sealed class ClinicManagementService : IClinicManagementService
     private readonly IPermissionService _permissions;
     private readonly IRoleAssignmentAuthorizationService _roleAssignment;
     private readonly IAuthorizationAuditLogger _audit;
+    private readonly IOrganizationLimitService _limits;
     private readonly IClinicTimeZoneConverter _timeZones;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<ClinicManagementService> _logger;
@@ -42,6 +44,7 @@ public sealed class ClinicManagementService : IClinicManagementService
         IPermissionService permissions,
         IRoleAssignmentAuthorizationService roleAssignment,
         IAuthorizationAuditLogger audit,
+        IOrganizationLimitService limits,
         IClinicTimeZoneConverter timeZones,
         TimeProvider timeProvider,
         ILogger<ClinicManagementService> logger)
@@ -53,6 +56,7 @@ public sealed class ClinicManagementService : IClinicManagementService
         _permissions = permissions;
         _roleAssignment = roleAssignment;
         _audit = audit;
+        _limits = limits;
         _timeZones = timeZones;
         _timeProvider = timeProvider;
         _logger = logger;
@@ -188,6 +192,7 @@ public sealed class ClinicManagementService : IClinicManagementService
         EnsureAuthorized(Permissions.Clinics.Create);
         var organizationId = await ResolveOrganizationIdAsync(request.OrganizationId, bypass, cancellationToken);
         await EnsureOrganizationActiveAsync(organizationId, cancellationToken);
+        await _limits.EnsureClinicCapacityAsync(organizationId, cancellationToken);
 
         var slug = ClinicSlugRules.Normalize(request.Slug);
         if (!ClinicSlugRules.IsValid(slug))
@@ -265,6 +270,8 @@ public sealed class ClinicManagementService : IClinicManagementService
         {
             _audit.ExplicitPlatformBypassUsed("clinic_create", organizationId, clinic.Id);
         }
+
+        _audit.ClinicOperation("clinic_created", "succeeded", organizationId, clinic.Id);
 
         _logger.LogInformation(
             "Clinic created. ActorUserId={ActorUserId} OrganizationId={OrganizationId} ClinicId={ClinicId} Slug={Slug} HasInitialAdmin={HasInitialAdmin}",
@@ -395,6 +402,8 @@ public sealed class ClinicManagementService : IClinicManagementService
             throw ClinicManagementException.SlugInUse();
         }
 
+        _audit.ClinicOperation("clinic_updated", "succeeded", clinic.OrganizationId, clinic.Id);
+
         _logger.LogInformation(
             "Clinic updated. ActorUserId={ActorUserId} ClinicId={ClinicId} ChangedFields={ChangedFields}",
             _currentUser.UserId,
@@ -425,6 +434,8 @@ public sealed class ClinicManagementService : IClinicManagementService
         clinic.Version++;
         clinic.UpdatedAtUtc = _timeProvider.GetUtcNow();
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _audit.ClinicOperation("clinic_activated", "succeeded", clinic.OrganizationId, clinic.Id);
 
         _logger.LogInformation(
             "Clinic activated. ActorUserId={ActorUserId} ClinicId={ClinicId} ReasonPresent={ReasonPresent}",
@@ -467,6 +478,8 @@ public sealed class ClinicManagementService : IClinicManagementService
         clinic.UpdatedAtUtc = _timeProvider.GetUtcNow();
         await _dbContext.SaveChangesAsync(cancellationToken);
 
+        _audit.ClinicOperation("clinic_deactivated", "succeeded", clinic.OrganizationId, clinic.Id);
+
         _logger.LogInformation(
             "Clinic deactivated. ActorUserId={ActorUserId} ClinicId={ClinicId} ReasonPresent={ReasonPresent}",
             _currentUser.UserId,
@@ -483,6 +496,7 @@ public sealed class ClinicManagementService : IClinicManagementService
     {
         _permissions.RequirePermission(Permissions.Staff.Manage);
         _permissions.RequirePermission(Permissions.Roles.Assign);
+        await _limits.EnsureStaffCapacityAsync(clinic.OrganizationId, cancellationToken);
 
         var email = admin.Email.Trim();
         if (await _userManager.FindByEmailAsync(email) is not null)

@@ -178,6 +178,30 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
                 cancellationToken);
         }
 
+        if (exception is OrganizationAuditLogException organizationAuditLogException)
+        {
+            return await WriteAuthProblemAsync(
+                httpContext,
+                organizationAuditLogException.StatusCode,
+                organizationAuditLogException.Title,
+                organizationAuditLogException.ErrorCode,
+                correlationId,
+                "Organization audit logs denied",
+                cancellationToken);
+        }
+
+        if (exception is OrganizationUsageException organizationUsageException)
+        {
+            return await WriteAuthProblemAsync(
+                httpContext,
+                organizationUsageException.StatusCode,
+                organizationUsageException.Title,
+                organizationUsageException.ErrorCode,
+                correlationId,
+                "Organization usage denied",
+                cancellationToken);
+        }
+
         if (exception is PatientClinicRegistrationException clinicRegistrationException)
         {
             return await WriteAuthProblemAsync(
