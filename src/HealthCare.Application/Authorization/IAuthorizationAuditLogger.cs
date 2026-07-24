@@ -13,4 +13,14 @@ public interface IAuthorizationAuditLogger
     void InactiveMembershipRejected(string operation);
 
     void UnknownPermissionRequested(string permission);
+
+    /// <summary>
+    /// Staff security/admin operation audit. Must never include passwords, tokens, or PHI.
+    /// </summary>
+    void StaffOperation(
+        string operation,
+        string resultCode,
+        Guid? organizationId = null,
+        Guid? clinicId = null,
+        Guid? staffMemberId = null);
 }

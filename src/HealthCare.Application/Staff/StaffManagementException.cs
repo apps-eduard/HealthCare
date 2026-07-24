@@ -34,13 +34,19 @@ public sealed class StaffManagementException : Exception
         new(StaffErrorCodes.SelfElevationDenied, "Self-elevation is not permitted.", 403);
 
     public static StaffManagementException CrossTenantDenied() =>
-        new(StaffErrorCodes.CrossTenantDenied, "Cross-tenant staff access is denied.", 403);
+        new(StaffErrorCodes.CrossOrganizationDenied, "Cross-organization staff access is denied.", 403);
+
+    public static StaffManagementException CrossOrganizationDenied() =>
+        CrossTenantDenied();
 
     public static StaffManagementException InactiveOrganization() =>
         new(StaffErrorCodes.InactiveOrganization, "The organization is inactive.", 409);
 
     public static StaffManagementException InactiveClinic() =>
         new(StaffErrorCodes.InactiveClinic, "The clinic is inactive.", 409);
+
+    public static StaffManagementException InvalidClinic() =>
+        new(StaffErrorCodes.InvalidClinic, "The clinic is invalid for this operation.", 400);
 
     public static StaffManagementException ConcurrencyConflict() =>
         new(StaffErrorCodes.ConcurrencyConflict, "The staff record was modified by another request.", 409);

@@ -80,6 +80,22 @@ public sealed class AuthorizationAuditLogger : IAuthorizationAuditLogger
             CorrelationId(),
             Contracts.Identity.AuthorizationErrorCodes.InvalidPermission);
 
+    public void StaffOperation(
+        string operation,
+        string resultCode,
+        Guid? organizationId = null,
+        Guid? clinicId = null,
+        Guid? staffMemberId = null) =>
+        _logger.LogInformation(
+            "Staff operation. Event=staff_operation UserId={UserId} Operation={Operation} ResultCode={ResultCode} OrganizationId={OrganizationId} ClinicId={ClinicId} StaffMemberId={StaffMemberId} CorrelationId={CorrelationId}",
+            _currentUser.UserId,
+            operation,
+            resultCode,
+            organizationId ?? _currentUser.OrganizationId,
+            clinicId ?? _currentUser.ClinicId,
+            staffMemberId,
+            CorrelationId());
+
     private string CorrelationId()
     {
         var http = _httpContextAccessor.HttpContext;

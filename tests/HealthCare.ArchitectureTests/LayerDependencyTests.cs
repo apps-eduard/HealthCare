@@ -307,8 +307,20 @@ public sealed class LayerDependencyTests
         typeof(IRoleAssignmentAuthorizationService).Namespace.Should().StartWith("HealthCare.Application");
         typeof(IStaffManagementService).Namespace.Should().StartWith("HealthCare.Application.Staff");
         typeof(ISecuritySessionInvalidationService).Namespace.Should().StartWith("HealthCare.Application.Identity");
+        typeof(IAccountEmailSender).Namespace.Should().StartWith("HealthCare.Application.Identity");
         typeof(IClinicDirectoryService).Namespace.Should().StartWith("HealthCare.Application.Clinics");
         typeof(IOrganizationDirectoryService).Namespace.Should().StartWith("HealthCare.Application.Organizations");
+    }
+
+    [Fact]
+    public void Staff_Management_Controller_Depends_On_Application_Abstraction_Only()
+    {
+        var controller = typeof(Program).Assembly.GetType("HealthCare.Api.Controllers.StaffManagementController");
+        controller.Should().NotBeNull();
+        var ctorParams = controller!.GetConstructors().SelectMany(c => c.GetParameters()).Select(p => p.ParameterType).ToArray();
+        ctorParams.Should().Contain(typeof(IStaffManagementService));
+        ctorParams.Should().NotContain(t => t.FullName != null && t.FullName.Contains("HealthCareDbContext", StringComparison.Ordinal));
+        typeof(IRoleAssignmentAuthorizationService).Namespace.Should().StartWith("HealthCare.Application.Authorization");
     }
 
     [Fact]

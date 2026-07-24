@@ -73,6 +73,7 @@ Route prefix: `/api/v1/staff-management`
 
 | Method | Path | Permission | Notes |
 |--------|------|------------|-------|
+| GET | `/clinic-admins` | `staff.read` | Clinic Admin directory (forces Role=CLINIC_ADMIN; same scope rules) |
 | GET | `/staff` | `staff.read` | Paginated search; clinic/org scoped |
 | GET | `/staff/{staffMemberId}` | `staff.read` | Detail; out-of-scope → safe 404 |
 | POST | `/staff` | `staff.manage` | Temporary-password create (transactional) |

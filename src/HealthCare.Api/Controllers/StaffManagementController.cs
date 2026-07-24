@@ -21,6 +21,18 @@ public sealed class StaffManagementController : ControllerBase
     }
 
     [AuthorizePermission(Permissions.Staff.Read)]
+    [HttpGet("clinic-admins")]
+    [ProducesResponseType(typeof(PagedResponse<StaffSummaryResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PagedResponse<StaffSummaryResponse>>> SearchClinicAdmins(
+        [FromQuery] StaffSearchRequest request,
+        [FromQuery] bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default)
+    {
+        var bypass = platformAdminBypass ? PlatformAdminBypass.Explicit : PlatformAdminBypass.None;
+        return Ok(await _staff.SearchClinicAdminsAsync(request, bypass, cancellationToken));
+    }
+
+    [AuthorizePermission(Permissions.Staff.Read)]
     [HttpGet("staff")]
     [ProducesResponseType(typeof(PagedResponse<StaffSummaryResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<PagedResponse<StaffSummaryResponse>>> Search(

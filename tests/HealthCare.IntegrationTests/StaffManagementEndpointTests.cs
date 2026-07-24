@@ -93,6 +93,67 @@ public sealed class StaffManagementEndpointTests : IAsyncLifetime
         deny.StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.Conflict, HttpStatusCode.BadRequest);
     }
 
+    [Fact]
+    public async Task Organization_Admin_Can_List_Clinic_Admins_And_Deny_Platform_Admin_Assignment()
+    {
+        await using var factory = CreateFactory();
+        var client = factory.CreateClient();
+        await AuthenticateAsync(client, "orgadmin@healthcare.local", "ChangeMe_OrgAdmin_1!");
+
+        var clinicAdmins = await client.GetFromJsonAsync<Contracts.Common.PagedResponse<StaffSummaryResponse>>(
+            "/api/v1/staff-management/clinic-admins");
+        clinicAdmins.Should().NotBeNull();
+        clinicAdmins!.Items.Should().OnlyContain(i => i.Role == AppRoles.ClinicAdmin);
+
+        var staff = await client.GetFromJsonAsync<Contracts.Common.PagedResponse<StaffSummaryResponse>>(
+            "/api/v1/staff-management/staff?role=DOCTOR");
+        staff.Should().NotBeNull();
+        var target = staff!.Items.FirstOrDefault();
+        if (target is null)
+        {
+            return;
+        }
+
+        var deny = await client.PostAsync(
+            $"/api/v1/staff-management/staff/{target.StaffMemberId:D}/roles/{AppRoles.PlatformAdmin}",
+            null);
+        deny.StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.Conflict, HttpStatusCode.BadRequest);
+
+        var reset = await client.PostAsJsonAsync(
+            $"/api/v1/staff-management/staff/{target.StaffMemberId:D}/password-reset",
+            new StaffPasswordResetRequest { Reason = "integration" });
+        reset.StatusCode.Should().Be(HttpStatusCode.OK);
+        var resetBody = await reset.Content.ReadAsStringAsync();
+        resetBody.Should().NotContain("Token");
+        resetBody.Should().NotContain("resetToken");
+    }
+
+    [Fact]
+    public async Task Organization_Admin_Self_Deactivation_Is_Denied()
+    {
+        await using var factory = CreateFactory();
+        var client = factory.CreateClient();
+        await AuthenticateAsync(client, "orgadmin@healthcare.local", "ChangeMe_OrgAdmin_1!");
+
+        var me = await client.GetFromJsonAsync<CurrentUserResponse>("/api/v1/auth/me");
+        me.Should().NotBeNull();
+        me!.StaffMemberId.Should().NotBeNull();
+
+        var detail = await client.GetFromJsonAsync<StaffDetailResponse>(
+            $"/api/v1/staff-management/staff/{me.StaffMemberId:D}");
+        detail.Should().NotBeNull();
+
+        var deactivate = await client.PostAsJsonAsync(
+            $"/api/v1/staff-management/staff/{me.StaffMemberId:D}/deactivate",
+            new StaffActivationRequest { ExpectedVersion = detail!.Version, Reason = "self" });
+        deactivate.StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.Conflict);
+
+        var problem = await deactivate.Content.ReadAsStringAsync();
+        (problem.Contains("self_deactivation", StringComparison.Ordinal)
+         || problem.Contains("deactivation_not_allowed", StringComparison.Ordinal)
+         || problem.Contains("last_admin", StringComparison.Ordinal)).Should().BeTrue();
+    }
+
     private WebApplicationFactory<Program> CreateFactory() =>
         new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>

@@ -207,8 +207,16 @@ Not allowed:
 - Revoke the full family after reuse detection.
 - Revoke tokens on logout.
 - Revoke tokens when an account is disabled.
-- Revoke **all** refresh tokens for a user (and update the Identity security stamp) after staff deactivation, role assignment, or role removal via `ISecuritySessionInvalidationService`. Never log token values or hashes.
+- Revoke **all** refresh tokens for a user (and update the Identity security stamp) via `ISecuritySessionInvalidationService` after staff deactivation, role assignment, clinic reassignment, admin password-reset initiation, and explicit `POST .../revoke-sessions`. Never log token values or hashes.
 - Staff web uses an HttpOnly BFF cookie plus server-side API token sessions (distributed cache). Access/refresh tokens are never stored in browser storage or returned to the browser.
+
+### 5.4b Staff password reset (admin-initiated)
+
+- Organization/Clinic admins with `staff.password_reset` may initiate reset for in-scope staff: `POST /api/v1/staff-management/staff/{id}/password-reset`.
+- Uses Identity password-reset tokens delivered through `IAccountEmailSender` (Development stores tokens in memory for manual testing; production sender may be unconfigured).
+- API responses are generic and never include the raw reset token.
+- Completion: `POST /api/v1/auth/complete-password-reset` (anonymous) with email + token + new password; then sessions are invalidated.
+- Development-only helper: `GET /api/v1/auth/dev/password-reset-token?email=` (404 outside Development).
 
 ### 5.4a Staff Web BFF authentication (hardened)
 

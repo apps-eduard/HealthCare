@@ -157,6 +157,12 @@ public sealed class StaffManagementService : IStaffManagementService
             })
             .ToListAsync(cancellationToken);
 
+        _audit.StaffOperation(
+            "staff_list",
+            "ok",
+            organizationId: scope.OrganizationId,
+            clinicId: scope.ClinicId);
+
         return PagedResponse<StaffSummaryResponse>.Create(items, page, pageSize, totalCount);
     }
 
@@ -172,7 +178,32 @@ public sealed class StaffManagementService : IStaffManagementService
             .Where(c => c.Id == staff.ClinicId)
             .Select(c => c.Name)
             .SingleOrDefaultAsync(cancellationToken);
+        _audit.StaffOperation(
+            "staff_detail",
+            "ok",
+            organizationId: staff.OrganizationId,
+            clinicId: staff.ClinicId,
+            staffMemberId: staff.Id);
         return MapDetail(staff, user, clinicName);
+    }
+
+    public Task<PagedResponse<StaffSummaryResponse>> SearchClinicAdminsAsync(
+        StaffSearchRequest request,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default)
+    {
+        var clinicAdminRequest = new StaffSearchRequest
+        {
+            Search = request.Search,
+            ClinicId = request.ClinicId,
+            Role = AppRoles.ClinicAdmin,
+            IsActive = request.IsActive,
+            Page = request.Page,
+            PageSize = request.PageSize,
+            SortBy = request.SortBy,
+            SortDirection = request.SortDirection,
+        };
+        return SearchAsync(clinicAdminRequest, bypass, cancellationToken);
     }
 
     public async Task<CreateStaffResponse> CreateAsync(
@@ -270,6 +301,12 @@ public sealed class StaffManagementService : IStaffManagementService
             await _dbContext.SaveChangesAsync(cancellationToken);
             await tx.CommitAsync(cancellationToken);
 
+            _audit.StaffOperation(
+                "staff_created",
+                "ok",
+                organizationId: staff.OrganizationId,
+                clinicId: staff.ClinicId,
+                staffMemberId: staff.Id);
             _logger.LogInformation(
                 "Staff created. ActorUserId={ActorUserId} TargetStaffMemberId={StaffMemberId} TargetUserId={TargetUserId} OrganizationId={OrganizationId} ClinicId={ClinicId} Role={Role}",
                 _currentUser.UserId,
@@ -349,6 +386,12 @@ public sealed class StaffManagementService : IStaffManagementService
             "Staff profile updated. ActorUserId={ActorUserId} StaffMemberId={StaffMemberId}",
             _currentUser.UserId,
             staff.Id);
+        _audit.StaffOperation(
+            "staff_updated",
+            "ok",
+            organizationId: staff.OrganizationId,
+            clinicId: staff.ClinicId,
+            staffMemberId: staff.Id);
 
         return await MapDetailAsync(staff, user, cancellationToken);
     }
@@ -394,6 +437,12 @@ public sealed class StaffManagementService : IStaffManagementService
             _currentUser.UserId,
             staff.Id,
             request.Reason);
+        _audit.StaffOperation(
+            "staff_activated",
+            "ok",
+            organizationId: staff.OrganizationId,
+            clinicId: staff.ClinicId,
+            staffMemberId: staff.Id);
 
         return await MapDetailAsync(staff, user, cancellationToken);
     }
@@ -416,10 +465,29 @@ public sealed class StaffManagementService : IStaffManagementService
 
         if (_currentUser.UserId == staff.UserId)
         {
+            _audit.StaffOperation(
+                "staff_deactivate",
+                StaffErrorCodes.SelfDeactivationDenied,
+                organizationId: staff.OrganizationId,
+                clinicId: staff.ClinicId,
+                staffMemberId: staff.Id);
             throw StaffManagementException.SelfDeactivationDenied();
         }
 
-        await EnsureNotLastAdminAsync(staff, cancellationToken);
+        try
+        {
+            await EnsureNotLastAdminAsync(staff, cancellationToken);
+        }
+        catch (StaffManagementException ex) when (ex.ErrorCode == StaffErrorCodes.LastAdminProtected)
+        {
+            _audit.StaffOperation(
+                "staff_deactivate",
+                StaffErrorCodes.LastAdminProtected,
+                organizationId: staff.OrganizationId,
+                clinicId: staff.ClinicId,
+                staffMemberId: staff.Id);
+            throw;
+        }
 
         var user = await _userManager.FindByIdAsync(staff.UserId.ToString())
             ?? throw StaffManagementException.NotFound();
@@ -446,6 +514,12 @@ public sealed class StaffManagementService : IStaffManagementService
             _currentUser.UserId,
             staff.Id,
             request.Reason);
+        _audit.StaffOperation(
+            "staff_deactivated",
+            "ok",
+            organizationId: staff.OrganizationId,
+            clinicId: staff.ClinicId,
+            staffMemberId: staff.Id);
 
         return await MapDetailAsync(staff, user, cancellationToken);
     }
@@ -563,6 +637,12 @@ public sealed class StaffManagementService : IStaffManagementService
             _currentUser.UserId,
             staff.Id,
             role);
+        _audit.StaffOperation(
+            "staff_role_assigned",
+            "ok",
+            organizationId: staff.OrganizationId,
+            clinicId: staff.ClinicId,
+            staffMemberId: staff.Id);
     }
 
     public async Task RemoveRoleAsync(
@@ -676,6 +756,12 @@ public sealed class StaffManagementService : IStaffManagementService
             previousClinicId,
             staff.ClinicId,
             request.AdministrativeReason);
+        _audit.StaffOperation(
+            "staff_clinic_changed",
+            "ok",
+            organizationId: staff.OrganizationId,
+            clinicId: staff.ClinicId,
+            staffMemberId: staff.Id);
 
         var user = await _userManager.FindByIdAsync(staff.UserId.ToString())
             ?? throw StaffManagementException.NotFound();
@@ -710,6 +796,12 @@ public sealed class StaffManagementService : IStaffManagementService
             _currentUser.UserId,
             staff.Id,
             request.Reason);
+        _audit.StaffOperation(
+            "staff_password_reset",
+            "ok",
+            organizationId: staff.OrganizationId,
+            clinicId: staff.ClinicId,
+            staffMemberId: staff.Id);
 
         return new StaffPasswordResetResponse { Message = PasswordResetGenericMessage };
     }
@@ -737,6 +829,12 @@ public sealed class StaffManagementService : IStaffManagementService
             _currentUser.UserId,
             staff.Id,
             request.Reason);
+        _audit.StaffOperation(
+            "staff_sessions_revoked",
+            "ok",
+            organizationId: staff.OrganizationId,
+            clinicId: staff.ClinicId,
+            staffMemberId: staff.Id);
 
         return new RevokeStaffSessionsResponse
         {
@@ -852,7 +950,7 @@ public sealed class StaffManagementService : IStaffManagementService
         {
             if (staff.OrganizationId != _currentStaff.OrganizationId)
             {
-                _audit.CrossTenantDenied("staff_detail", StaffErrorCodes.CrossTenantDenied, staff.OrganizationId, staff.ClinicId);
+                _audit.CrossTenantDenied("staff_detail", StaffErrorCodes.CrossOrganizationDenied, staff.OrganizationId, staff.ClinicId);
                 throw StaffManagementException.NotFound();
             }
 
@@ -861,7 +959,7 @@ public sealed class StaffManagementService : IStaffManagementService
 
         if (staff.ClinicId != _currentStaff.ClinicId)
         {
-            _audit.CrossTenantDenied("staff_detail", StaffErrorCodes.CrossTenantDenied, staff.OrganizationId, staff.ClinicId);
+            _audit.CrossTenantDenied("staff_detail", StaffErrorCodes.CrossOrganizationDenied, staff.OrganizationId, staff.ClinicId);
             throw StaffManagementException.NotFound();
         }
 
@@ -896,7 +994,7 @@ public sealed class StaffManagementService : IStaffManagementService
         {
             if (requestedClinicId is null || requestedClinicId == Guid.Empty)
             {
-                throw StaffManagementException.NotFound();
+                throw StaffManagementException.InvalidClinic();
             }
 
             return await _dbContext.Clinics
@@ -1042,7 +1140,7 @@ public sealed class StaffManagementService : IStaffManagementService
 
         if (staff.Role == AppRoles.ClinicAdmin)
         {
-            var count = await _dbContext.StaffMembers.CountAsync(
+            var count = await _dbContext.StaffMembers.AsNoTracking().CountAsync(
                 s => s.ClinicId == staff.ClinicId
                      && s.IsActive
                      && s.Role == AppRoles.ClinicAdmin
@@ -1056,7 +1154,7 @@ public sealed class StaffManagementService : IStaffManagementService
 
         if (staff.Role == AppRoles.OrganizationAdmin)
         {
-            var count = await _dbContext.StaffMembers.CountAsync(
+            var count = await _dbContext.StaffMembers.AsNoTracking().CountAsync(
                 s => s.OrganizationId == staff.OrganizationId
                      && s.IsActive
                      && s.Role == AppRoles.OrganizationAdmin

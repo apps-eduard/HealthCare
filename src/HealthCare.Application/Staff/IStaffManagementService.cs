@@ -54,6 +54,14 @@ public interface IStaffManagementService
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Organization-scoped Clinic Admin directory (same rules as staff search with Role=CLINIC_ADMIN).
+    /// </summary>
+    Task<PagedResponse<StaffSummaryResponse>> SearchClinicAdminsAsync(
+        StaffSearchRequest request,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default);
+
     Task<StaffDetailResponse> ChangeClinicAsync(
         Guid staffMemberId,
         ChangeStaffClinicRequest request,

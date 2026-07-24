@@ -8,8 +8,10 @@ public static class StaffErrorCodes
     public const string RoleAssignmentDenied = "staff.role_assignment_denied";
     public const string SelfElevationDenied = "staff.self_elevation_denied";
     public const string CrossTenantDenied = "staff.cross_tenant_denied";
+    public const string CrossOrganizationDenied = "staff.cross_organization_denied";
     public const string InactiveOrganization = "staff.inactive_organization";
     public const string InactiveClinic = "staff.inactive_clinic";
+    public const string InvalidClinic = "staff.invalid_clinic";
     public const string ConcurrencyConflict = "staff.concurrency_conflict";
     public const string LastAdminProtected = "staff.last_admin_protected";
     public const string SessionRevocationFailed = "staff.session_revocation_failed";

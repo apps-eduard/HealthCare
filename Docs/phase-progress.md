@@ -347,8 +347,8 @@ Authoritative design docs:
 
 ## Phase 6 — Staff and doctors
 
-**Status:** Partial (~75% — staff-management APIs; UI / doctor profile screens deferred)  
-**Updated:** 2026-07-23
+**Status:** Partial (~85% — staff-management APIs complete for Org Admin Phase 3 backend; doctor profile UI deferred)  
+**Updated:** 2026-07-24
 
 ### Already done
 
@@ -356,35 +356,36 @@ Authoritative design docs:
 - EF configuration, role check constraint, migration `AddStaffManagementFoundation`
 - Doctor availability APIs (Phase 7 overlap): clinic doctor directory + slots + staff availability CRUD
 - **Staff-management HTTP APIs** (`/api/v1/staff-management/...`):
-  - List/search, detail, create (temporary password), PATCH profile, activate/deactivate
+  - List/search (incl. `GET /clinic-admins`), detail with `ClinicName`, create (temporary password), PATCH profile, activate/deactivate
+  - Same-organization clinic reassignment (`POST .../change-clinic`) for Org/Platform Admin
+  - Admin password-reset initiation + Auth `complete-password-reset` foundation
+  - Explicit session revoke (`security_sessions.revoke`)
   - Roles catalog + assign/remove via `IRoleAssignmentAuthorizationService`
   - Permission + active membership + tenant scope + role hierarchy
-  - `ISecuritySessionInvalidationService` (revoke refresh tokens + security stamp) on security-sensitive changes
+  - `ISecuritySessionInvalidationService` on security-sensitive changes
   - Last-administrator protection; out-of-scope staff → safe 404
-  - Development seed: `clinicadmin@healthcare.local`
-- Docs: [authorization-matrix.md](./authorization-matrix.md) staff section; session revocation note in [security.md](./security.md)
+  - Development seed: `clinicadmin@healthcare.local` / `orgadmin@healthcare.local`
+- Docs: [authorization-matrix.md](./authorization-matrix.md), [security.md](./security.md), [mvp-organization-admin-scope.md](./mvp-organization-admin-scope.md)
 
 ### Remaining
 
-- Staff MudBlazor UI (Phase 8)
 - Doctor profile presentation beyond availability
-- Invitation / email activation workflow (temporary-password only for now)
+- Invitation / production email activation workflow (temporary-password + Dev reset capture for now)
 - Force password-change on first login
 - Multi-membership per user (explicitly out of MVP)
 
 ### Verification (staff-management APIs)
 - Build: succeeded
-- Migration `AddStaffManagementFoundation` applied to `healthcare_db`
-- Unit tests: staff-management suite + full unit suite green
-- Architecture tests: green (controllers must not query DbContext; session invalidation abstracted)
-- Integration tests: suite retained (`StaffManagementEndpointTests`); Docker may be unavailable locally
-- Manual: `/health` **200**; CLINIC_ADMIN lists own clinic; create RECEPTIONIST; deny ORGANIZATION_ADMIN assign; ORGANIZATION_ADMIN org scope; deactivate blocks access; role change revokes refresh tokens; self-elevation denied; platform bypass audited
+- No new migration for Org Admin staff Phase 3 backend (foundation already applied)
+- Unit / architecture / integration suites updated and retained
+- Manual: `/health` **200**; Org Admin org-scoped list; clinic-admins filter; create CLINIC_ADMIN/DOCTOR/NURSE/RECEPTIONIST; deny PLATFORM_ADMIN assign; self-deactivation denied; last-admin protected; password-reset does not return token; revoke-sessions invalidates refresh tokens
 
 ### Known limitations
 - Email not editable via staff PATCH
-- No real email provider / invitation tokens
+- Production email sender for password reset may be unconfigured (abstraction + Development capture)
 - Role model remains single membership `Role` string (+ Identity role sync on assign)
 - Access-token TTL still applies until stamp/permission re-resolution on next authenticated request
+- `DELETE .../roles/{role}` remains reassignment-oriented (cannot leave staff without a role)
 
 ---
 
@@ -1003,6 +1004,7 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 | 2026-07-24 | 8 / 4 | Organization Admin dashboard foundation (`organization_dashboard.read` + aggregates UI) |
 | 2026-07-24 | 4 | Organization clinic CRUD + `/clinics` UI + soft activate/deactivate |
 | 2026-07-24 | 4 | Org Admin staff + Clinic Admin management (change-clinic, password-reset, revoke-sessions, `/staff` tabs) |
+| 2026-07-24 | 4 | Org Admin staff management backend hardening (`clinic-admins`, audits, tests, docs) |
 
 ---
 

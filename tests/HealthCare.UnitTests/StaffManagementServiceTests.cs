@@ -315,6 +315,185 @@ public sealed class StaffManagementServiceTests
         RolePermissionMatrix.GetPermissionsForRole(AppRoles.OrganizationAdmin)
             .Should().Contain(Permissions.Staff.PasswordReset)
             .And.Contain(Permissions.SecuritySessions.Revoke);
+        RolePermissionMatrix.RoleHasPermission(AppRoles.OrganizationAdmin, Permissions.MedicalNotes.Read)
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Organization_Admin_Cross_Organization_Detail_Is_Hidden()
+    {
+        await using var h = await StaffHarness.CreateAsync();
+        var foreign = await h.SeedForeignOrgStaffAsync(AppRoles.Doctor, "foreign-doc@test.local");
+        var orgAdmin = await h.SeedStaffAsync(AppRoles.OrganizationAdmin, h.ClinicA.Id, "oa-cross@test.local");
+        var sut = h.CreateService(orgAdmin);
+
+        var act = () => sut.GetByIdAsync(foreign.Staff.Id);
+        await act.Should().ThrowAsync<StaffManagementException>()
+            .Where(e => e.ErrorCode == StaffErrorCodes.NotFound);
+    }
+
+    [Fact]
+    public async Task Create_Against_Inactive_Clinic_Is_Rejected()
+    {
+        await using var h = await StaffHarness.CreateAsync();
+        h.ClinicB.IsActive = false;
+        await h.Db.SaveChangesAsync();
+        var orgAdmin = await h.SeedStaffAsync(AppRoles.OrganizationAdmin, h.ClinicA.Id, "oa-inactive@test.local");
+        var sut = h.CreateService(orgAdmin);
+
+        var act = () => sut.CreateAsync(new CreateStaffRequest
+        {
+            Email = "newdoc@test.local",
+            FirstName = "New",
+            LastName = "Doc",
+            ClinicId = h.ClinicB.Id,
+            Role = AppRoles.Doctor,
+            TemporaryPassword = "TempPass_Staff_99!",
+        });
+        await act.Should().ThrowAsync<StaffManagementException>()
+            .Where(e => e.ErrorCode == StaffErrorCodes.InactiveClinic);
+    }
+
+    [Fact]
+    public async Task Create_Against_Foreign_Clinic_Is_Hidden()
+    {
+        await using var h = await StaffHarness.CreateAsync();
+        var foreign = await h.SeedForeignOrgStaffAsync(AppRoles.Doctor, "keep@test.local");
+        var orgAdmin = await h.SeedStaffAsync(AppRoles.OrganizationAdmin, h.ClinicA.Id, "oa-foreign-clinic@test.local");
+        var sut = h.CreateService(orgAdmin);
+
+        var act = () => sut.CreateAsync(new CreateStaffRequest
+        {
+            Email = "intruder@test.local",
+            FirstName = "No",
+            LastName = "Access",
+            ClinicId = foreign.Staff.ClinicId,
+            Role = AppRoles.Doctor,
+            TemporaryPassword = "TempPass_Staff_99!",
+        });
+        await act.Should().ThrowAsync<StaffManagementException>()
+            .Where(e => e.ErrorCode == StaffErrorCodes.NotFound);
+    }
+
+    [Fact]
+    public async Task Organization_Admin_Cannot_Deactivate_Platform_Admin_Membership()
+    {
+        await using var h = await StaffHarness.CreateAsync();
+        var orgAdmin = await h.SeedStaffAsync(AppRoles.OrganizationAdmin, h.ClinicA.Id, "oa-plat@test.local");
+        // Synthetic platform-admin membership row (unusual but must be protected).
+        var platformStaff = await h.SeedStaffAsync(AppRoles.PlatformAdmin, h.ClinicA.Id, "plat-member@test.local");
+        var sut = h.CreateService(orgAdmin);
+
+        var act = () => sut.DeactivateAsync(platformStaff.Staff.Id, new StaffActivationRequest
+        {
+            ExpectedVersion = platformStaff.Staff.Version,
+        });
+        await act.Should().ThrowAsync<StaffManagementException>()
+            .Where(e => e.ErrorCode == StaffErrorCodes.DeactivationNotAllowed);
+    }
+
+    [Fact]
+    public async Task Password_Reset_Response_Does_Not_Expose_Token()
+    {
+        await using var h = await StaffHarness.CreateAsync();
+        var orgAdmin = await h.SeedStaffAsync(AppRoles.OrganizationAdmin, h.ClinicA.Id, "oa-pwd2@test.local");
+        var doctor = await h.SeedStaffAsync(AppRoles.Doctor, h.ClinicA.Id, "doc-pwd2@test.local");
+        var sut = h.CreateService(orgAdmin);
+
+        var response = await sut.RequestPasswordResetAsync(doctor.Staff.Id, new StaffPasswordResetRequest());
+        response.Message.Should().NotBeNullOrWhiteSpace();
+        typeof(StaffPasswordResetResponse).GetProperty("Token").Should().BeNull();
+        typeof(StaffPasswordResetResponse).GetProperty("ResetToken").Should().BeNull();
+        response.Message.ToLowerInvariant().Should().NotContain("token");
+    }
+
+    [Fact]
+    public async Task Change_Clinic_Updates_Security_Stamp_And_Revokes_Tokens()
+    {
+        await using var h = await StaffHarness.CreateAsync();
+        var orgAdmin = await h.SeedStaffAsync(AppRoles.OrganizationAdmin, h.ClinicA.Id, "oa-stamp@test.local");
+        var doctor = await h.SeedStaffAsync(AppRoles.Doctor, h.ClinicA.Id, "doc-stamp@test.local");
+        var stampBefore = doctor.User.SecurityStamp;
+        h.Db.RefreshTokens.Add(new RefreshToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = doctor.User.Id,
+            TokenHash = "stamp-hash",
+            FamilyId = Guid.NewGuid(),
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            ExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(7),
+        });
+        await h.Db.SaveChangesAsync();
+        var sut = h.CreateService(orgAdmin);
+
+        await sut.ChangeClinicAsync(doctor.Staff.Id, new ChangeStaffClinicRequest
+        {
+            NewClinicId = h.ClinicB.Id,
+            ExpectedVersion = doctor.Staff.Version,
+            AdministrativeReason = "Move",
+        });
+
+        var reloaded = await h.Users.FindByIdAsync(doctor.User.Id.ToString());
+        reloaded!.SecurityStamp.Should().NotBe(stampBefore);
+        (await h.Db.RefreshTokens.SingleAsync(t => t.UserId == doctor.User.Id)).RevokedAtUtc.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Search_Clinic_Admins_Returns_Only_Clinic_Admins()
+    {
+        await using var h = await StaffHarness.CreateAsync();
+        var orgAdmin = await h.SeedStaffAsync(AppRoles.OrganizationAdmin, h.ClinicA.Id, "oa-ca-list@test.local");
+        await h.SeedStaffAsync(AppRoles.ClinicAdmin, h.ClinicA.Id, "ca-list@test.local");
+        await h.SeedStaffAsync(AppRoles.Doctor, h.ClinicA.Id, "doc-list@test.local");
+        var sut = h.CreateService(orgAdmin);
+
+        var page = await sut.SearchClinicAdminsAsync(new StaffSearchRequest());
+        page.Items.Should().OnlyContain(i => i.Role == AppRoles.ClinicAdmin);
+        page.Items.Should().Contain(i => i.Email == "ca-list@test.local");
+        page.Items.Should().NotContain(i => i.Email == "doc-list@test.local");
+    }
+
+    [Fact]
+    public async Task Create_Without_Clinic_For_Org_Admin_Returns_Invalid_Clinic()
+    {
+        await using var h = await StaffHarness.CreateAsync();
+        var orgAdmin = await h.SeedStaffAsync(AppRoles.OrganizationAdmin, h.ClinicA.Id, "oa-noclinic@test.local");
+        var sut = h.CreateService(orgAdmin);
+
+        var act = () => sut.CreateAsync(new CreateStaffRequest
+        {
+            Email = "missing-clinic@test.local",
+            FirstName = "Miss",
+            LastName = "Clinic",
+            Role = AppRoles.Nurse,
+            TemporaryPassword = "TempPass_Staff_99!",
+        });
+        await act.Should().ThrowAsync<StaffManagementException>()
+            .Where(e => e.ErrorCode == StaffErrorCodes.InvalidClinic);
+    }
+
+    [Fact]
+    public async Task Last_Organization_Admin_Cannot_Be_Deactivated()
+    {
+        await using var h = await StaffHarness.CreateAsync();
+        var soleAdmin = await h.SeedStaffAsync(AppRoles.OrganizationAdmin, h.ClinicA.Id, "oa-sole@test.local");
+        var secondAdmin = await h.SeedStaffAsync(AppRoles.OrganizationAdmin, h.ClinicA.Id, "oa-second@test.local");
+        var soleSut = h.CreateService(soleAdmin);
+
+        await soleSut.DeactivateAsync(secondAdmin.Staff.Id, new StaffActivationRequest
+        {
+            ExpectedVersion = secondAdmin.Staff.Version,
+        });
+
+        var platform = await h.SeedPlatformAdminAsync("plat-last@test.local");
+        var platformSut = h.CreatePlatformService(platform);
+        var refreshedSole = await h.Db.StaffMembers.AsNoTracking().SingleAsync(s => s.Id == soleAdmin.Staff.Id);
+        var act = () => platformSut.DeactivateAsync(
+            refreshedSole.Id,
+            new StaffActivationRequest { ExpectedVersion = refreshedSole.Version },
+            PlatformAdminBypass.Explicit);
+        await act.Should().ThrowAsync<StaffManagementException>()
+            .Where(e => e.ErrorCode == StaffErrorCodes.LastAdminProtected);
     }
 }
 
@@ -325,6 +504,8 @@ internal sealed class StaffHarness : IAsyncDisposable
     public required Domain.Organizations.Organization Org { get; init; }
     public required Domain.Clinics.Clinic ClinicA { get; init; }
     public required Domain.Clinics.Clinic ClinicB { get; init; }
+    public Domain.Organizations.Organization? ForeignOrg { get; private set; }
+    public Domain.Clinics.Clinic? ForeignClinic { get; private set; }
     private ServiceProvider? _provider;
 
     public static async Task<StaffHarness> CreateAsync()
@@ -397,6 +578,67 @@ internal sealed class StaffHarness : IAsyncDisposable
             ClinicB = clinicB,
             _provider = provider,
         };
+    }
+
+    public async Task<(ApplicationUser User, StaffMember Staff)> SeedForeignOrgStaffAsync(string role, string email)
+    {
+        if (ForeignOrg is null || ForeignClinic is null)
+        {
+            ForeignOrg = new Domain.Organizations.Organization
+            {
+                Id = Guid.NewGuid(),
+                Name = "Foreign Org",
+                Slug = "foreign-org",
+                Status = OrganizationStatus.Active,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+                UpdatedAtUtc = DateTimeOffset.UtcNow,
+            };
+            ForeignClinic = new Domain.Clinics.Clinic
+            {
+                Id = Guid.NewGuid(),
+                OrganizationId = ForeignOrg.Id,
+                Name = "Foreign Clinic",
+                Slug = "foreign-clinic",
+                IsActive = true,
+                TimeZoneId = "Asia/Riyadh",
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+                UpdatedAtUtc = DateTimeOffset.UtcNow,
+            };
+            Db.Organizations.Add(ForeignOrg);
+            Db.Clinics.Add(ForeignClinic);
+            await Db.SaveChangesAsync();
+        }
+
+        var user = new ApplicationUser
+        {
+            Id = Guid.NewGuid(),
+            Email = email,
+            UserName = email,
+            EmailConfirmed = true,
+            IsActive = true,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            UpdatedAtUtc = DateTimeOffset.UtcNow,
+        };
+        (await Users.CreateAsync(user, "TempPass_Staff_99!")).Succeeded.Should().BeTrue();
+        (await Users.AddToRoleAsync(user, role)).Succeeded.Should().BeTrue();
+
+        var staff = new StaffMember
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            OrganizationId = ForeignOrg.Id,
+            ClinicId = ForeignClinic.Id,
+            Role = role,
+            FirstName = "Foreign",
+            LastName = role,
+            IsActive = true,
+            Version = 0,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            UpdatedAtUtc = DateTimeOffset.UtcNow,
+        };
+        Db.StaffMembers.Add(staff);
+        await Db.SaveChangesAsync();
+        return (user, staff);
     }
 
     public async Task<(ApplicationUser User, StaffMember Staff)> SeedStaffAsync(string role, Guid clinicId, string email)

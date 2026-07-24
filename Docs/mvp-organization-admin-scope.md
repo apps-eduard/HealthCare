@@ -550,9 +550,12 @@ clinics.deactivate
 
 staff.read
 staff.manage
+staff.password_reset
 
 roles.read
 roles.assign
+
+security_sessions.revoke
 
 patients.read
 patients.search
@@ -683,6 +686,8 @@ The Organization Admin must not:
 8. Clinic selector
 9. Patient directory
 10. Appointment queue and calendar
+
+**Backend status (2026-07-24):** Organization-scoped staff APIs are implemented under `/api/v1/staff-management` including clinic reassignment, password-reset foundation, session revocation, `GET .../clinic-admins`, last Organization Admin protection, and role hierarchy via `IRoleAssignmentAuthorizationService`. No migration required for this slice. Production password email sender remains an abstraction (Development captures tokens safely).
 
 ### Phase 2 — Scheduling and operations
 

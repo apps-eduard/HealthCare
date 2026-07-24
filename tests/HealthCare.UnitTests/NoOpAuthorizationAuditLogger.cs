@@ -27,4 +27,13 @@ internal sealed class NoOpAuthorizationAuditLogger : IAuthorizationAuditLogger
     public void UnknownPermissionRequested(string permission)
     {
     }
+
+    public void StaffOperation(
+        string operation,
+        string resultCode,
+        Guid? organizationId = null,
+        Guid? clinicId = null,
+        Guid? staffMemberId = null)
+    {
+    }
 }
