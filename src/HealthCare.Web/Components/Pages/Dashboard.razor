@@ -306,6 +306,12 @@ else if (Permissions.Has(WebPermissions.OrganizationDashboardRead))
                             <Icon Type="dashboard" Theme="IconThemeType.Outline" /> Usage &amp; Limits
                         </Button>
                     }
+                    @if (OrganizationSettingsPermissionRules.CanView(Permissions))
+                    {
+                        <Button Type="@ButtonType.Primary" OnClick='() => Navigation.NavigateTo("/organization/settings")'>
+                            <Icon Type="setting" Theme="IconThemeType.Outline" /> Organization Profile
+                        </Button>
+                    }
                 </Space>
             </Card>
         }

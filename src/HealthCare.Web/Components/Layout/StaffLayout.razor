@@ -122,6 +122,20 @@
                     </ChildContent>
                 </SubMenu>
             }
+            @if (OrganizationSettingsPermissionRules.CanView(Permissions))
+            {
+                <SubMenu Key="organization">
+                    <TitleTemplate>
+                        <Icon Type="cluster" Theme="IconThemeType.Outline" />
+                        <span>Organization</span>
+                    </TitleTemplate>
+                    <ChildContent>
+                        <MenuItem Key="org-settings" RouterLink="/organization/settings" RouterMatch="NavLinkMatch.Prefix">
+                            <span>Organization Profile</span>
+                        </MenuItem>
+                    </ChildContent>
+                </SubMenu>
+            }
             @if (Permissions.Has(WebPermissions.ClinicsRead))
             {
                 <MenuItem Key="clinics" RouterLink="/clinics" RouterMatch="NavLinkMatch.Prefix">

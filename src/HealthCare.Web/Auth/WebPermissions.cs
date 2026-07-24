@@ -24,6 +24,8 @@ public static class WebPermissions
     public const string OrganizationReportsRead = "organization_reports.read";
     public const string OrganizationAuditLogsRead = "organization_audit_logs.read";
     public const string OrganizationUsageRead = "organization_usage.read";
+    public const string OrganizationProfileRead = "organization_profile.read";
+    public const string OrganizationProfileUpdate = "organization_profile.update";
 
     public const string AppointmentsRead = "appointments.read";
     public const string AppointmentsCreate = "appointments.create";

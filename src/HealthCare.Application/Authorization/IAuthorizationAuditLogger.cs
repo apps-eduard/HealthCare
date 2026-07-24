@@ -102,4 +102,12 @@ public interface IAuthorizationAuditLogger
         Guid? organizationId = null,
         Guid? clinicId = null,
         Guid? targetUserId = null);
+
+    /// <summary>
+    /// Organization profile/settings operational audit. Must never include secrets or PHI.
+    /// </summary>
+    void OrganizationOperation(
+        string operation,
+        string resultCode,
+        Guid? organizationId = null);
 }

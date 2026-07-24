@@ -25,9 +25,28 @@ public sealed class OrganizationConfiguration : IEntityTypeConfiguration<Organiz
             .HasConversion<string>()
             .HasMaxLength(32);
 
+        builder.Property(x => x.ContactEmail)
+            .HasMaxLength(256);
+
+        builder.Property(x => x.ContactPhone)
+            .HasMaxLength(32);
+
+        builder.Property(x => x.Country)
+            .HasMaxLength(100);
+
+        builder.Property(x => x.DefaultTimeZoneId)
+            .HasMaxLength(100);
+
+        builder.Property(x => x.BrandingPlaceholder)
+            .HasMaxLength(200);
+
         builder.Property(x => x.MaxClinics);
 
         builder.Property(x => x.MaxStaff);
+
+        builder.Property(x => x.Version)
+            .IsRequired()
+            .IsConcurrencyToken();
 
         builder.Property(x => x.CreatedAtUtc)
             .IsRequired();

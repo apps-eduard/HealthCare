@@ -429,6 +429,32 @@ public sealed class AuthorizationAuditLogger : IAuthorizationAuditLogger
             correlationId: correlationId);
     }
 
+    public void OrganizationOperation(
+        string operation,
+        string resultCode,
+        Guid? organizationId = null)
+    {
+        var orgId = organizationId ?? _currentUser.OrganizationId;
+        var correlationId = CorrelationId();
+        _logger.LogInformation(
+            "Organization operation. Event=organization_operation UserId={UserId} Operation={Operation} ResultCode={ResultCode} OrganizationId={OrganizationId} CorrelationId={CorrelationId}",
+            _currentUser.UserId,
+            operation,
+            resultCode,
+            orgId,
+            correlationId);
+
+        TryPersistOrgAudit(
+            category: "organization",
+            action: operation,
+            resultCode: resultCode,
+            organizationId: orgId,
+            clinicId: null,
+            resourceType: "organization",
+            resourceId: orgId,
+            correlationId: correlationId);
+    }
+
     private void TryPersistOrgAudit(
         string category,
         string action,

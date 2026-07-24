@@ -2,7 +2,7 @@ using HealthCare.Application.Authorization;
 
 namespace HealthCare.UnitTests;
 
-internal sealed class NoOpAuthorizationAuditLogger : IAuthorizationAuditLogger
+internal class NoOpAuthorizationAuditLogger : IAuthorizationAuditLogger
 {
     public void PermissionDenied(string permission, string operation, string reasonCode)
     {
@@ -105,6 +105,13 @@ internal sealed class NoOpAuthorizationAuditLogger : IAuthorizationAuditLogger
         Guid? organizationId = null,
         Guid? clinicId = null,
         Guid? targetUserId = null)
+    {
+    }
+
+    public virtual void OrganizationOperation(
+        string operation,
+        string resultCode,
+        Guid? organizationId = null)
     {
     }
 }

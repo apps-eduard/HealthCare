@@ -173,6 +173,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IOrganizationAuditLogService, OrganizationAuditLogService>();
         services.AddScoped<IOrganizationUsageService, OrganizationUsageService>();
         services.AddScoped<IOrganizationLimitService, OrganizationLimitService>();
+        services.AddScoped<IOrganizationSettingsService, OrganizationSettingsService>();
         services.AddScoped<ISecuritySessionInvalidationService, SecuritySessionInvalidationService>();
         services.AddScoped<IAppointmentService, AppointmentService>();
         services.AddScoped<IClinicTimeZoneConverter, ClinicTimeZoneConverter>();

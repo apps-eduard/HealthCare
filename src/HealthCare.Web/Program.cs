@@ -125,6 +125,7 @@ builder.Services.AddScoped<IBrowserFileDownload, BrowserFileDownload>();
 builder.Services.AddScoped<IOrganizationSecurityApiClient, OrganizationSecurityApiClient>();
 builder.Services.AddScoped<IOrganizationAuditLogApiClient, OrganizationAuditLogApiClient>();
 builder.Services.AddScoped<IOrganizationUsageApiClient, OrganizationUsageApiClient>();
+builder.Services.AddScoped<IOrganizationSettingsApiClient, OrganizationSettingsApiClient>();
 
 builder.Services.AddHttpClient();
 builder.Services.AddAntDesign();

@@ -697,6 +697,7 @@ The Organization Admin must not:
 - Organization-scoped security operations on `/api/v1/organization/security/*` (session visibility without token secrets, session revoke, compromised-account deactivate+revoke, failed-login / authorization-denial / cross-clinic attempt summaries). Permission `security_sessions.read` (+ `security_sessions.revoke` for mutations). Persisted `SecurityEvents` (`AddSecurityEvents` migration). Audited via `SecurityOperation`.
 - Organization-scoped audit-log query on `/api/v1/organization/audit-logs` (list, detail by id, correlation-id lookup) with filters/pagination and `AuditRetention` options foundation. Permission `organization_audit_logs.read`. Persisted `OrganizationAuditEvents` + org `MaxClinics`/`MaxStaff` (`AddOrganizationAuditAndUsageLimits` migration). Operational audits persist via `IOrganizationAuditRecorder` from `AuthorizationAuditLogger` (including `ClinicOperation`).
 - Organization usage and limit visibility on `GET /api/v1/organization/usage` (`organization_usage.read`) with remaining capacity and warning flags. Clinic/staff create enforce platform limits (`clinic.limit_reached` / `staff.limit_reached`). Org Admin cannot increase limits.
+- Organization profile settings on `GET`/`PATCH /api/v1/organization/settings` (`organization_profile.read` / `organization_profile.update`). Mutable: name, contact email/phone, country, default timezone, branding placeholder. Read-only: slug, status, MaxClinics/MaxStaff and capacity snapshot. Optimistic concurrency via `Version`/`ExpectedVersion`. Audited via `OrganizationOperation` (`organization_profile_update`). Migration `AddOrganizationProfileSettings`.
 
 **Frontend status (2026-07-24) — Phase 1 (Dashboard + Clinic management):**
 - `/dashboard` — organization metrics from `GET /api/v1/organization/dashboard` via `IOrganizationDashboardApiClient`; clinic filter (“All clinics” supported); manual refresh + last-refreshed; backend date/timezone strategy displayed; permission-aware quick links to existing pages only (`/clinics`, `/staff`, `/patients`, `/appointments`, calendar, availability, operations, reports, security, audit logs, usage).
@@ -737,6 +738,10 @@ The Organization Admin must not:
 - `/audit-logs` — organization audit list/detail/correlation lookup via `IOrganizationAuditLogApiClient` (`organization_audit_logs.read`). Filters: clinic, date range (max 93 days), category, action, result, actor, correlation id. Safe fields only; retention + immutability callouts; no metadata dump/export/edit/delete.
 - `/usage` — operational usage + clinic/staff limits/remaining capacity via `IOrganizationUsageApiClient` (`organization_usage.read`). Snapshot timestamp; read-only limits; warning/reached badges. No billing or limit modification.
 - Nav: Governance → Audit Logs / Usage & Limits. Clinic filter synced with `IClinicWorkingContext`.
+
+**Frontend status (2026-07-24) — Phase 10 (Organization profile settings):**
+- `/organization/settings` — organization profile via `IOrganizationSettingsApiClient` (`organization_profile.read` / `organization_profile.update`). Editable: name, contact email/phone, country, default timezone, branding placeholder. Read-only: status, slug, MaxClinics/MaxStaff/counts/remaining + link to `/usage`. Optimistic concurrency reload; safe Problem Details mapping. PLATFORM_ADMIN requires explicit bypass + selected organization.
+- Nav: Organization → Organization Profile.
 
 ### Phase 2 — Scheduling and operations
 

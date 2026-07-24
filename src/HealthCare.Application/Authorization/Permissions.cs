@@ -66,6 +66,8 @@ public static class Permissions
         public const string ReportsRead = "organization_reports.read";
         public const string AuditLogsRead = "organization_audit_logs.read";
         public const string UsageRead = "organization_usage.read";
+        public const string ProfileRead = "organization_profile.read";
+        public const string ProfileUpdate = "organization_profile.update";
     }
 
     public static class Staff
@@ -136,6 +138,8 @@ public static class Permissions
         Organizations.ReportsRead,
         Organizations.AuditLogsRead,
         Organizations.UsageRead,
+        Organizations.ProfileRead,
+        Organizations.ProfileUpdate,
         Staff.Read,
         Staff.Manage,
         Staff.PasswordReset,

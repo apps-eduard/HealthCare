@@ -10,7 +10,7 @@ public static class OrganizationAuditPresentation
 
     public static readonly IReadOnlyList<string> CommonCategories =
     [
-        "clinic", "staff", "appointment", "patient", "availability", "security", "reminder", "summary", "report",
+        "clinic", "staff", "appointment", "patient", "availability", "security", "reminder", "summary", "report", "organization",
     ];
 
     public static StatusTone ResultTone(string? resultCode) =>

@@ -159,12 +159,18 @@ public sealed class OrganizationAuditAndUsageServiceTests
     {
         RolePermissionMatrix.GetPermissionsForRole(AppRoles.OrganizationAdmin)
             .Should().Contain(Permissions.Organizations.AuditLogsRead)
-            .And.Contain(Permissions.Organizations.UsageRead);
+            .And.Contain(Permissions.Organizations.UsageRead)
+            .And.Contain(Permissions.Organizations.ProfileRead)
+            .And.Contain(Permissions.Organizations.ProfileUpdate);
         RolePermissionMatrix.GetPermissionsForRole(AppRoles.ClinicAdmin)
             .Should().NotContain(Permissions.Organizations.AuditLogsRead)
-            .And.NotContain(Permissions.Organizations.UsageRead);
+            .And.NotContain(Permissions.Organizations.UsageRead)
+            .And.NotContain(Permissions.Organizations.ProfileRead)
+            .And.NotContain(Permissions.Organizations.ProfileUpdate);
         Permissions.All.Should().Contain(Permissions.Organizations.AuditLogsRead)
-            .And.Contain(Permissions.Organizations.UsageRead);
+            .And.Contain(Permissions.Organizations.UsageRead)
+            .And.Contain(Permissions.Organizations.ProfileRead)
+            .And.Contain(Permissions.Organizations.ProfileUpdate);
     }
 }
 
