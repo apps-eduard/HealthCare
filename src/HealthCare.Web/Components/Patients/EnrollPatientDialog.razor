@@ -1,0 +1,112 @@
+@namespace HealthCare.Web.Components.Patients
+@inherits FeedbackComponent<EnrollPatientDialog.Args>
+@using HealthCare.Web.Components.Clinics
+@using HealthCare.Web.Patients
+@inject IStaffPatientApiClient PatientsApi
+@inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
+
+<p style="margin-top:0">
+    Enroll <b>@Options.PatientDisplayName</b> into another clinic in the organization.
+</p>
+
+<div style="display:flex;flex-direction:column;gap:12px;">
+    <ClinicPicker Value="_clinicId"
+                  ValueChanged="OnClinicChanged"
+                  Label="Target clinic"
+                  HelperText="Only clinics without an existing enrollment should be selected."
+                  AllowClear="false"
+                  Required="true"
+                  ActiveOnly="true"
+                  PlatformAdminBypass="@(Options.PlatformAdminBypass)"
+                  PlatformOrganizationId="@(Options.PlatformAdminBypass ? PlatformTenant.SelectedOrganizationId : null)"
+                  Disabled="_busy" />
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" />
+    }
+</div>
+<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;">
+    <Button OnClick="CancelCloseAsync" Disabled="_busy">Cancel</Button>
+    <Button Type="@ButtonType.Primary"
+            OnClick="SubmitAsync"
+            Loading="_busy"
+            Disabled="_busy || _clinicId is null">
+        Enroll
+    </Button>
+</div>
+
+@code {
+    public sealed class Args
+    {
+        public Guid PatientId { get; init; }
+        public string PatientDisplayName { get; init; } = string.Empty;
+        public IReadOnlySet<Guid> AlreadyEnrolledClinicIds { get; init; } = new HashSet<Guid>();
+        public bool PlatformAdminBypass { get; init; }
+    }
+
+    private Guid? _clinicId;
+    private bool _busy;
+    private string? _error;
+
+    private Task OnClinicChanged(Guid? clinicId)
+    {
+        _clinicId = clinicId;
+        _error = null;
+        if (clinicId is Guid id && Options.AlreadyEnrolledClinicIds.Contains(id))
+        {
+            _error = "This patient is already enrolled in the selected clinic.";
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task SubmitAsync()
+    {
+        _error = null;
+        if (!Permissions.Has(WebPermissions.PatientsUpdateClinicStatus))
+        {
+            _error = "You do not have permission to enroll patients.";
+            return;
+        }
+
+        if (_clinicId is null || _clinicId == Guid.Empty)
+        {
+            _error = "Select a clinic.";
+            return;
+        }
+
+        if (Options.AlreadyEnrolledClinicIds.Contains(_clinicId.Value))
+        {
+            _error = "This patient is already enrolled in the selected clinic.";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var result = await PatientsApi.EnrollAsync(
+                _clinicId.Value,
+                Options.PatientId,
+                Options.PlatformAdminBypass);
+
+            if (result.AlreadyEnrolled)
+            {
+                _error = "This patient is already enrolled in the selected clinic.";
+                return;
+            }
+
+            await OkCancelRef!.OkAsync(new ModalClosingEventArgs());
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = PatientProblemMessages.ToUserMessage(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task CancelCloseAsync() => OkCancelRef!.CancelAsync(new ModalClosingEventArgs());
+}

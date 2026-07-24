@@ -45,6 +45,36 @@ public static class PatientDisplay
     public static string PickerLabel(StaffPatientSummaryResponse p) =>
         $"{FullName(p)} · {p.LocalPatientNumber} · {PatientStatusPresentation.ClinicPatientLabel(p.ClinicPatientStatus)}";
 
+    public static string PickerLabel(StaffPatientLookupItemResponse p)
+    {
+        var parts = new[] { p.FirstName, p.MiddleName, p.LastName }
+            .Where(s => !string.IsNullOrWhiteSpace(s));
+        var name = string.Join(' ', parts).Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            name = "—";
+        }
+
+        return $"{name} · {p.LocalPatientNumber}";
+    }
+
+    public static StaffPatientSummaryResponse ToSummary(StaffPatientLookupItemResponse item) =>
+        new()
+        {
+            PatientId = item.PatientId,
+            ClinicPatientId = item.ClinicPatientId,
+            ClinicId = item.ClinicId,
+            LocalPatientNumber = item.LocalPatientNumber,
+            FirstName = item.FirstName,
+            MiddleName = item.MiddleName,
+            LastName = item.LastName,
+            DateOfBirth = item.DateOfBirth,
+            ClinicPatientStatus = "Active",
+            PatientIsActive = true,
+            RegisteredAtUtc = DateTimeOffset.MinValue,
+            Version = 0,
+        };
+
     /// <summary>
     /// Masks middle digits for dense list views while keeping enough for recognition.
     /// </summary>
@@ -83,8 +113,18 @@ public static class PatientProblemMessages
                 "This clinic patient record was updated by someone else. Reload and try again.",
             "patient.invalid_search" =>
                 "The search filters are not valid. Adjust them and try again.",
+            "patient.clinic_inactive" =>
+                "The clinic is inactive and cannot accept enrollments.",
+            "patient.organization_inactive" =>
+                "The organization is inactive.",
+            "patient.clinic_code_invalid" =>
+                "The clinic is invalid for this enrollment.",
             "authorization.permission_denied" =>
                 "You do not have permission to perform this action.",
+            "authz.clinic_access_denied" =>
+                "That clinic is outside your organization scope.",
+            "authz.patient_self_scope_denied" =>
+                "Patient self-scope accounts cannot use staff patient APIs.",
             _ => ex.ToUserMessage(),
         };
     }

@@ -3,6 +3,8 @@
 @using HealthCare.Contracts.Patients
 @using HealthCare.Web.Patients
 
+@* Legacy modal wrapper — Patients page uses PatientDetailDrawer. Kept for modal hosts. *@
+
 @if (_loading)
 {
     <PageLoading />
@@ -23,63 +25,47 @@ else
     <div style="display:flex;flex-direction:column;gap:8px;">
         <div><strong>Local number:</strong> @_patient.LocalPatientNumber</div>
         <div><strong>Name:</strong> @PatientDisplay.FullName(_patient)</div>
-        <div><strong>Date of birth:</strong> @(_patient.DateOfBirth?.ToString("yyyy-MM-dd") ?? "—")</div>
-        <div><strong>Gender:</strong> @(_patient.Gender ?? "—")</div>
         <div><strong>Mobile:</strong> @(_patient.MobileNumber ?? "—")</div>
-        <div><strong>Preferred language:</strong> @(_patient.PreferredLanguage ?? "—")</div>
         <div>
             <strong>Patient status:</strong>
             <StatusBadge Text="@PatientStatusPresentation.PatientActiveLabel(_patient.PatientIsActive)"
                          Tone="@PatientStatusPresentation.PatientActiveTone(_patient.PatientIsActive)" />
         </div>
-        <div>
-            <strong>Clinic enrollment:</strong>
-            <StatusBadge Text="@PatientStatusPresentation.ClinicPatientLabel(_patient.ClinicPatientStatus)"
-                         Tone="@PatientStatusPresentation.ClinicPatientTone(_patient.ClinicPatientStatus)" />
-        </div>
-        <div><strong>Clinic:</strong> @(_clinicLabel ?? _patient.ClinicId.ToString("D"))</div>
-        <div><strong>Enrolled:</strong> @_patient.RegisteredAtUtc.UtcDateTime.ToString("yyyy-MM-dd HH:mm") UTC</div>
-        <div><strong>Version:</strong> @_patient.Version</div>
-        @if (!string.IsNullOrWhiteSpace(_patient.Address))
+        <div style="font-weight:600;margin-top:0.5rem;">Clinic enrollments</div>
+        @foreach (var enrollment in _patient.Enrollments)
         {
-            <div><strong>Address:</strong> @_patient.Address</div>
+            <div class="hc-caption">
+                @enrollment.LocalPatientNumber · @enrollment.ClinicId.ToString("D")[..8]…
+                · @PatientStatusPresentation.ClinicPatientLabel(enrollment.ClinicPatientStatus)
+                · v@enrollment.Version
+            </div>
         }
-        @if (!string.IsNullOrWhiteSpace(_patient.EmergencyContact))
+        @if (Permissions.Has(WebPermissions.PatientsUpdateClinicStatus) && _selectedEnrollment is not null)
         {
-            <div><strong>Emergency contact:</strong> @_patient.EmergencyContact</div>
+            <hr style="margin:0.75rem 0;border:0;border-top:1px solid var(--hc-border);" />
+            <div>
+                <label>Enrollment status (@_selectedEnrollment.LocalPatientNumber)</label>
+                <Select TItemValue="string" TItem="string" @bind-Value="_newStatus" Disabled="_busy" Style="width:100%;">
+                    <SelectOptions>
+                        @foreach (var status in PatientStatusPresentation.ClinicPatientStatuses)
+                        {
+                            <SelectOption TItemValue="string" TItem="string" Value="@status" Label="@status" />
+                        }
+                    </SelectOptions>
+                </Select>
+            </div>
         }
-        <div class="hc-caption">Patient ID: @_patient.PatientId</div>
     </div>
-
-    @if (Permissions.Has(WebPermissions.PatientsUpdateClinicStatus))
-    {
-        <hr style="margin:1rem 0;border:0;border-top:1px solid var(--hc-border);" />
-        <div style="font-weight:600;margin-bottom:0.5rem;">Update clinic enrollment status</div>
-        <div>
-            <label>ClinicPatient status</label>
-            <Select TItemValue="string"
-                    TItem="string"
-                    @bind-Value="_newStatus"
-                    Disabled="_busy"
-                    Style="width:100%;">
-                <SelectOptions>
-                    @foreach (var status in PatientStatusPresentation.ClinicPatientStatuses)
-                    {
-                        <SelectOption TItemValue="string" TItem="string" Value="@status" Label="@status" />
-                    }
-                </SelectOptions>
-            </Select>
-        </div>
-    }
 }
 <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;">
     <Button OnClick="CloseAsync" Disabled="_busy">Close</Button>
-    @if (_patient is not null && Permissions.Has(WebPermissions.PatientsUpdateClinicStatus))
+    @if (_patient is not null
+         && _selectedEnrollment is not null
+         && Permissions.Has(WebPermissions.PatientsUpdateClinicStatus)
+         && !string.IsNullOrWhiteSpace(_newStatus)
+         && _newStatus != _selectedEnrollment.ClinicPatientStatus)
     {
-        <Button Type="@ButtonType.Primary"
-                Disabled="_busy || string.IsNullOrWhiteSpace(_newStatus) || _newStatus == _patient.ClinicPatientStatus"
-                Loading="_busy"
-                OnClick="ConfirmUpdateAsync">
+        <Button Type="@ButtonType.Primary" Disabled="_busy" Loading="_busy" OnClick="ConfirmUpdateAsync">
             Update status
         </Button>
     }
@@ -89,21 +75,17 @@ else
     public sealed class Args
     {
         public Guid PatientId { get; init; }
+        public Guid? PreferredClinicId { get; init; }
         public bool PlatformAdminBypass { get; init; }
     }
 
     [Inject] private IStaffPatientApiClient PatientsApi { get; set; } = default!;
     [Inject] private IPermissionState Permissions { get; set; } = default!;
-    [Inject] private IClinicDirectoryApiClient ClinicsApi { get; set; } = default!;
-    [Inject] private IClinicDirectoryCache ClinicCache { get; set; } = default!;
     [Inject] private IUiModalService Modals { get; set; } = default!;
     [Inject] private IUserNotificationService Notify { get; set; } = default!;
 
-    private Guid PatientId => Options.PatientId;
-    private bool PlatformAdminBypass => Options.PlatformAdminBypass;
-
     private StaffPatientDetailResponse? _patient;
-    private string? _clinicLabel;
+    private StaffPatientClinicEnrollmentResponse? _selectedEnrollment;
     private string? _newStatus;
     private bool _loading = true;
     private bool _busy;
@@ -128,14 +110,13 @@ else
         _error = null;
         try
         {
-            _patient = await PatientsApi.GetByIdAsync(PatientId, PlatformAdminBypass);
-            _newStatus = _patient.ClinicPatientStatus;
-            await ResolveClinicLabelAsync(_patient.ClinicId);
-        }
-        catch (ApiProblemException ex) when (PatientProblemMessages.IsNotFound(ex))
-        {
-            _patient = null;
-            _error = PatientProblemMessages.ToUserMessage(ex);
+            Guid? clinicId = Options.PlatformAdminBypass ? Options.PreferredClinicId : null;
+            _patient = await PatientsApi.GetByIdAsync(Options.PatientId, clinicId, Options.PlatformAdminBypass);
+            _selectedEnrollment = _patient.Enrollments
+                .FirstOrDefault(e => Options.PreferredClinicId is Guid pref && e.ClinicId == pref)
+                ?? _patient.Enrollments.FirstOrDefault(e => e.ClinicId == _patient.ClinicId)
+                ?? _patient.Enrollments.FirstOrDefault();
+            _newStatus = _selectedEnrollment?.ClinicPatientStatus;
         }
         catch (ApiProblemException ex)
         {
@@ -148,47 +129,14 @@ else
         }
     }
 
-    private async Task ResolveClinicLabelAsync(Guid clinicId)
-    {
-        try
-        {
-            if (ClinicCache.TryGet(clinicId, out var cached) && cached is not null)
-            {
-                _clinicLabel = $"{cached.Name} ({cached.Slug})";
-                return;
-            }
-
-            var detail = await ClinicsApi.GetByIdAsync(clinicId, PlatformAdminBypass);
-            ClinicCache.Set(detail);
-            _clinicLabel = $"{detail.Name} ({detail.Slug})";
-        }
-        catch
-        {
-            _clinicLabel = null;
-        }
-    }
-
     private async Task ConfirmUpdateAsync()
     {
-        if (_patient is null || _busy || string.IsNullOrWhiteSpace(_newStatus))
+        if (_patient is null || _selectedEnrollment is null || string.IsNullOrWhiteSpace(_newStatus))
         {
             return;
         }
 
-        var confirmed = await Modals.ConfirmAsync(
-            "Update clinic enrollment",
-            $"Change clinic enrollment status to '{_newStatus}'?");
-        if (!confirmed)
-        {
-            return;
-        }
-
-        await SubmitUpdateAsync();
-    }
-
-    private async Task SubmitUpdateAsync()
-    {
-        if (_patient is null || _busy || string.IsNullOrWhiteSpace(_newStatus))
+        if (!await Modals.ConfirmAsync("Update clinic enrollment", $"Change enrollment status to '{_newStatus}'?"))
         {
             return;
         }
@@ -201,20 +149,21 @@ else
                 _patient.PatientId,
                 new UpdateClinicPatientRequest
                 {
-                    ExpectedVersion = _patient.Version,
+                    ExpectedVersion = _selectedEnrollment.Version,
                     Status = _newStatus,
+                    ClinicId = _selectedEnrollment.ClinicId,
                 },
-                PlatformAdminBypass);
-            _newStatus = _patient.ClinicPatientStatus;
+                Options.PlatformAdminBypass);
+            _selectedEnrollment = _patient.Enrollments
+                .FirstOrDefault(e => e.ClinicId == _selectedEnrollment.ClinicId)
+                ?? _patient.Enrollments.FirstOrDefault();
+            _newStatus = _selectedEnrollment?.ClinicPatientStatus;
             _changed = true;
             Notify.Success("Clinic enrollment status updated.");
         }
         catch (ApiProblemException ex) when (PatientProblemMessages.IsConcurrencyConflict(ex))
         {
-            var reload = await Modals.ConfirmAsync(
-                "Record changed",
-                "This clinic patient record was updated elsewhere. Reload the latest version?");
-            if (reload)
+            if (await Modals.ConfirmAsync("Record changed", "Reload the latest version?"))
             {
                 await LoadAsync();
             }
@@ -226,7 +175,6 @@ else
         catch (ApiProblemException ex)
         {
             _error = PatientProblemMessages.ToUserMessage(ex);
-            Notify.Error(_error);
         }
         finally
         {

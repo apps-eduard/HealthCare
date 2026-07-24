@@ -9,13 +9,14 @@
 @inject IStaffPatientApiClient PatientsApi
 @inject IPermissionState Permissions
 @inject IPlatformTenantContext PlatformTenant
+@inject IClinicWorkingContext ClinicContext
 @inject IUiModalService Modals
 @inject IUserNotificationService Notify
 @inject IClinicDirectoryCache ClinicCache
 @inject IClinicDirectoryApiClient ClinicsApi
 @inject NavigationManager Navigation
 
-<PageTitle>Patients</PageTitle>
+<PageTitle>Patient Directory</PageTitle>
 
 @if (Permissions.IsPatientOnly)
 {
@@ -27,11 +28,22 @@ else if (!Permissions.Has(WebPermissions.PatientsSearch))
 }
 else
 {
-    <HcPageHeader Title="Patient directory">
-        <Button OnClick="ResetFiltersAsync" Disabled="_loading">Clear filters</Button>
-        <Button OnClick="RefreshClicked" Disabled="_loading">
-            <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
-        </Button>
+    <HcPageHeader Title="Patient Directory"
+                  Subtitle="Organization patient search and clinic enrollment">
+        <Breadcrumb>
+            <Breadcrumb>
+                <BreadcrumbItem Href="/dashboard">Home</BreadcrumbItem>
+                <BreadcrumbItem>Patients</BreadcrumbItem>
+            </Breadcrumb>
+        </Breadcrumb>
+        <ChildContent>
+            <Space>
+                <Button OnClick="ResetFiltersAsync" Disabled="_loading" AriaLabel="Reset patient filters">Reset</Button>
+                <Button OnClick="RefreshClicked" Disabled="_loading" AriaLabel="Refresh patient list">
+                    <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
+                </Button>
+            </Space>
+        </ChildContent>
     </HcPageHeader>
 
     @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
@@ -52,16 +64,16 @@ else
     <div class="hc-card">
         <div class="hc-filter-grid">
             <div>
-                <span class="hc-filter-label">Search</span>
-                <Input @bind-Value="_search" @bind-Value:after="DebouncedReloadAsync" Disabled="_loading" Style="width:100%;" />
+                <label class="hc-filter-label" for="patients-search">Search</label>
+                <Input Id="patients-search" @bind-Value="_search" @bind-Value:after="DebouncedReloadAsync" Disabled="_loading" Style="width:100%;" />
             </div>
             <div>
-                <span class="hc-filter-label">Local patient number</span>
-                <Input @bind-Value="_localNumber" @bind-Value:after="DebouncedReloadAsync" Disabled="_loading" Style="width:100%;" />
+                <label class="hc-filter-label" for="patients-local">Local patient number</label>
+                <Input Id="patients-local" @bind-Value="_localNumber" @bind-Value:after="DebouncedReloadAsync" Disabled="_loading" Style="width:100%;" />
             </div>
             <div>
-                <span class="hc-filter-label">Enrollment status</span>
-                <Select TItemValue="string" TItem="string" Value="_clinicPatientStatus" ValueChanged="OnClinicStatusChanged" Style="width:100%;" AllowClear>
+                <label class="hc-filter-label" for="patients-enrollment">Enrollment status</label>
+                <Select Id="patients-enrollment" TItemValue="string" TItem="string" Value="_clinicPatientStatus" ValueChanged="OnClinicStatusChanged" Style="width:100%;" AllowClear>
                     <SelectOptions>
                         @foreach (var status in PatientStatusPresentation.ClinicPatientStatuses)
                         {
@@ -71,8 +83,8 @@ else
                 </Select>
             </div>
             <div>
-                <span class="hc-filter-label">Patient status</span>
-                <Select TItemValue="string" TItem="string" Value="_patientActiveFilter" ValueChanged="OnPatientActiveChanged" Style="width:100%;" AllowClear>
+                <label class="hc-filter-label" for="patients-active">Patient status</label>
+                <Select Id="patients-active" TItemValue="string" TItem="string" Value="_patientActiveFilter" ValueChanged="OnPatientActiveChanged" Style="width:100%;" AllowClear>
                     <SelectOptions>
                         <SelectOption TItemValue="string" TItem="string" Value="@("active")" Label="Active" />
                         <SelectOption TItemValue="string" TItem="string" Value="@("inactive")" Label="Inactive" />
@@ -93,8 +105,8 @@ else
                 <ClinicPicker Label="Clinic" AllowClear="false" Required="false" Disabled="true" />
             }
             <div>
-                <span class="hc-filter-label">Sort by</span>
-                <Select TItemValue="string" TItem="string" @bind-Value="_sortBy" Style="width:100%;">
+                <label class="hc-filter-label" for="patients-sort">Sort by</label>
+                <Select Id="patients-sort" TItemValue="string" TItem="string" @bind-Value="_sortBy" Style="width:100%;">
                     <SelectOptions>
                         <SelectOption TItemValue="string" TItem="string" Value="@("registeredAtUtc")" Label="Enrollment date" />
                         <SelectOption TItemValue="string" TItem="string" Value="@("localPatientNumber")" Label="Local number" />
@@ -106,43 +118,41 @@ else
                 </Select>
             </div>
             <div>
-                <span class="hc-filter-label">Direction</span>
-                <Select TItemValue="string" TItem="string" @bind-Value="_sortDirection" Style="width:100%;">
+                <label class="hc-filter-label" for="patients-dir">Direction</label>
+                <Select Id="patients-dir" TItemValue="string" TItem="string" @bind-Value="_sortDirection" Style="width:100%;">
                     <SelectOptions>
                         <SelectOption TItemValue="string" TItem="string" Value="@("desc")" Label="Descending" />
                         <SelectOption TItemValue="string" TItem="string" Value="@("asc")" Label="Ascending" />
                     </SelectOptions>
                 </Select>
             </div>
-            <div>
-                <span class="hc-filter-label">Page size</span>
-                <Select TItemValue="string" TItem="string" Value="@_pageSize.ToString()" ValueChanged="OnPageSizeChanged" Style="width:100%;">
-                    <SelectOptions>
-                        <SelectOption TItemValue="string" TItem="string" Value="@("10")" Label="10" />
-                        <SelectOption TItemValue="string" TItem="string" Value="@("20")" Label="20" />
-                        <SelectOption TItemValue="string" TItem="string" Value="@("50")" Label="50" />
-                    </SelectOptions>
-                </Select>
-            </div>
-            <div>
-                <span class="hc-filter-label">&nbsp;</span>
+            <div style="display:flex;gap:8px;align-items:flex-end;">
                 <Button Type="@ButtonType.Primary" OnClick="ApplyFiltersAsync"
-                        Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !_clinicId.HasValue))">Apply</Button>
+                        Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !_clinicId.HasValue))"
+                        AriaLabel="Search patients">
+                    Search
+                </Button>
+                <Button OnClick="ResetFiltersAsync" Disabled="_loading" AriaLabel="Reset filters">Reset</Button>
             </div>
         </div>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(_error)) { <ErrorState Message="@_error" /> }
     @if (_loading) { <PageLoading /> }
-    else if (_items.Count == 0) { <EmptyState Message="No patients match the current filters." /> }
+    else if (_items.Count == 0) { <EmptyState Title="No patients found" Message="No patients match the current filters." /> }
     else
     {
         <div class="hc-table-wrap">
             <table class="hc-table">
                 <thead>
                     <tr>
-                        <th>Local #</th><th>Name</th><th>Gender</th><th>DOB</th><th>Mobile</th>
-                        <th>Enrollment</th><th>Patient</th><th>Clinic</th><th>Enrolled</th><th class="hc-actions">Actions</th>
+                        <th>Patient No.</th>
+                        <th>Name</th>
+                        <th>Contact</th>
+                        <th>Clinic</th>
+                        <th>Status</th>
+                        <th>Updated</th>
+                        <th class="hc-actions">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -151,20 +161,58 @@ else
                     <tr>
                         <td>@row.LocalPatientNumber</td>
                         <td>@PatientDisplay.FullName(row)</td>
-                        <td>@(row.Gender ?? "—")</td>
-                        <td>@(row.DateOfBirth?.ToString("yyyy-MM-dd") ?? "—")</td>
                         <td>@PatientDisplay.MaskMobile(row.MobileNumber)</td>
-                        <td><StatusBadge Text="@PatientStatusPresentation.ClinicPatientLabel(row.ClinicPatientStatus)" Tone="@PatientStatusPresentation.ClinicPatientTone(row.ClinicPatientStatus)" /></td>
-                        <td><StatusBadge Text="@PatientStatusPresentation.PatientActiveLabel(row.PatientIsActive)" Tone="@PatientStatusPresentation.PatientActiveTone(row.PatientIsActive)" /></td>
                         <td>@ClinicLabel(row.ClinicId)</td>
-                        <td>@row.RegisteredAtUtc.UtcDateTime.ToString("yyyy-MM-dd")</td>
-                        <td class="hc-actions">
-                            @if (Permissions.Has(WebPermissions.PatientsRead))
+                        <td>
+                            <StatusBadge Text="@PatientStatusPresentation.ClinicPatientLabel(row.ClinicPatientStatus)"
+                                         Tone="@PatientStatusPresentation.ClinicPatientTone(row.ClinicPatientStatus)" />
+                            @if (!row.PatientIsActive)
                             {
-                                <Button Type="@ButtonType.Text" OnClick="@(() => OpenDetailAsync(row.PatientId))" AriaLabel="Details">
-                                    <Icon Type="eye" Theme="IconThemeType.Outline" />
-                                </Button>
+                                <div class="hc-caption">Patient inactive</div>
                             }
+                        </td>
+                        <td><span class="hc-caption">@row.RegisteredAtUtc.ToString("u")</span></td>
+                        <td class="hc-actions">
+                            <div class="hc-table-actions">
+                                <Space Wrap>
+                                    @if (Permissions.Has(WebPermissions.PatientsRead))
+                                    {
+                                        <Button Type="@ButtonType.Link"
+                                                OnClick="@(() => OpenDetailAsync(row))"
+                                                AriaLabel="@($"Details for {PatientDisplay.FullName(row)}")">
+                                            Details
+                                        </Button>
+                                    }
+                                    @if (Permissions.Has(WebPermissions.PatientsUpdateClinicStatus)
+                                         && (Permissions.IsOrganizationAdmin || Permissions.IsPlatformAdmin))
+                                    {
+                                        <Button Type="@ButtonType.Link"
+                                                Class="hc-action-wide"
+                                                OnClick="@(() => OpenEnrollFromRowAsync(row))"
+                                                AriaLabel="@($"Enroll {PatientDisplay.FullName(row)}")">
+                                            Enroll
+                                        </Button>
+                                    }
+                                </Space>
+                                <Dropdown Class="hc-action-narrow">
+                                    <Overlay>
+                                        <Menu>
+                                            @if (Permissions.Has(WebPermissions.PatientsRead))
+                                            {
+                                                <MenuItem OnClick="@(() => OpenDetailAsync(row))">Details</MenuItem>
+                                            }
+                                            @if (Permissions.Has(WebPermissions.PatientsUpdateClinicStatus)
+                                                 && (Permissions.IsOrganizationAdmin || Permissions.IsPlatformAdmin))
+                                            {
+                                                <MenuItem OnClick="@(() => OpenEnrollFromRowAsync(row))">Enroll in clinic</MenuItem>
+                                            }
+                                        </Menu>
+                                    </Overlay>
+                                    <ChildContent>
+                                        <Button Type="@ButtonType.Link" AriaLabel="@($"More actions for {PatientDisplay.FullName(row)}")">More</Button>
+                                    </ChildContent>
+                                </Dropdown>
+                            </div>
                         </td>
                     </tr>
                 }
@@ -173,13 +221,15 @@ else
             <div class="hc-pager">
                 <span class="hc-caption">Total: @_totalCount</span>
                 <Space>
-                    <Button Disabled="@(_page <= 1 || _loading)" OnClick="@(() => OnPageChanged(_page - 1))">Prev</Button>
+                    <Button Disabled="@(_page <= 1 || _loading)" OnClick="@(() => OnPageChanged(_page - 1))" AriaLabel="Previous page">Prev</Button>
                     <span class="hc-caption">Page @_page / @_pageCount</span>
-                    <Button Disabled="@(_page >= _pageCount || _loading)" OnClick="@(() => OnPageChanged(_page + 1))">Next</Button>
+                    <Button Disabled="@(_page >= _pageCount || _loading)" OnClick="@(() => OnPageChanged(_page + 1))" AriaLabel="Next page">Next</Button>
                 </Space>
             </div>
         </div>
     }
+
+    <PatientDetailDrawer @ref="_detailDrawer" OnChanged="OnDetailChangedAsync" />
 }
 
 @code {
@@ -205,31 +255,59 @@ else
     private int _pageCount = 1;
     private Guid? _boundOrganizationId;
     private bool _disposed;
+    private bool _subscribedPlatform;
+    private bool _subscribedClinic;
+    private PatientDetailDrawer? _detailDrawer;
+    private CancellationTokenSource? _debounceCts;
 
     protected override async Task OnInitializedAsync()
     {
-        PlatformTenant.Changed += OnPlatformTenantChanged;
-
         if (Permissions.IsPatientOnly || !Permissions.Has(WebPermissions.PatientsSearch))
         {
             return;
         }
 
-        SyncFromPlatformTenant();
+        if (Permissions.IsPlatformAdmin)
+        {
+            PlatformTenant.Changed += OnPlatformTenantChanged;
+            _subscribedPlatform = true;
+            SyncFromPlatformTenant();
+        }
+        else if (Permissions.IsOrganizationAdmin)
+        {
+            ClinicContext.Changed += OnClinicContextChanged;
+            _subscribedClinic = true;
+            if (ClinicContext.HasClinic)
+            {
+                _clinicId = ClinicContext.SelectedClinicId;
+            }
+        }
+
         await LoadAsync();
 
         if (PatientId is Guid id && Permissions.Has(WebPermissions.PatientsRead))
         {
-            await OpenDetailAsync(id);
+            await OpenDetailByIdAsync(id, preferredClinicId: _clinicId);
         }
     }
 
     public void Dispose()
     {
         _disposed = true;
-        PlatformTenant.Changed -= OnPlatformTenantChanged;
+        if (_subscribedPlatform)
+        {
+            PlatformTenant.Changed -= OnPlatformTenantChanged;
+        }
+
+        if (_subscribedClinic)
+        {
+            ClinicContext.Changed -= OnClinicContextChanged;
+        }
+
         _loadCts?.Cancel();
         _loadCts?.Dispose();
+        _debounceCts?.Cancel();
+        _debounceCts?.Dispose();
         _items.Clear();
         _clinicLabels.Clear();
     }
@@ -252,6 +330,13 @@ else
         StateHasChanged();
     });
 
+    private void OnClinicContextChanged() => InvokeAsync(async () =>
+    {
+        _clinicId = ClinicContext.SelectedClinicId;
+        await LoadAsync();
+        StateHasChanged();
+    });
+
     private void SyncFromPlatformTenant()
     {
         _boundOrganizationId = PlatformTenant.SelectedOrganizationId;
@@ -259,20 +344,6 @@ else
         {
             _clinicId = PlatformTenant.SelectedClinicId;
         }
-    }
-
-    private CancellationTokenSource? _debounceCts;
-
-    private async Task OnSearchChanged(string? value)
-    {
-        _search = value;
-        await DebouncedReloadAsync();
-    }
-
-    private async Task OnLocalNumberChanged(string? value)
-    {
-        _localNumber = value;
-        await DebouncedReloadAsync();
     }
 
     private async Task DebouncedReloadAsync()
@@ -308,6 +379,7 @@ else
     private async Task OnClinicFilterChanged(Guid? clinicId)
     {
         _clinicId = clinicId;
+
         if (Permissions.IsPlatformAdmin)
         {
             if (clinicId is Guid id && id != Guid.Empty)
@@ -321,6 +393,24 @@ else
             {
                 PlatformTenant.ClearClinic();
             }
+
+            _page = 1;
+            await LoadAsync();
+            return;
+        }
+
+        if (Permissions.IsOrganizationAdmin)
+        {
+            if (clinicId is Guid id && id != Guid.Empty)
+            {
+                ClinicContext.SelectClinic(id);
+            }
+            else
+            {
+                ClinicContext.ClearClinic();
+            }
+
+            return;
         }
 
         _page = 1;
@@ -344,6 +434,15 @@ else
             if (Permissions.IsPlatformAdmin)
             {
                 _clinicId = PlatformTenant.SelectedClinicId;
+            }
+            else if (_subscribedClinic && ClinicContext.HasClinic)
+            {
+                ClinicContext.ClearClinic();
+                _sortBy = "registeredAtUtc";
+                _sortDirection = "desc";
+                _page = 1;
+                _pageSize = 20;
+                return;
             }
             else
             {
@@ -479,16 +578,12 @@ else
     private string ClinicLabel(Guid clinicId) =>
         _clinicLabels.TryGetValue(clinicId, out var name) ? name : "—";
 
-    private Task OnPageSizeChanged(string? value)
-    {
-        if (int.TryParse(value, out var size) && size > 0)
-        {
-            _pageSize = size;
-        }
-        return Task.CompletedTask;
-    }
+    private Task OnDetailChangedAsync() => LoadAsync();
 
-    private async Task OpenDetailAsync(Guid patientId)
+    private async Task OpenDetailAsync(StaffPatientSummaryResponse row) =>
+        await OpenDetailByIdAsync(row.PatientId, row.ClinicId);
+
+    private async Task OpenDetailByIdAsync(Guid patientId, Guid? preferredClinicId)
     {
         if (!Permissions.Has(WebPermissions.PatientsRead))
         {
@@ -496,21 +591,60 @@ else
             return;
         }
 
-        if (await Modals.ShowAsync<PatientDetailDialog, PatientDetailDialog.Args>(
-                "Patient",
-                new PatientDetailDialog.Args
-                {
-                    PatientId = patientId,
-                    PlatformAdminBypass = Permissions.IsPlatformAdmin,
-                },
-                "560px"))
+        if (_detailDrawer is not null)
         {
-            await LoadAsync();
+            await _detailDrawer.OpenAsync(
+                patientId,
+                preferredClinicId,
+                platformAdminBypass: Permissions.IsPlatformAdmin);
         }
 
         if (PatientId is not null)
         {
             Navigation.NavigateTo("/patients", replace: true);
+        }
+    }
+
+    private async Task OpenEnrollFromRowAsync(StaffPatientSummaryResponse row)
+    {
+        if (!Permissions.Has(WebPermissions.PatientsUpdateClinicStatus))
+        {
+            Notify.Warning("You do not have permission to enroll patients.");
+            return;
+        }
+
+        HashSet<Guid> enrolled;
+        try
+        {
+            Guid? detailClinicId = Permissions.IsPlatformAdmin ? row.ClinicId : null;
+            var detail = await PatientsApi.GetByIdAsync(
+                row.PatientId,
+                clinicId: detailClinicId,
+                platformAdminBypass: Permissions.IsPlatformAdmin);
+            enrolled = detail.Enrollments.Select(e => e.ClinicId).ToHashSet();
+            if (enrolled.Count == 0)
+            {
+                enrolled.Add(row.ClinicId);
+            }
+        }
+        catch (ApiProblemException ex)
+        {
+            Notify.Error(PatientProblemMessages.ToUserMessage(ex));
+            return;
+        }
+
+        if (await Modals.ShowAsync<EnrollPatientDialog, EnrollPatientDialog.Args>(
+                "Enroll in clinic",
+                new EnrollPatientDialog.Args
+                {
+                    PatientId = row.PatientId,
+                    PatientDisplayName = PatientDisplay.FullName(row),
+                    AlreadyEnrolledClinicIds = enrolled,
+                    PlatformAdminBypass = Permissions.IsPlatformAdmin,
+                }))
+        {
+            Notify.Success("Patient enrolled in clinic.");
+            await LoadAsync();
         }
     }
 }

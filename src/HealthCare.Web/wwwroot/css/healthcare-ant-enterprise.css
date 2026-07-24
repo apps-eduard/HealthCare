@@ -323,6 +323,10 @@ h1:focus {
     opacity: 0.72;
 }
 
+.hc-table tr.hc-row-selected {
+    background: color-mix(in srgb, var(--hc-primary, #1677ff) 8%, transparent);
+}
+
 .hc-clinic-context-banner {
     display: flex;
     flex-wrap: wrap;

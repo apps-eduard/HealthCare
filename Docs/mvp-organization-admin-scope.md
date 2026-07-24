@@ -707,6 +707,10 @@ The Organization Admin must not:
 - `/staff` (+ `/staff/clinic-admins`, `/staff/doctors`, `/staff/nurses`, `/staff/receptionists`) — organization staff directory via `IStaffManagementApiClient` (`staff.read` gate). Tabs for All / Clinic Admins / Doctors / Nurses / Receptionists; Clinic Admins use `GET .../clinic-admins`. Search, clinic, role (All tab), and active-status filters with paging.
 - Actions: detail, create, edit (profile fields + concurrency reload), activate/deactivate (self-deactivate hidden), change clinic, role reassignment (`roles.assign`; sole-role removal is backend-denied — UI guides reassignment), password-reset initiation, session revoke. Safe `StaffProblemMessages` mapping. Org Admin clinic filter syncs with `IClinicWorkingContext`.
 
+**Frontend status (2026-07-24) — Phase 3 (Patient directory + clinic enrollment):**
+- `/patients` — organization patient directory via `IStaffPatientApiClient` (`patients.search` for list; `patients.read` for detail). Search, local number, enrollment status, patient active, clinic filter (synced with `IClinicWorkingContext`), sort/paging.
+- Detail `Drawer` lists org-scoped enrollments; status update sends `ClinicId` + `ExpectedVersion`; enroll into another org clinic (`POST .../clinics/{id}/patients/{id}/enroll`). Patient self-scope blocked in UI presentation. `PatientPicker` uses appointment-safe `GET .../lookup`.
+
 ### Phase 2 — Scheduling and operations
 
 11. Doctor availability

@@ -143,9 +143,11 @@ public sealed class PatientDirectorySupportTests
         {
             ExpectedVersion = 7,
             Status = "Inactive",
+            ClinicId = Guid.NewGuid(),
         };
         request.ExpectedVersion.Should().Be(7);
         request.Status.Should().Be("Inactive");
+        request.ClinicId.Should().NotBeNull();
     }
 
     [Fact]
@@ -186,6 +188,8 @@ public sealed class PatientDirectorySupportTests
         typeof(IStaffPatientApiClient).GetMethod(nameof(IStaffPatientApiClient.GetByIdAsync)).Should().NotBeNull();
         typeof(IStaffPatientApiClient).GetMethod(nameof(IStaffPatientApiClient.UpdateClinicProfileAsync)).Should().NotBeNull();
         typeof(IStaffPatientApiClient).GetMethod(nameof(IStaffPatientApiClient.SearchAsync)).Should().NotBeNull();
+        typeof(IStaffPatientApiClient).GetMethod(nameof(IStaffPatientApiClient.LookupAsync)).Should().NotBeNull();
+        typeof(IStaffPatientApiClient).GetMethod(nameof(IStaffPatientApiClient.EnrollAsync)).Should().NotBeNull();
     }
 
     [Fact]

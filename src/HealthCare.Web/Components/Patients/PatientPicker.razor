@@ -39,7 +39,7 @@ else
                 }
                 else if (_results.Count == 0)
                 {
-                    <div class="hc-caption" style="padding:0.5rem 0.75rem;">No patients matched.</div>
+                    <div class="hc-caption" style="padding:0.5rem 0.75rem;">No eligible patients matched.</div>
                 }
                 else
                 {
@@ -66,7 +66,7 @@ else
     [Parameter] public EventCallback<Guid?> ValueChanged { get; set; }
     [Parameter] public EventCallback<StaffPatientSummaryResponse?> SelectedPatientChanged { get; set; }
     [Parameter] public string Label { get; set; } = "Patient";
-    [Parameter] public string? HelperText { get; set; } = "Search by name or local patient number";
+    [Parameter] public string? HelperText { get; set; } = "Active patients with active enrollment only";
     [Parameter] public bool Required { get; set; }
     [Parameter] public bool Disabled { get; set; }
     [Parameter] public Guid? ClinicId { get; set; }
@@ -119,17 +119,14 @@ else
 
         try
         {
-            var result = await PatientsApi.SearchAsync(
-                new StaffPatientSearchRequest
+            // Appointment-safe lookup: active patient + active enrollment only.
+            var result = await PatientsApi.LookupAsync(
+                new StaffPatientLookupRequest
                 {
                     Search = string.IsNullOrWhiteSpace(value) ? null : value.Trim(),
                     ClinicId = ClinicId,
-                    ClinicPatientStatus = "Active",
-                    PatientIsActive = true,
                     Page = 1,
                     PageSize = 20,
-                    SortBy = "lastName",
-                    SortDirection = "asc",
                 },
                 PlatformAdminBypass,
                 cts.Token);
@@ -139,7 +136,7 @@ else
                 return;
             }
 
-            _results = result.Items.ToList();
+            _results = result.Items.Select(PatientDisplay.ToSummary).ToList();
         }
         catch (OperationCanceledException)
         {
