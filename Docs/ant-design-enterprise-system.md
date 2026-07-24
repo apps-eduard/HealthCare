@@ -100,6 +100,14 @@ Shape: **4px** radius, minimal shadow, compact controls, **8px** spacing scale.
 |-------|-------|
 | `/availability` | Doctor Availability — weekly windows, exceptions, effective view, slot preview |
 
+## Org Admin Phase 6 pages
+
+| Route | Notes |
+|-------|-------|
+| `/operations/reminders` | Reminder search/paging + retry |
+| `/operations/clinic-summaries` | Clinic-summary run search/paging + retry |
+| `/operations/health` | Safe sender / Hangfire worker flags |
+
 ## NU1900
 
 `Directory.Build.props` keeps `NuGetAudit=true` and adds `NU1900` to `WarningsNotAsErrors` so transient nuget.org vulnerability-feed timeouts do not fail restore under `TreatWarningsAsErrors`. Advisory codes NU1901–NU1904 remain non-fatal as before; audit is not disabled.

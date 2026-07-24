@@ -2,6 +2,7 @@
 @inherits FeedbackComponent<AppointmentDetailDialog.Args>
 @using HealthCare.Contracts.Appointments
 @using HealthCare.Web.Appointments
+@using HealthCare.Web.Operations
 
 @if (_loading)
 {
@@ -45,6 +46,66 @@ else
         {
             <div><strong>Cancellation reason:</strong> @_appointment.CancellationReason</div>
         }
+
+        @if (OperationsPermissionRules.CanViewReminders(Permissions))
+        {
+            <h4 style="font-size:0.95rem;margin:0.75rem 0 0.5rem;">Reminders</h4>
+            @if (_remindersLoading)
+            {
+                <PageLoading />
+            }
+            else if (_reminders.Count == 0)
+            {
+                <div class="hc-caption">No reminders for this appointment.</div>
+            }
+            else
+            {
+                <div class="hc-table-wrap">
+                    <table class="hc-table" aria-label="Appointment reminders">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Attempts</th>
+                                <th>Scheduled (UTC)</th>
+                                @if (OperationsPermissionRules.CanRetryReminders(Permissions))
+                                {
+                                    <th class="hc-actions">Actions</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var reminder in _reminders)
+                        {
+                            <tr>
+                                <td>@ReminderStatusPresentation.TypeLabel(reminder.ReminderType)</td>
+                                <td>
+                                    <StatusBadge Text="@ReminderStatusPresentation.DisplayLabel(reminder.Status)"
+                                                 Tone="@ReminderStatusPresentation.ChipTone(reminder.Status)" />
+                                </td>
+                                <td>@reminder.AttemptCount</td>
+                                <td><span class="hc-caption">@reminder.ScheduledAtUtc.UtcDateTime.ToString("u")</span></td>
+                                @if (OperationsPermissionRules.CanRetryReminders(Permissions))
+                                {
+                                    <td class="hc-actions">
+                                        @if (ReminderStatusPresentation.AppearsRetryable(reminder.Status))
+                                        {
+                                            <Button Type="@ButtonType.Link"
+                                                    Disabled="_busy"
+                                                    OnClick="@(() => RetryReminderAsync(reminder))"
+                                                    AriaLabel="Retry reminder">
+                                                Retry
+                                            </Button>
+                                        }
+                                    </td>
+                                }
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
     </div>
 }
 
@@ -69,12 +130,15 @@ else
     }
 
     [Inject] private IAppointmentApiClient AppointmentsApi { get; set; } = default!;
+    [Inject] private IStaffOperationsApiClient OperationsApi { get; set; } = default!;
     [Inject] private IPermissionState Permissions { get; set; } = default!;
     [Inject] private IUiModalService Modals { get; set; } = default!;
     [Inject] private IUserNotificationService Notify { get; set; } = default!;
 
     private AppointmentResponse? _appointment;
+    private readonly List<AppointmentReminderResponse> _reminders = [];
     private bool _loading = true;
+    private bool _remindersLoading;
     private bool _busy;
     private string? _error;
     private bool _changed;
@@ -91,15 +155,78 @@ else
         try
         {
             _appointment = await AppointmentsApi.GetByIdAsync(AppointmentId, PlatformAdminBypass);
+            await LoadRemindersAsync();
         }
         catch (ApiProblemException ex)
         {
             _appointment = null;
             _error = AppointmentProblemMessages.ToUserMessage(ex);
+            _reminders.Clear();
         }
         finally
         {
             _loading = false;
+        }
+    }
+
+    private async Task LoadRemindersAsync()
+    {
+        _reminders.Clear();
+        if (!OperationsPermissionRules.CanViewReminders(Permissions) || _appointment is null)
+        {
+            return;
+        }
+
+        _remindersLoading = true;
+        try
+        {
+            var items = await OperationsApi.ListAppointmentRemindersAsync(_appointment.Id, PlatformAdminBypass);
+            _reminders.AddRange(items.OrderBy(r => r.ScheduledAtUtc));
+        }
+        catch (ApiProblemException)
+        {
+            // Appointment detail remains usable if reminder list fails.
+        }
+        finally
+        {
+            _remindersLoading = false;
+        }
+    }
+
+    private async Task RetryReminderAsync(AppointmentReminderResponse reminder)
+    {
+        if (_busy || !OperationsPermissionRules.CanRetryReminders(Permissions))
+        {
+            return;
+        }
+
+        if (!await Modals.ConfirmAsync(
+                "Retry reminder",
+                $"Retry {ReminderStatusPresentation.TypeLabel(reminder.ReminderType)} reminder?"))
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await OperationsApi.RetryReminderAsync(reminder.AppointmentId, reminder.Id, PlatformAdminBypass);
+            Notify.Success("Reminder queued for retry.");
+            _changed = true;
+            await LoadRemindersAsync();
+        }
+        catch (ApiProblemException ex) when (ReminderProblemMessages.IsRetryConflict(ex))
+        {
+            Notify.Warning(ReminderProblemMessages.ToUserMessage(ex));
+            await LoadRemindersAsync();
+        }
+        catch (ApiProblemException ex)
+        {
+            Notify.Error(ReminderProblemMessages.ToUserMessage(ex));
+        }
+        finally
+        {
+            _busy = false;
         }
     }
 

@@ -180,13 +180,31 @@ else if (Permissions.Has(WebPermissions.OrganizationDashboardRead))
                                 <div style="padding:8px 0;">
                                     <Space>
                                         <Tag Color="@(AlertTone(_dashboard.Alerts.FailedReminderCount))">@_dashboard.Alerts.FailedReminderCount</Tag>
-                                        <span>Failed reminders</span>
+                                        @if (Permissions.Has(WebPermissions.RemindersRead))
+                                        {
+                                            <Button Type="@ButtonType.Link" OnClick='() => Navigation.NavigateTo("/operations/reminders")'>
+                                                Failed reminders
+                                            </Button>
+                                        }
+                                        else
+                                        {
+                                            <span>Failed reminders</span>
+                                        }
                                     </Space>
                                 </div>
                                 <div style="padding:8px 0;">
                                     <Space>
                                         <Tag Color="@(AlertTone(_dashboard.Alerts.FailedClinicSummaryCount))">@_dashboard.Alerts.FailedClinicSummaryCount</Tag>
-                                        <span>Failed clinic summaries</span>
+                                        @if (Permissions.Has(WebPermissions.SummariesRead))
+                                        {
+                                            <Button Type="@ButtonType.Link" OnClick='() => Navigation.NavigateTo("/operations/clinic-summaries")'>
+                                                Failed clinic summaries
+                                            </Button>
+                                        }
+                                        else
+                                        {
+                                            <span>Failed clinic summaries</span>
+                                        }
                                     </Space>
                                 </div>
                                 <div style="padding:8px 0;">
@@ -244,6 +262,24 @@ else if (Permissions.Has(WebPermissions.OrganizationDashboardRead))
                     {
                         <Button Type="@ButtonType.Primary" OnClick='() => Navigation.NavigateTo("/availability")'>
                             <Icon Type="clock-circle" Theme="IconThemeType.Outline" /> Availability
+                        </Button>
+                    }
+                    @if (Permissions.Has(WebPermissions.RemindersRead))
+                    {
+                        <Button Type="@ButtonType.Primary" OnClick='() => Navigation.NavigateTo("/operations/reminders")'>
+                            <Icon Type="bell" Theme="IconThemeType.Outline" /> Reminders
+                        </Button>
+                    }
+                    @if (Permissions.Has(WebPermissions.SummariesRead))
+                    {
+                        <Button OnClick='() => Navigation.NavigateTo("/operations/clinic-summaries")'>
+                            <Icon Type="file-text" Theme="IconThemeType.Outline" /> Clinic Summaries
+                        </Button>
+                    }
+                    @if (OperationsPermissionRules.CanViewOperationsHealth(Permissions))
+                    {
+                        <Button OnClick='() => Navigation.NavigateTo("/operations/health")'>
+                            <Icon Type="heart" Theme="IconThemeType.Outline" /> Operations Health
                         </Button>
                     }
                 </Space>

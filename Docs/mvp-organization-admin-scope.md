@@ -719,6 +719,12 @@ The Organization Admin must not:
 - `/availability` — Doctor Availability via `IDoctorAvailabilityApiClient`. Gate: `availability.read` **or** any manage permission; mutations require manage. Clinic + doctor selection (`IClinicWorkingContext` for Org Admin); Guid doctors via `GET .../staff/clinics/{id}/doctors`; optional `clinicId` on availability mutations.
 - Tabs: Weekly Schedule (CRUD windows), Exceptions (create/delete; no exception edit API), Effective Availability (client-side composition, max 14 days), Slot Preview (`available-slots`). Clinic timezone from `ClinicTimeZoneId` / clinic meta. Optimistic concurrency via `ExpectedVersion` + reload on conflict.
 
+**Frontend status (2026-07-24) — Phase 6 (Reminders + clinic summaries):**
+- `/operations/reminders` — org reminder search/paging via `IStaffOperationsApiClient` (`reminders.read`); retry (`reminders.retry`) for Failed/Pending; safe detail dialog (no message bodies/secrets). Clinic filter syncs with `IClinicWorkingContext`.
+- `/operations/clinic-summaries` — summary-run search/paging (`summaries.read`); retry (`summaries.retry`); safe run detail.
+- `/operations/health` — safe sender/Hangfire flags (`reminders.read` or `summaries.read`).
+- Appointment detail shows per-appointment reminders + retry when permitted. Nav: Operations → Reminders / Clinic Summaries / Operations Health.
+
 ### Phase 2 — Scheduling and operations
 
 11. Doctor availability

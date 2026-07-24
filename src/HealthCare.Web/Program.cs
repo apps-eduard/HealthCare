@@ -119,6 +119,7 @@ builder.Services.AddScoped<IOrganizationDashboardApiClient, OrganizationDashboar
 builder.Services.AddScoped<IAppointmentApiClient, AppointmentApiClient>();
 builder.Services.AddScoped<IStaffPatientApiClient, StaffPatientApiClient>();
 builder.Services.AddScoped<IDoctorAvailabilityApiClient, DoctorAvailabilityApiClient>();
+builder.Services.AddScoped<IStaffOperationsApiClient, StaffOperationsApiClient>();
 
 builder.Services.AddHttpClient();
 builder.Services.AddAntDesign();

@@ -37,6 +37,11 @@ public static class WebPermissions
     public const string PatientsSearch = "patients.search";
     public const string PatientsRead = "patients.read";
     public const string PatientsUpdateClinicStatus = "patients.update_clinic_status";
+
+    public const string RemindersRead = "reminders.read";
+    public const string RemindersRetry = "reminders.retry";
+    public const string SummariesRead = "summaries.read";
+    public const string SummariesRetry = "summaries.retry";
 }
 
 public static class WebRoles

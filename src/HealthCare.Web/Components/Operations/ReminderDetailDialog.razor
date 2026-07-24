@@ -1,0 +1,111 @@
+@namespace HealthCare.Web.Components.Operations
+@inherits FeedbackComponent<ReminderDetailDialog.Args>
+@using HealthCare.Contracts.Appointments
+@using HealthCare.Web.Operations
+
+@if (_reminder is null)
+{
+    <Alert Type="@AlertType.Error" Message="Reminder details are unavailable." ShowIcon="true" />
+}
+else
+{
+    <div style="display:flex;flex-direction:column;gap:8px;">
+        <div class="hc-caption">Reminder ID: @_reminder.Id</div>
+        <div><strong>Appointment:</strong> @_reminder.AppointmentId</div>
+        <div><strong>Clinic:</strong> @_reminder.ClinicId</div>
+        <div><strong>Type:</strong> @ReminderStatusPresentation.TypeLabel(_reminder.ReminderType)</div>
+        <div>
+            <strong>Status:</strong>
+            <StatusBadge Text="@ReminderStatusPresentation.DisplayLabel(_reminder.Status)"
+                         Tone="@ReminderStatusPresentation.ChipTone(_reminder.Status)" />
+        </div>
+        <div><strong>Scheduled (UTC):</strong> @_reminder.ScheduledAtUtc.UtcDateTime.ToString("u")</div>
+        <div><strong>Sent (UTC):</strong> @(_reminder.SentAtUtc?.UtcDateTime.ToString("u") ?? "—")</div>
+        <div><strong>Attempts:</strong> @_reminder.AttemptCount</div>
+        <div><strong>Error code:</strong> @(_reminder.ErrorCode ?? "—")</div>
+        <div><strong>Error:</strong> @(SafeError(_reminder.ErrorMessage))</div>
+        <div class="hc-caption">Job correlation: @(_reminder.BackgroundJobId ?? "—")</div>
+        <Alert Type="@AlertType.Info"
+               Message="Message bodies, patient contact details, and provider secrets are never shown here."
+               ShowIcon="true"
+               Style="margin-top:0.5rem;" />
+    </div>
+}
+
+<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:1rem;">
+    <Button OnClick="CloseAsync" Disabled="_busy" AriaLabel="Close reminder detail">Close</Button>
+    @if (_reminder is not null
+         && OperationsPermissionRules.CanRetryReminders(Permissions)
+         && ReminderStatusPresentation.AppearsRetryable(_reminder.Status))
+    {
+        <Button Type="@ButtonType.Primary" OnClick="RetryAsync" Disabled="_busy" AriaLabel="Retry reminder">
+            Retry
+        </Button>
+    }
+</div>
+
+@code {
+    public sealed class Args
+    {
+        public AppointmentReminderResponse Reminder { get; init; } = default!;
+        public bool PlatformAdminBypass { get; init; }
+    }
+
+    [Inject] private IStaffOperationsApiClient OperationsApi { get; set; } = default!;
+    [Inject] private IPermissionState Permissions { get; set; } = default!;
+    [Inject] private IUiModalService Modals { get; set; } = default!;
+    [Inject] private IUserNotificationService Notify { get; set; } = default!;
+
+    private AppointmentReminderResponse? _reminder;
+    private bool _busy;
+
+    protected override void OnInitialized() => _reminder = Options.Reminder;
+
+    private Task ConfirmOkAsync() => OkCancelRef!.OkAsync(new ModalClosingEventArgs());
+
+    private Task CloseAsync() => CancelCloseAsync();
+
+    private Task CancelCloseAsync() => OkCancelRef!.CancelAsync(new ModalClosingEventArgs());
+
+    private async Task RetryAsync()
+    {
+        if (_reminder is null || _busy)
+        {
+            return;
+        }
+
+        if (!await Modals.ConfirmAsync(
+                "Retry reminder",
+                $"Retry {ReminderStatusPresentation.TypeLabel(_reminder.ReminderType)} reminder?"))
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            _reminder = await OperationsApi.RetryReminderAsync(
+                _reminder.AppointmentId,
+                _reminder.Id,
+                Options.PlatformAdminBypass);
+            Notify.Success("Reminder queued for retry.");
+            await ConfirmOkAsync();
+        }
+        catch (ApiProblemException ex) when (ReminderProblemMessages.IsRetryConflict(ex))
+        {
+            Notify.Warning(ReminderProblemMessages.ToUserMessage(ex));
+            await ConfirmOkAsync();
+        }
+        catch (ApiProblemException ex)
+        {
+            Notify.Error(ReminderProblemMessages.ToUserMessage(ex));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string SafeError(string? message) =>
+        string.IsNullOrWhiteSpace(message) ? "—" : message.Trim();
+}

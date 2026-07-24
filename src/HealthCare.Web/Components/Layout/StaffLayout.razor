@@ -56,6 +56,35 @@
                     <span>Doctor Availability</span>
                 </MenuItem>
             }
+            @if (OperationsPermissionRules.CanViewAnyOperations(Permissions))
+            {
+                <SubMenu Key="operations">
+                    <TitleTemplate>
+                        <Icon Type="tool" Theme="IconThemeType.Outline" />
+                        <span>Operations</span>
+                    </TitleTemplate>
+                    <ChildContent>
+                        @if (OperationsPermissionRules.CanViewReminders(Permissions))
+                        {
+                            <MenuItem Key="ops-reminders" RouterLink="/operations/reminders" RouterMatch="NavLinkMatch.Prefix">
+                                <span>Reminders</span>
+                            </MenuItem>
+                        }
+                        @if (OperationsPermissionRules.CanViewSummaries(Permissions))
+                        {
+                            <MenuItem Key="ops-summaries" RouterLink="/operations/clinic-summaries" RouterMatch="NavLinkMatch.Prefix">
+                                <span>Clinic Summaries</span>
+                            </MenuItem>
+                        }
+                        @if (OperationsPermissionRules.CanViewOperationsHealth(Permissions))
+                        {
+                            <MenuItem Key="ops-health" RouterLink="/operations/health" RouterMatch="NavLinkMatch.Prefix">
+                                <span>Operations Health</span>
+                            </MenuItem>
+                        }
+                    </ChildContent>
+                </SubMenu>
+            }
             @if (Permissions.Has(WebPermissions.ClinicsRead))
             {
                 <MenuItem Key="clinics" RouterLink="/clinics" RouterMatch="NavLinkMatch.Prefix">
@@ -191,6 +220,9 @@
                 var p when p.StartsWith("/appointments/calendar", StringComparison.Ordinal) => "calendar",
                 var p when p.StartsWith("/patients", StringComparison.Ordinal) => "patients",
                 var p when p.StartsWith("/availability", StringComparison.Ordinal) => "availability",
+                var p when p.StartsWith("/operations/reminders", StringComparison.Ordinal) => "ops-reminders",
+                var p when p.StartsWith("/operations/clinic-summaries", StringComparison.Ordinal) => "ops-summaries",
+                var p when p.StartsWith("/operations/health", StringComparison.Ordinal) => "ops-health",
                 var p when p.StartsWith("/clinics", StringComparison.Ordinal) => "clinics",
                 var p when p.StartsWith("/staff", StringComparison.Ordinal) => "staff",
                 _ => "dashboard",

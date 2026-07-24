@@ -24,8 +24,8 @@ Resolution uses server-side Identity roles (DB) + active staff membership + pati
 | `availability.manage_self` | Doctor own availability |
 | `availability.manage_clinic` | Clinic admin availability |
 | `availability.manage_organization` | Org admin availability |
-| `reminders.read` / `reminders.retry` | Staff reminder inspection |
-| `summaries.read` / `summaries.retry` | Daily clinic summary |
+| `reminders.read` / `reminders.retry` | Staff reminder inspection + `/operations/reminders` |
+| `summaries.read` / `summaries.retry` | Daily clinic summary runs + `/operations/clinic-summaries` |
 | `clinics.read` | Clinic discovery / directory |
 | `clinics.manage` | Legacy coarse clinic management (org/platform) |
 | `clinics.create` / `clinics.update` / `clinics.activate` / `clinics.deactivate` | Organization clinic CRUD and soft activation |

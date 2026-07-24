@@ -1,0 +1,113 @@
+@namespace HealthCare.Web.Components.Operations
+@inherits FeedbackComponent<SummaryRunDetailDialog.Args>
+@using HealthCare.Contracts.Appointments
+@using HealthCare.Web.Operations
+
+@if (_run is null)
+{
+    <Alert Type="@AlertType.Error" Message="Summary run details are unavailable." ShowIcon="true" />
+}
+else
+{
+    <div style="display:flex;flex-direction:column;gap:8px;">
+        <div class="hc-caption">Run ID: @_run.RunId</div>
+        <div><strong>Clinic:</strong> @_run.ClinicId</div>
+        <div><strong>Summary date:</strong> @_run.SummaryDate</div>
+        <div>
+            <strong>Status:</strong>
+            <StatusBadge Text="@SummaryRunStatusPresentation.DisplayLabel(_run.Status)"
+                         Tone="@SummaryRunStatusPresentation.ChipTone(_run.Status)" />
+        </div>
+        <div><strong>Appointments:</strong> @_run.AppointmentCount</div>
+        <div><strong>Attempts:</strong> @_run.AttemptCount</div>
+        <div><strong>Scheduled (UTC):</strong> @_run.ScheduledAtUtc.UtcDateTime.ToString("u")</div>
+        <div><strong>Started (UTC):</strong> @(_run.StartedAtUtc?.UtcDateTime.ToString("u") ?? "—")</div>
+        <div><strong>Completed (UTC):</strong> @(_run.CompletedAtUtc?.UtcDateTime.ToString("u") ?? "—")</div>
+        <div><strong>Error code:</strong> @(_run.LastErrorCode ?? "—")</div>
+        <div><strong>Error:</strong> @(SafeError(_run.LastError))</div>
+        <div class="hc-caption">Job correlation: @(_run.BackgroundJobId ?? "—")</div>
+        <Alert Type="@AlertType.Info"
+               Message="Provider secrets and Hangfire job payloads are never shown here."
+               ShowIcon="true"
+               Style="margin-top:0.5rem;" />
+    </div>
+}
+
+<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:1rem;">
+    <Button OnClick="CloseAsync" Disabled="_busy" AriaLabel="Close summary run detail">Close</Button>
+    @if (_run is not null
+         && OperationsPermissionRules.CanRetrySummaries(Permissions)
+         && SummaryRunStatusPresentation.AppearsRetryable(_run.Status)
+         && DateOnly.TryParse(_run.SummaryDate, out _))
+    {
+        <Button Type="@ButtonType.Primary" OnClick="RetryAsync" Disabled="_busy" AriaLabel="Retry clinic summary">
+            Retry
+        </Button>
+    }
+</div>
+
+@code {
+    public sealed class Args
+    {
+        public ClinicAppointmentSummaryRunResponse Run { get; init; } = default!;
+        public bool PlatformAdminBypass { get; init; }
+    }
+
+    [Inject] private IStaffOperationsApiClient OperationsApi { get; set; } = default!;
+    [Inject] private IPermissionState Permissions { get; set; } = default!;
+    [Inject] private IUiModalService Modals { get; set; } = default!;
+    [Inject] private IUserNotificationService Notify { get; set; } = default!;
+
+    private ClinicAppointmentSummaryRunResponse? _run;
+    private bool _busy;
+
+    protected override void OnInitialized() => _run = Options.Run;
+
+    private Task ConfirmOkAsync() => OkCancelRef!.OkAsync(new ModalClosingEventArgs());
+
+    private Task CloseAsync() => CancelCloseAsync();
+
+    private Task CancelCloseAsync() => OkCancelRef!.CancelAsync(new ModalClosingEventArgs());
+
+    private async Task RetryAsync()
+    {
+        if (_run is null || _busy || !DateOnly.TryParse(_run.SummaryDate, out var date))
+        {
+            return;
+        }
+
+        if (!await Modals.ConfirmAsync(
+                "Retry clinic summary",
+                $"Retry clinic summary for {_run.SummaryDate}?"))
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            _run = await OperationsApi.RetrySummaryAsync(
+                _run.ClinicId,
+                date,
+                Options.PlatformAdminBypass);
+            Notify.Success("Clinic summary queued for retry.");
+            await ConfirmOkAsync();
+        }
+        catch (ApiProblemException ex) when (SummaryProblemMessages.IsRetryConflict(ex))
+        {
+            Notify.Warning(SummaryProblemMessages.ToUserMessage(ex));
+            await ConfirmOkAsync();
+        }
+        catch (ApiProblemException ex)
+        {
+            Notify.Error(SummaryProblemMessages.ToUserMessage(ex));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string SafeError(string? message) =>
+        string.IsNullOrWhiteSpace(message) ? "—" : message.Trim();
+}

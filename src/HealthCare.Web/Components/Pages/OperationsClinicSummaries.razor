@@ -1,0 +1,427 @@
+@page "/operations/clinic-summaries"
+@attribute [Authorize]
+@using HealthCare.Contracts.Appointments
+@using HealthCare.Web.Components.Operations
+@using HealthCare.Web.Operations
+@implements IDisposable
+@inject IStaffOperationsApiClient OperationsApi
+@inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
+@inject IClinicWorkingContext ClinicContext
+@inject IUiModalService Modals
+@inject IUserNotificationService Notify
+@inject NavigationManager Navigation
+
+<PageTitle>Clinic Summaries</PageTitle>
+
+@if (Permissions.IsPatientOnly)
+{
+    <Alert Type="@AlertType.Error" Message="Patient accounts cannot use staff operations." ShowIcon="true" />
+}
+else if (!OperationsPermissionRules.CanViewSummaries(Permissions))
+{
+    <PermissionDeniedState Message="You do not have permission to view clinic summaries." />
+}
+else
+{
+    <HcPageHeader Title="Clinic Summaries"
+                  Subtitle="Daily clinic appointment summary runs (safe operational fields only)">
+        <Breadcrumb>
+            <Breadcrumb>
+                <BreadcrumbItem Href="/dashboard">Home</BreadcrumbItem>
+                <BreadcrumbItem>Operations</BreadcrumbItem>
+                <BreadcrumbItem>Clinic Summaries</BreadcrumbItem>
+            </Breadcrumb>
+        </Breadcrumb>
+        <ChildContent>
+            <Space>
+                @if (OperationsPermissionRules.CanViewReminders(Permissions))
+                {
+                    <Button OnClick='() => Navigation.NavigateTo("/operations/reminders")' AriaLabel="Open reminders">
+                        Reminders
+                    </Button>
+                }
+                @if (OperationsPermissionRules.CanViewOperationsHealth(Permissions))
+                {
+                    <Button OnClick='() => Navigation.NavigateTo("/operations/health")' AriaLabel="Open operations health">
+                        Health
+                    </Button>
+                }
+                <Button OnClick="RefreshAsync" Disabled="_loading" AriaLabel="Refresh clinic summaries">
+                    <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
+                </Button>
+            </Space>
+        </ChildContent>
+    </HcPageHeader>
+
+    @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+    {
+        <Alert Type="@AlertType.Info"
+               Message="Select an organization in the platform banner before loading clinic summaries."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
+    }
+
+    <div class="hc-card">
+        <div class="hc-filter-grid">
+            <div>
+                <label class="hc-filter-label" for="summary-status">Status</label>
+                <Select Id="summary-status" TItemValue="string" TItem="string" @bind-Value="_status" Style="width:100%;" AllowClear AriaLabel="Summary run status filter">
+                    <SelectOptions>
+                        <SelectOption TItemValue="string" TItem="string" Value="@("")" Label="Any status" />
+                        @foreach (var status in SummaryRunStatusPresentation.AllStatuses)
+                        {
+                            <SelectOption TItemValue="string" TItem="string" Value="@status" Label="@status" />
+                        }
+                    </SelectOptions>
+                </Select>
+            </div>
+            <div>
+                <label class="hc-filter-label" for="summary-from">From date</label>
+                <DatePicker Id="summary-from" TValue="DateTime?" @bind-Value="_fromDate" Style="width:100%;" AriaLabel="Summary runs from date" />
+            </div>
+            <div>
+                <label class="hc-filter-label" for="summary-to">To date</label>
+                <DatePicker Id="summary-to" TValue="DateTime?" @bind-Value="_toDate" Style="width:100%;" AriaLabel="Summary runs to date" />
+            </div>
+            @if (Permissions.CanFilterByClinic)
+            {
+                <ClinicPicker Value="_clinicId" ValueChanged="OnClinicFilterChanged" Label="Clinic filter"
+                              HelperText="@(Permissions.IsPlatformAdmin ? "Optional within selected organization" : "Leave empty for all clinics")"
+                              AllowClear="true" Required="false" ActiveOnly="null"
+                              PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
+                              PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
+                              Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)" />
+            }
+            <div style="display:flex;gap:8px;align-items:flex-end;">
+                <Button Type="@ButtonType.Primary" OnClick="ApplyFiltersAsync"
+                        Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)"
+                        AriaLabel="Search clinic summaries">
+                    Search
+                </Button>
+                <Button OnClick="ResetFiltersAsync" Disabled="_loading" AriaLabel="Reset filters">Reset</Button>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error)) { <ErrorState Message="@_error" /> }
+    @if (_loading) { <PageLoading /> }
+    else if (_items.Count == 0) { <EmptyState Title="No summary runs" Message="No clinic-summary runs match the current filters." /> }
+    else
+    {
+        <div class="hc-table-wrap">
+            <table class="hc-table" aria-label="Clinic summary runs">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Status</th>
+                        <th>Appointments</th>
+                        <th>Attempts</th>
+                        <th>Error</th>
+                        <th>Scheduled (UTC)</th>
+                        <th class="hc-actions">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var row in _items)
+                {
+                    <tr>
+                        <td>@row.SummaryDate</td>
+                        <td>
+                            <StatusBadge Text="@SummaryRunStatusPresentation.DisplayLabel(row.Status)"
+                                         Tone="@SummaryRunStatusPresentation.ChipTone(row.Status)" />
+                        </td>
+                        <td>@row.AppointmentCount</td>
+                        <td>@row.AttemptCount</td>
+                        <td>@(row.LastErrorCode ?? "—")</td>
+                        <td><span class="hc-caption">@row.ScheduledAtUtc.UtcDateTime.ToString("u")</span></td>
+                        <td class="hc-actions">
+                            <Space Wrap>
+                                <Button Type="@ButtonType.Link" OnClick="@(() => OpenDetailAsync(row))" AriaLabel="View summary run detail">
+                                    Details
+                                </Button>
+                                @if (OperationsPermissionRules.CanRetrySummaries(Permissions)
+                                     && SummaryRunStatusPresentation.AppearsRetryable(row.Status))
+                                {
+                                    <Button Type="@ButtonType.Link" OnClick="@(() => RetryAsync(row))" AriaLabel="Retry clinic summary">
+                                        Retry
+                                    </Button>
+                                }
+                            </Space>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.75rem;gap:8px;flex-wrap:wrap;">
+            <span class="hc-caption">Total: @_totalCount</span>
+            <Space>
+                <Button Disabled="@(_page <= 1 || _loading)" OnClick="@(() => OnPageChanged(_page - 1))" AriaLabel="Previous page">Prev</Button>
+                <span class="hc-caption">Page @_page / @_totalPages</span>
+                <Button Disabled="@(_page >= _totalPages || _loading)" OnClick="@(() => OnPageChanged(_page + 1))" AriaLabel="Next page">Next</Button>
+            </Space>
+        </div>
+    }
+}
+
+@code {
+    private readonly List<ClinicAppointmentSummaryRunResponse> _items = [];
+    private bool _loading;
+    private string? _error;
+    private string? _status = "Failed";
+    private DateTime? _fromDate = DateTime.UtcNow.Date.AddDays(-14);
+    private DateTime? _toDate = DateTime.UtcNow.Date;
+    private Guid? _clinicId;
+    private int _page = 1;
+    private int _pageSize = 50;
+    private int _totalCount;
+    private int _totalPages = 1;
+    private bool _subscribedPlatform;
+    private bool _subscribedClinic;
+    private Guid? _boundOrganizationId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Permissions.IsPatientOnly || !OperationsPermissionRules.CanViewSummaries(Permissions))
+        {
+            return;
+        }
+
+        if (Permissions.IsPlatformAdmin)
+        {
+            PlatformTenant.Changed += OnPlatformTenantChanged;
+            _subscribedPlatform = true;
+            SyncFromPlatformTenant();
+        }
+        else if (Permissions.IsOrganizationAdmin)
+        {
+            ClinicContext.Changed += OnClinicContextChanged;
+            _subscribedClinic = true;
+            if (ClinicContext.HasClinic)
+            {
+                _clinicId = ClinicContext.SelectedClinicId;
+            }
+        }
+        else if (!Permissions.CanFilterByClinic && Permissions.CurrentUser?.ClinicId is Guid clinicId)
+        {
+            _clinicId = clinicId;
+        }
+
+        await LoadAsync();
+    }
+
+    public void Dispose()
+    {
+        if (_subscribedPlatform)
+        {
+            PlatformTenant.Changed -= OnPlatformTenantChanged;
+        }
+
+        if (_subscribedClinic)
+        {
+            ClinicContext.Changed -= OnClinicContextChanged;
+        }
+    }
+
+    private void OnPlatformTenantChanged() => InvokeAsync(async () =>
+    {
+        var orgChanged = _boundOrganizationId != PlatformTenant.SelectedOrganizationId;
+        SyncFromPlatformTenant();
+        if (orgChanged)
+        {
+            _items.Clear();
+            _error = null;
+            _page = 1;
+        }
+
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    private void OnClinicContextChanged() => InvokeAsync(async () =>
+    {
+        _clinicId = ClinicContext.SelectedClinicId;
+        _page = 1;
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    private void SyncFromPlatformTenant()
+    {
+        _boundOrganizationId = PlatformTenant.SelectedOrganizationId;
+        if (Permissions.IsPlatformAdmin && PlatformTenant.HasClinic)
+        {
+            _clinicId = PlatformTenant.SelectedClinicId;
+        }
+    }
+
+    private async Task OnClinicFilterChanged(Guid? clinicId)
+    {
+        _clinicId = clinicId;
+        if (Permissions.IsPlatformAdmin)
+        {
+            if (clinicId is Guid id && id != Guid.Empty)
+            {
+                if (PlatformTenant.SelectedClinicId != id)
+                {
+                    PlatformTenant.SelectClinic(id);
+                }
+            }
+            else if (PlatformTenant.HasClinic)
+            {
+                PlatformTenant.ClearClinic();
+            }
+
+            _page = 1;
+            await LoadAsync();
+            return;
+        }
+
+        if (Permissions.IsOrganizationAdmin)
+        {
+            if (clinicId is Guid id && id != Guid.Empty)
+            {
+                ClinicContext.SelectClinic(id);
+            }
+            else
+            {
+                ClinicContext.ClearClinic();
+            }
+
+            return;
+        }
+
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task ResetFiltersAsync()
+    {
+        _status = "Failed";
+        _fromDate = DateTime.UtcNow.Date.AddDays(-14);
+        _toDate = DateTime.UtcNow.Date;
+        _page = 1;
+        _pageSize = 50;
+
+        if (Permissions.IsPlatformAdmin)
+        {
+            _clinicId = PlatformTenant.SelectedClinicId;
+        }
+        else if (_subscribedClinic && ClinicContext.HasClinic)
+        {
+            ClinicContext.ClearClinic();
+            return;
+        }
+        else if (Permissions.CanFilterByClinic)
+        {
+            _clinicId = null;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task RefreshAsync() => await LoadAsync();
+
+    private async Task OnPageChanged(int page)
+    {
+        _page = page;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+        {
+            _items.Clear();
+            _totalCount = 0;
+            _totalPages = 1;
+            return;
+        }
+
+        _loading = true;
+        _error = null;
+        try
+        {
+            var query = new ClinicAppointmentSummaryRunQuery
+            {
+                ClinicId = _clinicId,
+                Status = string.IsNullOrWhiteSpace(_status) ? null : _status,
+                FromDate = _fromDate is DateTime from ? DateOnly.FromDateTime(from).ToString("yyyy-MM-dd") : null,
+                ToDate = _toDate is DateTime to ? DateOnly.FromDateTime(to).ToString("yyyy-MM-dd") : null,
+                Page = _page,
+                PageSize = _pageSize,
+            };
+
+            var result = await OperationsApi.ListSummaryRunsAsync(query, Permissions.IsPlatformAdmin);
+            _items.Clear();
+            _items.AddRange(result.Items);
+            _totalCount = result.TotalCount;
+            _totalPages = Math.Max(1, result.TotalPages);
+            _page = result.Page < 1 ? 1 : result.Page;
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = SummaryProblemMessages.ToUserMessage(ex);
+            _items.Clear();
+            _totalCount = 0;
+            _totalPages = 1;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenDetailAsync(ClinicAppointmentSummaryRunResponse row)
+    {
+        if (await Modals.ShowAsync<SummaryRunDetailDialog, SummaryRunDetailDialog.Args>(
+                "Clinic summary run",
+                new SummaryRunDetailDialog.Args
+                {
+                    Run = row,
+                    PlatformAdminBypass = Permissions.IsPlatformAdmin,
+                }))
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task RetryAsync(ClinicAppointmentSummaryRunResponse row)
+    {
+        if (!OperationsPermissionRules.CanRetrySummaries(Permissions)
+            || !DateOnly.TryParse(row.SummaryDate, out var date))
+        {
+            return;
+        }
+
+        if (!await Modals.ConfirmAsync(
+                "Retry clinic summary",
+                $"Retry clinic summary for {row.SummaryDate}?"))
+        {
+            return;
+        }
+
+        try
+        {
+            await OperationsApi.RetrySummaryAsync(row.ClinicId, date, Permissions.IsPlatformAdmin);
+            Notify.Success("Clinic summary queued for retry.");
+            await LoadAsync();
+        }
+        catch (ApiProblemException ex) when (SummaryProblemMessages.IsRetryConflict(ex))
+        {
+            Notify.Warning(SummaryProblemMessages.ToUserMessage(ex));
+            await LoadAsync();
+        }
+        catch (ApiProblemException ex)
+        {
+            Notify.Error(SummaryProblemMessages.ToUserMessage(ex));
+        }
+    }
+}

@@ -1,0 +1,181 @@
+@page "/operations/health"
+@attribute [Authorize]
+@using HealthCare.Contracts.Appointments
+@using HealthCare.Web.Operations
+@implements IDisposable
+@inject IStaffOperationsApiClient OperationsApi
+@inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
+@inject NavigationManager Navigation
+
+<PageTitle>Operations Health</PageTitle>
+
+@if (Permissions.IsPatientOnly)
+{
+    <Alert Type="@AlertType.Error" Message="Patient accounts cannot use staff operations." ShowIcon="true" />
+}
+else if (!OperationsPermissionRules.CanViewOperationsHealth(Permissions))
+{
+    <PermissionDeniedState Message="You do not have permission to view operations health." />
+}
+else
+{
+    <HcPageHeader Title="Operations Health"
+                  Subtitle="Safe sender and Hangfire worker flags — no secrets or job payloads">
+        <Breadcrumb>
+            <Breadcrumb>
+                <BreadcrumbItem Href="/dashboard">Home</BreadcrumbItem>
+                <BreadcrumbItem>Operations</BreadcrumbItem>
+                <BreadcrumbItem>Operations Health</BreadcrumbItem>
+            </Breadcrumb>
+        </Breadcrumb>
+        <ChildContent>
+            <Space>
+                @if (OperationsPermissionRules.CanViewReminders(Permissions))
+                {
+                    <Button OnClick='() => Navigation.NavigateTo("/operations/reminders")' AriaLabel="Open reminders">
+                        Reminders
+                    </Button>
+                }
+                @if (OperationsPermissionRules.CanViewSummaries(Permissions))
+                {
+                    <Button OnClick='() => Navigation.NavigateTo("/operations/clinic-summaries")' AriaLabel="Open clinic summaries">
+                        Clinic Summaries
+                    </Button>
+                }
+                <Button OnClick="LoadAsync" Disabled="_loading" AriaLabel="Refresh operations health">
+                    <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
+                </Button>
+            </Space>
+        </ChildContent>
+    </HcPageHeader>
+
+    @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+    {
+        <Alert Type="@AlertType.Info"
+               Message="Select an organization in the platform banner before loading operations health."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_error)) { <ErrorState Message="@_error" /> }
+    @if (_loading) { <PageLoading /> }
+    else if (_health is not null)
+    {
+        <AntDesign.Row Gutter="(16, 16)">
+            <AntDesign.Col Xs="24" Md="12">
+                <Card Title="Reminder sender" Size="CardSize.Small">
+                    <div><strong>Mode:</strong> @_health.ReminderSenderMode</div>
+                    <div class="hc-caption" style="margin-top:0.5rem;">
+                        Development senders capture safely; production uses configured providers without exposing secrets here.
+                    </div>
+                </Card>
+            </AntDesign.Col>
+            <AntDesign.Col Xs="24" Md="12">
+                <Card Title="Clinic-summary sender" Size="CardSize.Small">
+                    <div><strong>Mode:</strong> @_health.SummarySenderMode</div>
+                    <div class="hc-caption" style="margin-top:0.5rem;">
+                        Sender mode only — templates and delivery payloads are not listed.
+                    </div>
+                </Card>
+            </AntDesign.Col>
+            <AntDesign.Col Xs="24" Md="8">
+                <Card Title="Workers" Size="CardSize.Small">
+                    <StatusBadge Text="@(_health.HangfireWorkersEnabled ? "Enabled" : "Disabled")"
+                                 Tone="@(_health.HangfireWorkersEnabled ? StatusTone.Success : StatusTone.Warning)" />
+                </Card>
+            </AntDesign.Col>
+            <AntDesign.Col Xs="24" Md="8">
+                <Card Title="Recurring jobs" Size="CardSize.Small">
+                    <StatusBadge Text="@(_health.HangfireRecurringJobsScheduled ? "Scheduled" : "Not scheduled")"
+                                 Tone="@(_health.HangfireRecurringJobsScheduled ? StatusTone.Success : StatusTone.Warning)" />
+                </Card>
+            </AntDesign.Col>
+            <AntDesign.Col Xs="24" Md="8">
+                <Card Title="Dashboard" Size="CardSize.Small">
+                    <StatusBadge Text="@(_health.HangfireDashboardEnabled ? "Enabled" : "Disabled")"
+                                 Tone="@(_health.HangfireDashboardEnabled ? StatusTone.Info : StatusTone.Default)" />
+                </Card>
+            </AntDesign.Col>
+            <AntDesign.Col Xs="24">
+                <Card Title="Hangfire queues" Size="CardSize.Small">
+                    @if (_health.HangfireQueues.Count == 0)
+                    {
+                        <EmptyState Message="No queue names reported." />
+                    }
+                    else
+                    {
+                        <Space Wrap>
+                            @foreach (var queue in _health.HangfireQueues)
+                            {
+                                <StatusBadge Text="@queue" Tone="StatusTone.Neutral" />
+                            }
+                        </Space>
+                    }
+                </Card>
+            </AntDesign.Col>
+        </AntDesign.Row>
+    }
+}
+
+@code {
+    private StaffOperationsHealthResponse? _health;
+    private bool _loading;
+    private string? _error;
+    private bool _subscribedPlatform;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Permissions.IsPatientOnly || !OperationsPermissionRules.CanViewOperationsHealth(Permissions))
+        {
+            return;
+        }
+
+        if (Permissions.IsPlatformAdmin)
+        {
+            PlatformTenant.Changed += OnPlatformTenantChanged;
+            _subscribedPlatform = true;
+        }
+
+        await LoadAsync();
+    }
+
+    public void Dispose()
+    {
+        if (_subscribedPlatform)
+        {
+            PlatformTenant.Changed -= OnPlatformTenantChanged;
+        }
+    }
+
+    private void OnPlatformTenantChanged() => InvokeAsync(async () =>
+    {
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    private async Task LoadAsync()
+    {
+        if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+        {
+            _health = null;
+            return;
+        }
+
+        _loading = true;
+        _error = null;
+        try
+        {
+            _health = await OperationsApi.GetOperationsHealthAsync(Permissions.IsPlatformAdmin);
+        }
+        catch (ApiProblemException ex)
+        {
+            _health = null;
+            _error = ReminderProblemMessages.ToUserMessage(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}
