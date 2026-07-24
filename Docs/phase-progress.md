@@ -91,7 +91,7 @@ Authoritative design docs:
 | 5 | Patients and clinic-patient registration | Complete (staff search + clinic admin) | 2026-07-23 |
 | 6 | Staff and doctors | Partial (staff-management APIs; UI deferred) | 2026-07-23 |
 | 7 | Appointment booking | Partial (foundation + availability + reschedule) | 2026-07-23 |
-| 8 | Staff web application (Fluent UI) | Partial (auth + staff + appointments UI; MudBlazor removed) | 2026-07-24 |
+| 8 | Staff web application (Ant Design) | Partial (auth + staff + appointments UI; Fluent removed) | 2026-07-24 |
 | 9 | Medical notes | Not started | — |
 | 10 | Hangfire and notifications | Partial (reminders + daily clinic summary) | 2026-07-23 |
 | 11 | Patient mobile application | Not started | — |
@@ -709,6 +709,32 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 - No paid Fluent scheduler — calendar is custom CSS Grid day/week
 - Dense lists use enterprise HTML tables (server-side paging preserved)
 - Some date/time fields use native inputs styled to match Fluent
+
+### Verification
+
+- See commit verification notes
+
+---
+## Phase 8f — Ant Design Blazor migration (replace Fluent UI)
+
+**Status:** Complete  
+**Updated:** 2026-07-24
+
+### Delivered
+
+- Replaced Fluent UI with `AntDesign` **1.6.2**
+- Ant Design Pro–inspired enterprise shell (`Sider` + `Header` + page container)
+- Shared: `HcPageHeader`, `StatusBadge`, loading/empty/error/permission states, `IUserNotificationService`, `IUiModalService`
+- Migrated shell, login, dashboard, staff, patients, appointments, calendar, availability, pickers, dialogs
+- Zero Fluent UI package/usings/components remaining in Web
+- Docs: `Docs/ant-design-enterprise-system.md`
+- NU1900 kept non-fatal under `TreatWarningsAsErrors` (audit still enabled)
+
+### Known limitations
+
+- No paid Ant Design Pro package — open-source AntDesign only
+- Calendar is custom CSS Grid day/week
+- Dense lists use enterprise HTML tables
 
 ### Verification
 

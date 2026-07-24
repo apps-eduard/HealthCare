@@ -1,7 +1,7 @@
 namespace HealthCare.Web.Services;
 
 /// <summary>
-/// UI toast notifications for staff pages (wraps Fluent IToastService).
+/// UI toast notifications for staff pages (wraps Ant Design MessageService).
 /// </summary>
 public interface IUserNotificationService
 {

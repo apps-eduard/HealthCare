@@ -1,4 +1,4 @@
-@implements IDialogContentComponent<StaffDetailDialog.Args>
+@inherits FeedbackComponent<StaffDetailDialog.Args>
 @inject IStaffManagementApiClient StaffApi
 @inject IPermissionState Permissions
 
@@ -8,11 +8,11 @@
 }
 else if (!string.IsNullOrWhiteSpace(_error))
 {
-    <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">@_error</FluentMessageBar>
+    <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" />
 }
 else if (_detail is not null)
 {
-    <FluentStack Orientation="Orientation.Vertical" VerticalGap="4">
+    <div style="display:flex;flex-direction:column;gap:4px;">
         <div><b>Name:</b> @($"{_detail.FirstName} {_detail.LastName}")</div>
         <div><b>Display name:</b> @(_detail.DisplayName ?? "—")</div>
         <div><b>Email:</b> @_detail.Email</div>
@@ -27,23 +27,17 @@ else if (_detail is not null)
         <div><b>Created:</b> @_detail.CreatedAtUtc.ToString("u")</div>
         <div><b>Updated:</b> @_detail.UpdatedAtUtc.ToString("u")</div>
         <div class="hc-caption">Version @_detail.Version</div>
-    </FluentStack>
+    </div>
 }
-<FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Style="margin-top:1rem;justify-content:flex-end;">
-    <FluentButton Appearance="Appearance.Outline" OnClick="CloseAsync">Close</FluentButton>
-</FluentStack>
+<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;">
+    <Button OnClick="CancelCloseAsync">Close</Button>
+</div>
 
 @code {
     public sealed class Args
     {
         public Guid StaffMemberId { get; init; }
     }
-
-    [Parameter]
-    public Args Content { get; set; } = default!;
-
-    [CascadingParameter]
-    private FluentDialog Dialog { get; set; } = default!;
 
     private StaffDetailResponse? _detail;
     private bool _loading = true;
@@ -54,7 +48,7 @@ else if (_detail is not null)
         try
         {
             var bypass = Permissions.CurrentUser?.Roles.Contains(WebRoles.PlatformAdmin, StringComparer.Ordinal) == true;
-            _detail = await StaffApi.GetByIdAsync(Content.StaffMemberId, platformAdminBypass: bypass);
+            _detail = await StaffApi.GetByIdAsync(Options.StaffMemberId, platformAdminBypass: bypass);
         }
         catch (ApiProblemException ex)
         {
@@ -66,5 +60,5 @@ else if (_detail is not null)
         }
     }
 
-    private async Task CloseAsync() => await Dialog.CloseAsync();
+    private Task CancelCloseAsync() => OkCancelRef!.CancelAsync(new ModalClosingEventArgs());
 }

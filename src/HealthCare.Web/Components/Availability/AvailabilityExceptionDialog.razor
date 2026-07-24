@@ -1,34 +1,58 @@
 @namespace HealthCare.Web.Components.Availability
-@implements IDialogContentComponent<AvailabilityExceptionDialog.Args>
+@inherits FeedbackComponent<AvailabilityExceptionDialog.Args>
 @using HealthCare.Contracts.Appointments
 @using HealthCare.Web.Availability
 
-<FluentStack Orientation="Orientation.Vertical" VerticalGap="12">
-    <FluentSelect TOption="string" Value="_type" ValueChanged="OnTypeChanged" Label="Exception type" Required="true" Disabled="_busy" Style="width:100%;">
-        @foreach (var type in AvailabilityPresentation.ExceptionTypes)
-        {
-            <FluentOption Value="@type">@AvailabilityPresentation.ExceptionTypeLabel(type)</FluentOption>
-        }
-    </FluentSelect>
-    <FluentDatePicker @bind-Value="_date" Label="Date (clinic local)" Disabled="_busy" Style="width:100%;" />
+<div style="display:flex;flex-direction:column;gap:12px;">
+    <div>
+        <label>@FieldLabel.Mark("Exception type")</label>
+        <Select TItemValue="string"
+                TItem="string"
+                Value="_type"
+                ValueChanged="OnTypeChanged"
+                Disabled="_busy"
+                Style="width:100%;">
+            <SelectOptions>
+                @foreach (var type in AvailabilityPresentation.ExceptionTypes)
+                {
+                    <SelectOption TItemValue="string"
+                                  TItem="string"
+                                  Value="@type"
+                                  Label="@AvailabilityPresentation.ExceptionTypeLabel(type)" />
+                }
+            </SelectOptions>
+        </Select>
+    </div>
+    <div>
+        <label>Date (clinic local)</label>
+        <DatePicker TValue="DateTime?" @bind-Value="_date" Disabled="_busy" Style="width:100%;" />
+    </div>
     @if (AvailabilityPresentation.ExceptionRequiresTimes(_type))
     {
-        <FluentTextField @bind-Value="_start" Label="Start (HH:mm)" Required="true" Disabled="_busy" Style="width:100%;" />
-        <FluentTextField @bind-Value="_end" Label="End (HH:mm)" Required="true" Disabled="_busy" Style="width:100%;" />
+        <div>
+            <label>@FieldLabel.Mark("Start (HH:mm)")</label>
+            <Input @bind-Value="_start" Disabled="_busy" Style="width:100%;" />
+        </div>
+        <div>
+            <label>@FieldLabel.Mark("End (HH:mm)")</label>
+            <Input @bind-Value="_end" Disabled="_busy" Style="width:100%;" />
+        </div>
     }
-    <FluentTextField @bind-Value="_reason" Label="Reason (optional)" Disabled="_busy" Style="width:100%;" />
+    <div>
+        <label>Reason (optional)</label>
+        <Input @bind-Value="_reason" Disabled="_busy" Style="width:100%;" />
+    </div>
     @if (!string.IsNullOrWhiteSpace(_error))
     {
-        <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">@_error</FluentMessageBar>
+        <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" />
     }
-</FluentStack>
-<FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Style="margin-top:1rem;justify-content:flex-end;">
-    <FluentButton Appearance="Appearance.Outline" OnClick="CancelAsync" Disabled="_busy">Cancel</FluentButton>
-    <FluentButton Appearance="Appearance.Accent" OnClick="SubmitAsync" Disabled="_busy || !ClientValid">
-        @if (_busy) { <FluentProgressRing Style="width:16px;height:16px;margin-right:0.35rem;" /> }
+</div>
+<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;">
+    <Button OnClick="CancelCloseAsync" Disabled="_busy">Cancel</Button>
+    <Button Type="@ButtonType.Primary" OnClick="SubmitAsync" Loading="_busy" Disabled="_busy || !ClientValid">
         Create
-    </FluentButton>
-</FluentStack>
+    </Button>
+</div>
 
 @code {
     public sealed class Args
@@ -37,8 +61,6 @@
         public bool PlatformAdminBypass { get; init; }
     }
 
-    [Parameter] public Args Content { get; set; } = default!;
-    [CascadingParameter] private FluentDialog Dialog { get; set; } = default!;
     [Inject] private IDoctorAvailabilityApiClient Api { get; set; } = default!;
     [Inject] private IUserNotificationService Notify { get; set; } = default!;
 
@@ -85,7 +107,9 @@
         return Task.CompletedTask;
     }
 
-    private async Task CancelAsync() => await Dialog.CancelAsync();
+    private Task CancelCloseAsync() => OkCancelRef!.CancelAsync(new ModalClosingEventArgs());
+
+    private Task ConfirmOkAsync() => OkCancelRef!.OkAsync(new ModalClosingEventArgs());
 
     private async Task SubmitAsync()
     {
@@ -100,8 +124,8 @@
         try
         {
             var requiresTimes = AvailabilityPresentation.ExceptionRequiresTimes(_type);
-            var created = await Api.CreateExceptionAsync(
-                Content.DoctorStaffMemberId,
+            await Api.CreateExceptionAsync(
+                Options.DoctorStaffMemberId,
                 new CreateDoctorAvailabilityExceptionRequest
                 {
                     Date = DateOnly.FromDateTime(_date.Value),
@@ -110,9 +134,9 @@
                     EndLocalTime = requiresTimes ? _end?.Trim() : null,
                     Reason = string.IsNullOrWhiteSpace(_reason) ? null : _reason.Trim(),
                 },
-                Content.PlatformAdminBypass);
+                Options.PlatformAdminBypass);
             Notify.Success("Exception created.");
-            await Dialog.CloseAsync(DialogResult.Ok(created));
+            await ConfirmOkAsync();
         }
         catch (ApiProblemException ex)
         {

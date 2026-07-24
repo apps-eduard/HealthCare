@@ -1,14 +1,6 @@
 ﻿@using HealthCare.Web.Components.Layout
 @using HealthCare.Web.Components.Pages
 @using Microsoft.AspNetCore.Components.Authorization
-@using Microsoft.FluentUI.AspNetCore.Components
-
-<FluentDesignTheme Mode="DesignThemeModes.Light" OfficeColor="OfficeColor.Office" StorageName="hc-theme" />
-<FluentToastProvider MaxToastCount="5" Position="ToastPosition.BottomRight" />
-<FluentDialogProvider />
-<FluentTooltipProvider />
-<FluentMessageBarProvider Section="MESSAGES_TOP" />
-<FluentMenuProvider />
 
 <CascadingAuthenticationState>
     <Router AppAssembly="typeof(Program).Assembly" NotFoundPage="typeof(Pages.NotFound)">

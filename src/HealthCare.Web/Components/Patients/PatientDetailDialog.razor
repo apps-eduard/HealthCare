@@ -1,5 +1,5 @@
 @namespace HealthCare.Web.Components.Patients
-@implements IDialogContentComponent<PatientDetailDialog.Args>
+@inherits FeedbackComponent<PatientDetailDialog.Args>
 @using HealthCare.Contracts.Patients
 @using HealthCare.Web.Patients
 
@@ -9,16 +9,18 @@
 }
 else if (_patient is null)
 {
-    <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">@(_error ?? "Patient was not found or you do not have access.")</FluentMessageBar>
+    <Alert Type="@AlertType.Error"
+           Message="@(_error ?? "Patient was not found or you do not have access.")"
+           ShowIcon="true" />
 }
 else
 {
     @if (!string.IsNullOrWhiteSpace(_error))
     {
-        <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false" Style="margin-bottom:0.75rem;">@_error</FluentMessageBar>
+        <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" Style="margin-bottom:0.75rem;" />
     }
 
-    <FluentStack Orientation="Orientation.Vertical" VerticalGap="8">
+    <div style="display:flex;flex-direction:column;gap:8px;">
         <div><strong>Local number:</strong> @_patient.LocalPatientNumber</div>
         <div><strong>Name:</strong> @PatientDisplay.FullName(_patient)</div>
         <div><strong>Date of birth:</strong> @(_patient.DateOfBirth?.ToString("yyyy-MM-dd") ?? "—")</div>
@@ -47,32 +49,41 @@ else
             <div><strong>Emergency contact:</strong> @_patient.EmergencyContact</div>
         }
         <div class="hc-caption">Patient ID: @_patient.PatientId</div>
-    </FluentStack>
+    </div>
 
     @if (Permissions.Has(WebPermissions.PatientsUpdateClinicStatus))
     {
         <hr style="margin:1rem 0;border:0;border-top:1px solid var(--hc-border);" />
         <div style="font-weight:600;margin-bottom:0.5rem;">Update clinic enrollment status</div>
-        <FluentSelect TOption="string" @bind-Value="_newStatus" Label="ClinicPatient status" Disabled="_busy" Style="width:100%;">
-            @foreach (var status in PatientStatusPresentation.ClinicPatientStatuses)
-            {
-                <FluentOption Value="@status">@status</FluentOption>
-            }
-        </FluentSelect>
+        <div>
+            <label>ClinicPatient status</label>
+            <Select TItemValue="string"
+                    TItem="string"
+                    @bind-Value="_newStatus"
+                    Disabled="_busy"
+                    Style="width:100%;">
+                <SelectOptions>
+                    @foreach (var status in PatientStatusPresentation.ClinicPatientStatuses)
+                    {
+                        <SelectOption TItemValue="string" TItem="string" Value="@status" Label="@status" />
+                    }
+                </SelectOptions>
+            </Select>
+        </div>
     }
 }
-<FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Style="margin-top:1rem;justify-content:flex-end;">
-    <FluentButton Appearance="Appearance.Outline" OnClick="CloseAsync" Disabled="_busy">Close</FluentButton>
+<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;">
+    <Button OnClick="CloseAsync" Disabled="_busy">Close</Button>
     @if (_patient is not null && Permissions.Has(WebPermissions.PatientsUpdateClinicStatus))
     {
-        <FluentButton Appearance="Appearance.Accent"
-                      Disabled="_busy || string.IsNullOrWhiteSpace(_newStatus) || _newStatus == _patient.ClinicPatientStatus"
-                      OnClick="ConfirmUpdateAsync">
-            @if (_busy) { <FluentProgressRing Style="width:16px;height:16px;margin-right:0.35rem;" /> }
+        <Button Type="@ButtonType.Primary"
+                Disabled="_busy || string.IsNullOrWhiteSpace(_newStatus) || _newStatus == _patient.ClinicPatientStatus"
+                Loading="_busy"
+                OnClick="ConfirmUpdateAsync">
             Update status
-        </FluentButton>
+        </Button>
     }
-</FluentStack>
+</div>
 
 @code {
     public sealed class Args
@@ -81,17 +92,15 @@ else
         public bool PlatformAdminBypass { get; init; }
     }
 
-    [Parameter] public Args Content { get; set; } = default!;
-    [CascadingParameter] private FluentDialog Dialog { get; set; } = default!;
     [Inject] private IStaffPatientApiClient PatientsApi { get; set; } = default!;
     [Inject] private IPermissionState Permissions { get; set; } = default!;
     [Inject] private IClinicDirectoryApiClient ClinicsApi { get; set; } = default!;
     [Inject] private IClinicDirectoryCache ClinicCache { get; set; } = default!;
-    [Inject] private IDialogService DialogService { get; set; } = default!;
+    [Inject] private IUiModalService Modals { get; set; } = default!;
     [Inject] private IUserNotificationService Notify { get; set; } = default!;
 
-    private Guid PatientId => Content.PatientId;
-    private bool PlatformAdminBypass => Content.PlatformAdminBypass;
+    private Guid PatientId => Options.PatientId;
+    private bool PlatformAdminBypass => Options.PlatformAdminBypass;
 
     private StaffPatientDetailResponse? _patient;
     private string? _clinicLabel;
@@ -166,13 +175,10 @@ else
             return;
         }
 
-        var confirm = await DialogService.ShowConfirmationAsync(
-            $"Change clinic enrollment status to '{_newStatus}'?",
+        var confirmed = await Modals.ConfirmAsync(
             "Update clinic enrollment",
-            "Update",
-            "Cancel");
-        var result = await confirm.Result;
-        if (result.Cancelled)
+            $"Change clinic enrollment status to '{_newStatus}'?");
+        if (!confirmed)
         {
             return;
         }
@@ -205,13 +211,10 @@ else
         }
         catch (ApiProblemException ex) when (PatientProblemMessages.IsConcurrencyConflict(ex))
         {
-            var reload = await DialogService.ShowConfirmationAsync(
-                "This clinic patient record was updated elsewhere. Reload the latest version?",
+            var reload = await Modals.ConfirmAsync(
                 "Record changed",
-                "Reload",
-                "Close");
-            var result = await reload.Result;
-            if (!result.Cancelled)
+                "This clinic patient record was updated elsewhere. Reload the latest version?");
+            if (reload)
             {
                 await LoadAsync();
             }
@@ -231,6 +234,9 @@ else
         }
     }
 
-    private async Task CloseAsync() =>
-        await Dialog.CloseAsync(_changed ? DialogResult.Ok(true) : DialogResult.Cancel());
+    private Task ConfirmOkAsync() => OkCancelRef!.OkAsync(new ModalClosingEventArgs());
+
+    private Task CancelCloseAsync() => OkCancelRef!.CancelAsync(new ModalClosingEventArgs());
+
+    private Task CloseAsync() => _changed ? ConfirmOkAsync() : CancelCloseAsync();
 }

@@ -8,55 +8,62 @@
 
 @if (Permissions.IsPatientOnly)
 {
-    <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">
-        Patient accounts cannot use the staff application.
-    </FluentMessageBar>
+    <Alert Type="@AlertType.Error"
+           Message="Patient accounts cannot use the staff application."
+           ShowIcon="true" />
 }
 else if (!Permissions.IsStaffUser)
 {
-    <FluentMessageBar Intent="MessageIntent.Warning" AllowDismiss="false">
-        An active staff membership is required.
-    </FluentMessageBar>
+    <Alert Type="@AlertType.Warning"
+           Message="An active staff membership is required."
+           ShowIcon="true" />
 }
 else
 {
-    <PageHeader Title="Dashboard"
-                Subtitle="@($"Welcome{(string.IsNullOrWhiteSpace(Permissions.CurrentUser?.Email) ? "" : $", {Permissions.CurrentUser!.Email}")}.")" />
+    <HcPageHeader Title="Dashboard"
+                Subtitle="@($"Welcome{(string.IsNullOrWhiteSpace(Permissions.CurrentUser?.Email) ? "" : $", {Permissions.CurrentUser!.Email}")}.")">
+        <Breadcrumb>
+            <Breadcrumb>
+                <BreadcrumbItem>Home</BreadcrumbItem>
+                <BreadcrumbItem>Dashboard</BreadcrumbItem>
+            </Breadcrumb>
+        </Breadcrumb>
+    </HcPageHeader>
 
-    <FluentCard Class="hc-card">
-        <h2 class="hc-caption" style="margin-top:0;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">Session context</h2>
+    <div class="hc-card">
+        <div class="hc-caption" style="margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">Session context</div>
         <p>Organization: @(Permissions.CurrentUser?.OrganizationId?.ToString("D") ?? "—")</p>
         <p>Clinic: @(Permissions.CurrentUser?.ClinicId?.ToString("D") ?? "—")</p>
         <p>Roles: @string.Join(", ", Permissions.CurrentUser?.Roles ?? [])</p>
         <p>Staff membership: @(Permissions.CurrentUser?.HasActiveStaffMembership == true ? "Active" : "None")</p>
-    </FluentCard>
+    </div>
 
-    <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Wrap="true">
+    <Space Wrap>
         @if (Permissions.Has(WebPermissions.AppointmentsRead))
         {
-            <FluentButton Appearance="Appearance.Accent" Href="/appointments" IconStart="@(new Icons.Regular.Size20.CalendarLtr())">
-                Appointments
-            </FluentButton>
+            <Button Type="@ButtonType.Primary" OnClick='() => Navigation.NavigateTo("/appointments")'>
+                <Icon Type="calendar" Theme="IconThemeType.Outline" /> Appointments
+            </Button>
         }
         @if (Permissions.Has(WebPermissions.PatientsSearch))
         {
-            <FluentButton Appearance="Appearance.Accent" Href="/patients" IconStart="@(new Icons.Regular.Size20.People())">
-                Patients
-            </FluentButton>
+            <Button Type="@ButtonType.Primary" OnClick='() => Navigation.NavigateTo("/patients")'>
+                <Icon Type="team" Theme="IconThemeType.Outline" /> Patients
+            </Button>
         }
         @if (AvailabilityPermissionRules.CanManage(Permissions))
         {
-            <FluentButton Appearance="Appearance.Accent" Href="/availability" IconStart="@(new Icons.Regular.Size20.Clock())">
-                Availability
-            </FluentButton>
+            <Button Type="@ButtonType.Primary" OnClick='() => Navigation.NavigateTo("/availability")'>
+                <Icon Type="clock-circle" Theme="IconThemeType.Outline" /> Availability
+            </Button>
         }
         @if (Permissions.Has(WebPermissions.StaffRead))
         {
-            <FluentButton Appearance="Appearance.Accent" Href="/staff" IconStart="@(new Icons.Regular.Size20.PeopleTeam())">
-                Staff Management
-            </FluentButton>
+            <Button Type="@ButtonType.Primary" OnClick='() => Navigation.NavigateTo("/staff")'>
+                <Icon Type="user" Theme="IconThemeType.Outline" /> Staff Management
+            </Button>
         }
-    </FluentStack>
+    </Space>
 }
 
 @code {

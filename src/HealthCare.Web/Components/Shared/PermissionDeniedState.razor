@@ -1,10 +1,10 @@
 @namespace HealthCare.Web.Components.Shared
 
 <div class="hc-state">
-    <h2 class="hc-state-title">Access denied</h2>
-    <p class="hc-state-body">
-        @(string.IsNullOrWhiteSpace(Message) ? "You do not have permission to view this page." : Message)
-    </p>
+    <Alert Type="@AlertType.Warning"
+           Message="Access denied"
+           Description="@(string.IsNullOrWhiteSpace(Message) ? "You do not have permission to view this page." : Message)"
+           ShowIcon="true" />
     @ChildContent
 </div>
 

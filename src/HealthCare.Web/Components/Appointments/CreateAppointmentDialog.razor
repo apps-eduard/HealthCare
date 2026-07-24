@@ -1,5 +1,5 @@
 @namespace HealthCare.Web.Components.Appointments
-@implements IDialogContentComponent<CreateAppointmentDialog.Args>
+@inherits FeedbackComponent<CreateAppointmentDialog.Args>
 @using HealthCare.Contracts.Appointments
 @using HealthCare.Contracts.Clinics
 @using HealthCare.Web.Appointments
@@ -8,16 +8,16 @@
 
 @if (!Permissions.Has(WebPermissions.AppointmentsCreate))
 {
-    <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">You do not have permission to create appointments.</FluentMessageBar>
+    <Alert Type="@AlertType.Error" Message="You do not have permission to create appointments." ShowIcon="true" />
 }
 else
 {
-    <FluentStack Orientation="Orientation.Vertical" VerticalGap="12">
+    <div style="display:flex;flex-direction:column;gap:12px;">
         @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
         {
-            <FluentMessageBar Intent="MessageIntent.Warning" AllowDismiss="false">
-                Select an organization in the platform banner before creating an appointment.
-            </FluentMessageBar>
+            <Alert Type="@AlertType.Warning"
+                   Message="Select an organization in the platform banner before creating an appointment."
+                   ShowIcon="true" />
         }
         @if (Permissions.CanFilterByClinic || Permissions.IsPlatformAdmin)
         {
@@ -44,64 +44,90 @@ else
                        Required="true"
                        Disabled="_busy || (Permissions.CanFilterByClinic && _clinicId is null)" />
 
-        <FluentSelect TOption="string"
-                      Value="@(_doctorId?.ToString() ?? "")"
-                      ValueChanged="OnDoctorStringChanged"
-                      Label="Doctor"
-                      Required="true"
-                      Disabled="@(_busy || string.IsNullOrWhiteSpace(_clinicSlug) || _doctorsLoading)"
-                      Style="width:100%;">
-            @foreach (var doctor in _doctors)
-            {
-                <FluentOption Value="@doctor.StaffMemberId.ToString()">@doctor.DisplayName</FluentOption>
-            }
-        </FluentSelect>
+        <div>
+            <label>@FieldLabel.Mark("Doctor")</label>
+            <Select TItemValue="string"
+                    TItem="string"
+                    Value="@(_doctorId?.ToString() ?? "")"
+                    ValueChanged="OnDoctorStringChanged"
+                    Disabled="@(_busy || string.IsNullOrWhiteSpace(_clinicSlug) || _doctorsLoading)"
+                    Style="width:100%;">
+                <SelectOptions>
+                    @foreach (var doctor in _doctors)
+                    {
+                        <SelectOption TItemValue="string"
+                                      TItem="string"
+                                      Value="@doctor.StaffMemberId.ToString()"
+                                      Label="@doctor.DisplayName" />
+                    }
+                </SelectOptions>
+            </Select>
+        </div>
         @if (_doctorsLoading)
         {
-            <FluentProgressRing />
+            <Spin Size="@SpinSize.Small" />
         }
         else if (!string.IsNullOrWhiteSpace(_clinicSlug) && _doctors.Count == 0)
         {
             <div class="hc-caption">No bookable doctors for this clinic.</div>
         }
 
-        <FluentDatePicker Value="_date" ValueChanged="OnDateChanged" Label="Date" Disabled="@(_busy || _doctorId is null)" Style="width:100%;" />
-        <FluentNumberField @bind-Value="_durationMinutes" Label="Duration (minutes)" Min="5" Max="240" Disabled="@(_busy || _doctorId is null)" Style="width:100%;" @bind-Value:after="OnDurationChangedAfter" />
+        <div>
+            <label>Date</label>
+            <DatePicker TValue="DateTime?"
+                        Value="_date"
+                        OnChange="OnDatePickerChanged"
+                        Disabled="@(_busy || _doctorId is null)"
+                        Style="width:100%;" />
+        </div>
+        <div>
+            <label>Duration (minutes)</label>
+            <AntDesign.InputNumber TValue="int"
+                                   @bind-Value="_durationMinutes"
+                                   OnChange="OnDurationNumberChanged"
+                                   Disabled="@(_busy || _doctorId is null)"
+                                   Style="width:100%;"
+                                   Min="5"
+                                   Max="240" />
+        </div>
 
-        <FluentSelect TOption="string"
-                      Value="@SelectedSlotKey"
-                      ValueChanged="OnSlotKeyChanged"
-                      Label="Available slot"
-                      Required="true"
-                      Disabled="@(_busy || _slotsLoading || _doctorId is null || _date is null)"
-                      Style="width:100%;">
-            @foreach (var slot in _slots)
-            {
-                <FluentOption Value="@SlotKey(slot)">@FormatSlot(slot)</FluentOption>
-            }
-        </FluentSelect>
+        <div>
+            <label>@FieldLabel.Mark("Available slot")</label>
+            <Select TItemValue="string"
+                    TItem="string"
+                    Value="@SelectedSlotKey"
+                    ValueChanged="OnSlotKeyChanged"
+                    Disabled="@(_busy || _slotsLoading || _doctorId is null || _date is null)"
+                    Style="width:100%;">
+                <SelectOptions>
+                    @foreach (var slot in _slots)
+                    {
+                        <SelectOption TItemValue="string" TItem="string" Value="@SlotKey(slot)" Label="@FormatSlot(slot)" />
+                    }
+                </SelectOptions>
+            </Select>
+        </div>
         @if (_slotsLoading)
         {
-            <FluentProgressRing />
+            <Spin Size="@SpinSize.Small" />
         }
         else if (_doctorId is not null && _date is not null && _slots.Count == 0)
         {
-            <FluentMessageBar Intent="MessageIntent.Info" AllowDismiss="false">No available slots for this date.</FluentMessageBar>
+            <Alert Type="@AlertType.Info" Message="No available slots for this date." ShowIcon="true" />
         }
 
         @if (!string.IsNullOrWhiteSpace(_error))
         {
-            <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">@_error</FluentMessageBar>
+            <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" />
         }
-    </FluentStack>
+    </div>
 }
-<FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Style="margin-top:1rem;justify-content:flex-end;">
-    <FluentButton Appearance="Appearance.Outline" OnClick="CloseAsync" Disabled="_busy">Cancel</FluentButton>
-    <FluentButton Appearance="Appearance.Accent" OnClick="SubmitAsync" Disabled="_busy || !CanSubmit">
-        @if (_busy) { <FluentProgressRing Style="width:16px;height:16px;margin-right:0.35rem;" /> }
+<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;">
+    <Button OnClick="CancelCloseAsync" Disabled="_busy">Cancel</Button>
+    <Button Type="@ButtonType.Primary" OnClick="SubmitAsync" Loading="_busy" Disabled="_busy || !CanSubmit">
         Create
-    </FluentButton>
-</FluentStack>
+    </Button>
+</div>
 
 @code {
     public sealed class Args
@@ -110,8 +136,6 @@ else
         public bool PlatformAdminBypass { get; init; }
     }
 
-    [Parameter] public Args Content { get; set; } = default!;
-    [CascadingParameter] private FluentDialog Dialog { get; set; } = default!;
     [Inject] private IAppointmentApiClient AppointmentsApi { get; set; } = default!;
     [Inject] private IClinicDirectoryApiClient ClinicsApi { get; set; } = default!;
     [Inject] private IClinicDirectoryCache ClinicCache { get; set; } = default!;
@@ -119,8 +143,8 @@ else
     [Inject] private IPlatformTenantContext PlatformTenant { get; set; } = default!;
     [Inject] private IUserNotificationService Notify { get; set; } = default!;
 
-    private Guid? InitialClinicId => Content.InitialClinicId;
-    private bool PlatformAdminBypass => Content.PlatformAdminBypass;
+    private Guid? InitialClinicId => Options.InitialClinicId;
+    private bool PlatformAdminBypass => Options.PlatformAdminBypass;
 
     private Guid? _clinicId;
     private string? _clinicSlug;
@@ -190,9 +214,12 @@ else
         return Task.CompletedTask;
     }
 
-    private Task OnDurationChangedAfter() => OnDurationChanged(_durationMinutes);
+    private async Task OnDurationNumberChanged(int value)
+    {
+        await OnDurationChanged(Math.Clamp(value, 5, 240));
+    }
 
-    private async Task OnDoctorStringChanged(string? value)
+    private async Task OnDoctorStringChanged(string value)
     {
         Guid? doctorId = Guid.TryParse(value, out var id) ? id : null;
         await OnDoctorChanged(doctorId);
@@ -203,7 +230,7 @@ else
     private static string SlotKey(AvailableSlotResponse slot) =>
         $"{slot.StartUtc:O}|{slot.EndUtc:O}|{slot.DurationMinutes}";
 
-    private Task OnSlotKeyChanged(string? value)
+    private Task OnSlotKeyChanged(string value)
     {
         _selectedSlot = _slots.FirstOrDefault(s => SlotKey(s) == value);
         return Task.CompletedTask;
@@ -216,6 +243,9 @@ else
         _slots = [];
         await LoadSlotsAsync();
     }
+
+    private Task OnDatePickerChanged(DateTimeChangedEventArgs<DateTime?> args) =>
+        OnDateChanged(args.Date);
 
     private async Task OnDateChanged(DateTime? date)
     {
@@ -328,7 +358,7 @@ else
         {
             var bypass = (PlatformAdminBypass || Permissions.IsPlatformAdmin) && _clinicId is not null;
 
-            var created = await AppointmentsApi.CreateStaffAsync(
+            await AppointmentsApi.CreateStaffAsync(
                 new CreateStaffAppointmentRequest
                 {
                     PatientId = _patientId.Value,
@@ -341,7 +371,7 @@ else
 
             Notify.Success("Appointment created.");
             await LoadSlotsAsync();
-            await Dialog.CloseAsync(DialogResult.Ok(created));
+            await ConfirmOkAsync();
         }
         catch (ApiProblemException ex)
         {
@@ -358,7 +388,9 @@ else
         }
     }
 
-    private async Task CloseAsync() => await Dialog.CancelAsync();
+    private Task CancelCloseAsync() => OkCancelRef!.CancelAsync(new ModalClosingEventArgs());
+
+    private Task ConfirmOkAsync() => OkCancelRef!.OkAsync(new ModalClosingEventArgs());
 
     private static string FormatSlot(AvailableSlotResponse? slot) =>
         slot is null ? string.Empty : $"{slot.StartLocal} – {slot.EndLocal} ({slot.TimeZoneId})";

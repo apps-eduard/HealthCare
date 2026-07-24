@@ -4,7 +4,7 @@
 @inject IStaffManagementApiClient StaffApi
 @inject IPermissionState Permissions
 @inject IPlatformTenantContext PlatformTenant
-@inject IDialogService DialogService
+@inject IUiModalService Modals
 @inject IUserNotificationService Notify
 @inject NavigationManager Navigation
 @inject StaffAuthenticationStateProvider AuthState
@@ -17,48 +17,61 @@
 }
 else
 {
-    <PageHeader Title="Staff">
-        <FluentButton Appearance="Appearance.Outline" IconStart="@(new Icons.Regular.Size20.ArrowClockwise())" OnClick="RefreshClicked" Disabled="_loading">Refresh</FluentButton>
+    <HcPageHeader Title="Staff Management">
+        <Button OnClick="RefreshClicked" Disabled="_loading">
+            <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
+        </Button>
         @if (Permissions.Has(WebPermissions.StaffManage))
         {
-            <FluentButton Appearance="Appearance.Accent"
-                          IconStart="@(new Icons.Regular.Size20.PersonAdd())"
-                          OnClick="OpenCreateAsync"
-                          Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !PlatformTenant.HasClinic))">
-                Create staff
-            </FluentButton>
+            <Button Type="@ButtonType.Primary"
+                    OnClick="OpenCreateAsync"
+                    Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !PlatformTenant.HasClinic))">
+                <Icon Type="user-add" Theme="IconThemeType.Outline" /> Create staff
+            </Button>
         }
-    </PageHeader>
+    </HcPageHeader>
 
     @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
     {
-        <FluentMessageBar Intent="MessageIntent.Info" AllowDismiss="false" Style="margin-bottom:1rem;">
-            Select an organization in the platform banner before searching staff. Global staff search is not allowed.
-        </FluentMessageBar>
+        <Alert Type="@AlertType.Info"
+               Message="Select an organization in the platform banner before searching staff. Global staff search is not allowed."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
     }
     else if (Permissions.IsPlatformAdmin && !PlatformTenant.HasClinic)
     {
-        <FluentMessageBar Intent="MessageIntent.Info" AllowDismiss="false" Style="margin-bottom:1rem;">
-            Select a clinic in the platform banner (or below) before loading staff for the selected organization.
-        </FluentMessageBar>
+        <Alert Type="@AlertType.Info"
+               Message="Select a clinic in the platform banner (or below) before loading staff for the selected organization."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
     }
 
     <div class="hc-card">
         <div class="hc-filter-grid">
-            <FluentTextField @bind-Value="_search" Label="Search" Disabled="_loading" Style="width:100%;"
-                             @onkeyup="OnSearchKeyUp" />
-            <FluentSelect TOption="string" @bind-Value="_role" Label="Role" Style="width:100%;">
-                <FluentOption Value="">Any</FluentOption>
-                @foreach (var role in _roleOptions)
-                {
-                    <FluentOption Value="@role">@role</FluentOption>
-                }
-            </FluentSelect>
-            <FluentSelect TOption="string" @bind-Value="_activeFilter" Label="Status" Style="width:100%;">
-                <FluentOption Value="">Any</FluentOption>
-                <FluentOption Value="active">Active</FluentOption>
-                <FluentOption Value="inactive">Inactive</FluentOption>
-            </FluentSelect>
+            <div>
+                <span class="hc-filter-label">Search</span>
+                <Input @bind-Value="_search" Disabled="_loading" Style="width:100%;" @onkeyup="OnSearchKeyUp" />
+            </div>
+            <div>
+                <span class="hc-filter-label">Role</span>
+                <Select TItemValue="string" TItem="string" @bind-Value="_role" Style="width:100%;" AllowClear>
+                    <SelectOptions>
+                        @foreach (var role in _roleOptions)
+                        {
+                            <SelectOption TItemValue="string" TItem="string" Value="@role" Label="@role" />
+                        }
+                    </SelectOptions>
+                </Select>
+            </div>
+            <div>
+                <span class="hc-filter-label">Status</span>
+                <Select TItemValue="string" TItem="string" @bind-Value="_activeFilter" Style="width:100%;" AllowClear>
+                    <SelectOptions>
+                        <SelectOption TItemValue="string" TItem="string" Value="@("active")" Label="Active" />
+                        <SelectOption TItemValue="string" TItem="string" Value="@("inactive")" Label="Inactive" />
+                    </SelectOptions>
+                </Select>
+            </div>
             @if (Permissions.CanFilterByClinic)
             {
                 <ClinicPicker Value="_clinicId"
@@ -76,10 +89,13 @@ else
             {
                 <ClinicPicker Label="Clinic" AllowClear="false" Required="false" />
             }
-            <FluentButton Appearance="Appearance.Accent" OnClick="RefreshClicked"
-                          Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !_clinicId.HasValue))">
-                Apply
-            </FluentButton>
+            <div>
+                <span class="hc-filter-label">&nbsp;</span>
+                <Button Type="@ButtonType.Primary" OnClick="RefreshClicked"
+                        Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !_clinicId.HasValue))">
+                    Apply
+                </Button>
+            </div>
         </div>
     </div>
 
@@ -123,21 +139,29 @@ else
                             </td>
                             <td><span class="hc-caption">@row.ClinicId</span></td>
                             <td class="hc-actions">
-                                <FluentButton Appearance="Appearance.Stealth" IconStart="@(new Icons.Regular.Size16.Eye())" OnClick="@(() => OpenDetailAsync(row))" aria-label="Details" />
+                                <Button Type="@ButtonType.Text" OnClick="@(() => OpenDetailAsync(row))" AriaLabel="Details">
+                                    <Icon Type="eye" Theme="IconThemeType.Outline" />
+                                </Button>
                                 @if (Permissions.Has(WebPermissions.StaffManage))
                                 {
                                     @if (row.MembershipIsActive)
                                     {
-                                        <FluentButton Appearance="Appearance.Stealth" IconStart="@(new Icons.Regular.Size16.PersonProhibited())" OnClick="@(() => OpenActivationAsync(row, activate: false))" aria-label="Deactivate" />
+                                        <Button Type="@ButtonType.Text" OnClick="@(() => OpenActivationAsync(row, activate: false))" AriaLabel="Deactivate">
+                                            <Icon Type="stop" Theme="IconThemeType.Outline" />
+                                        </Button>
                                     }
                                     else
                                     {
-                                        <FluentButton Appearance="Appearance.Stealth" IconStart="@(new Icons.Regular.Size16.Person())" OnClick="@(() => OpenActivationAsync(row, activate: true))" aria-label="Activate" />
+                                        <Button Type="@ButtonType.Text" OnClick="@(() => OpenActivationAsync(row, activate: true))" AriaLabel="Activate">
+                                            <Icon Type="check" Theme="IconThemeType.Outline" />
+                                        </Button>
                                     }
                                 }
                                 @if (Permissions.Has(WebPermissions.RolesAssign))
                                 {
-                                    <FluentButton Appearance="Appearance.Stealth" IconStart="@(new Icons.Regular.Size16.Shield())" OnClick="@(() => OpenRolesAsync(row))" aria-label="Roles" />
+                                    <Button Type="@ButtonType.Text" OnClick="@(() => OpenRolesAsync(row))" AriaLabel="Roles">
+                                        <Icon Type="safety" Theme="IconThemeType.Outline" />
+                                    </Button>
                                 }
                             </td>
                         </tr>
@@ -146,11 +170,11 @@ else
             </table>
             <div class="hc-pager">
                 <span class="hc-caption">Total: @_totalCount</span>
-                <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="4">
-                    <FluentButton Appearance="Appearance.Outline" Disabled="@(_page <= 1 || _loading)" OnClick="@(() => OnPageChanged(_page - 1))">Prev</FluentButton>
+                <Space>
+                    <Button Disabled="@(_page <= 1 || _loading)" OnClick="@(() => OnPageChanged(_page - 1))">Prev</Button>
                     <span class="hc-caption">Page @_page / @_totalPages</span>
-                    <FluentButton Appearance="Appearance.Outline" Disabled="@(_page >= _totalPages || _loading)" OnClick="@(() => OnPageChanged(_page + 1))">Next</FluentButton>
-                </FluentStack>
+                    <Button Disabled="@(_page >= _totalPages || _loading)" OnClick="@(() => OnPageChanged(_page + 1))">Next</Button>
+                </Space>
             </div>
         </div>
     }
@@ -337,9 +361,7 @@ else
             return;
         }
 
-        var dialog = await DialogService.ShowDialogAsync<CreateStaffDialog>(FluentDialogDefaults.ContentOnly("Create staff"));
-        var result = await dialog.Result;
-        if (!result.Cancelled)
+        if (await Modals.ShowAsync<CreateStaffDialog, object?>("Create staff", null))
         {
             Notify.Success("Staff member created.");
             await ReloadAsync();
@@ -348,24 +370,22 @@ else
 
     private async Task OpenDetailAsync(StaffSummaryResponse row)
     {
-        await DialogService.ShowDialogAsync<StaffDetailDialog>(
-            new StaffDetailDialog.Args { StaffMemberId = row.StaffMemberId },
-            FluentDialogDefaults.ContentOnly("Staff details"));
+        await Modals.ShowAsync<StaffDetailDialog, StaffDetailDialog.Args>(
+            "Staff details",
+            new StaffDetailDialog.Args { StaffMemberId = row.StaffMemberId });
     }
 
     private async Task OpenActivationAsync(StaffSummaryResponse row, bool activate)
     {
-        var dialog = await DialogService.ShowDialogAsync<StaffActivationDialog>(
-            new StaffActivationDialog.Args
-            {
-                StaffMemberId = row.StaffMemberId,
-                ExpectedVersion = row.Version,
-                Activate = activate,
-                DisplayName = DisplayName(row),
-            },
-            FluentDialogDefaults.ContentOnly(activate ? "Activate staff" : "Deactivate staff"));
-        var result = await dialog.Result;
-        if (!result.Cancelled)
+        if (await Modals.ShowAsync<StaffActivationDialog, StaffActivationDialog.Args>(
+                activate ? "Activate staff" : "Deactivate staff",
+                new StaffActivationDialog.Args
+                {
+                    StaffMemberId = row.StaffMemberId,
+                    ExpectedVersion = row.Version,
+                    Activate = activate,
+                    DisplayName = DisplayName(row),
+                }))
         {
             Notify.Success(activate ? "Staff activated." : "Staff deactivated.");
             await ReloadAsync(resetPage: false);
@@ -374,17 +394,15 @@ else
 
     private async Task OpenRolesAsync(StaffSummaryResponse row)
     {
-        var dialog = await DialogService.ShowDialogAsync<StaffRolesDialog>(
-            new StaffRolesDialog.Args
-            {
-                StaffMemberId = row.StaffMemberId,
-                CurrentRole = row.Role,
-                DisplayName = DisplayName(row),
-                TargetUserId = row.UserId,
-            },
-            FluentDialogDefaults.ContentOnly("Assign role"));
-        var result = await dialog.Result;
-        if (!result.Cancelled)
+        if (await Modals.ShowAsync<StaffRolesDialog, StaffRolesDialog.Args>(
+                "Assign role",
+                new StaffRolesDialog.Args
+                {
+                    StaffMemberId = row.StaffMemberId,
+                    CurrentRole = row.Role,
+                    DisplayName = DisplayName(row),
+                    TargetUserId = row.UserId,
+                }))
         {
             Notify.Success("Role updated.");
             if (Permissions.CurrentUser?.UserId == row.UserId)

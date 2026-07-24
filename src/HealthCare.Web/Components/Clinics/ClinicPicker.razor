@@ -9,31 +9,32 @@
 }
 else if (_readOnlyClinic is not null)
 {
-    <FluentTextField Value="@($"{_readOnlyClinic.Name} ({_readOnlyClinic.Slug})")"
-                     Label="@Label"
-                     Disabled="true"
-                     Style="width:100%;" />
+    <div>
+        <label>@FieldLabel.Mark(Label, Required)</label>
+        <Input Value="@($"{_readOnlyClinic.Name} ({_readOnlyClinic.Slug})")" Disabled="true" Style="width:100%;" />
+    </div>
     <div class="hc-caption">Assigned clinic from your staff membership</div>
 }
 else
 {
     <div class="hc-picker">
-        <FluentTextField Value="@_searchText"
-                         ValueChanged="OnSearchTextChanged"
-                         Label="@Label"
-                         Placeholder="Type to search…"
-                         Disabled="@EffectiveDisabled"
-                         Required="@Required"
-                         Style="width:100%;" />
+        <div>
+            <label>@FieldLabel.Mark(Label, Required)</label>
+            <Input @bind-Value="_searchText"
+                   @bind-Value:after="OnSearchTextAfter"
+                   Placeholder="Type to search…"
+                   Disabled="@EffectiveDisabled"
+                   Style="width:100%;" />
+        </div>
         @if (_selected is not null)
         {
-            <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" VerticalAlignment="VerticalAlignment.Center" Style="margin-top:0.35rem;">
+            <Space Style="margin-top:0.35rem;">
                 <span class="hc-caption">Selected: @FormatClinic(_selected)</span>
                 @if (AllowClear && !EffectiveDisabled)
                 {
-                    <FluentButton Appearance="Appearance.Lightweight" OnClick="ClearAsync">Clear</FluentButton>
+                    <Button Type="@ButtonType.Link" OnClick="ClearAsync">Clear</Button>
                 }
-            </FluentStack>
+            </Space>
         }
         @if (_showResults && !EffectiveDisabled)
         {
@@ -61,7 +62,7 @@ else
         }
         @if (!string.IsNullOrWhiteSpace(_error))
         {
-            <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false" Style="margin-top:0.35rem;">@_error</FluentMessageBar>
+            <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" Style="margin-top:0.35rem;" />
         }
     </div>
 }
@@ -198,11 +199,10 @@ else
         }
     }
 
-    private async Task OnSearchTextChanged(string? value)
+    private Task OnSearchTextAfter()
     {
-        _searchText = value ?? string.Empty;
         _showResults = true;
-        await SearchAsync(_searchText);
+        return SearchAsync(_searchText);
     }
 
     private async Task SearchAsync(string? value)

@@ -29,21 +29,43 @@ public sealed class WebArchitectureTests
     }
 
     [Fact]
-    public void Web_Uses_FluentUI_Not_MudBlazor()
+    public void Web_Uses_AntDesign_Not_FluentUI_Or_MudBlazor()
     {
         var csproj = Path.GetFullPath(Path.Combine(
             AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "HealthCare.Web", "HealthCare.Web.csproj"));
         var text = File.ReadAllText(csproj);
-        text.Should().Contain("Microsoft.FluentUI.AspNetCore.Components");
-        text.Should().Contain("4.14.3");
+        text.Should().Contain("AntDesign");
+        text.Should().Contain("1.6.2");
+        text.Should().NotContain("Microsoft.FluentUI.AspNetCore.Components");
         text.Should().NotContain("MudBlazor");
 
         var refs = typeof(AppointmentApiClient).Assembly
             .GetReferencedAssemblies()
             .Select(a => a.Name)
             .ToArray();
-        refs.Should().Contain("Microsoft.FluentUI.AspNetCore.Components");
+        refs.Should().Contain("AntDesign");
+        refs.Should().NotContain("Microsoft.FluentUI.AspNetCore.Components");
         refs.Should().NotContain("MudBlazor");
+
+        var program = File.ReadAllText(Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "HealthCare.Web", "Program.cs")));
+        program.Should().Contain("AddAntDesign()");
+        program.Should().NotContain("AddFluentUIComponents");
+
+        var appRazor = File.ReadAllText(Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "HealthCare.Web", "Components", "App.razor")));
+        appRazor.Should().Contain("<AntContainer");
+        appRazor.Should().Contain("_content/AntDesign/");
+        appRazor.Should().NotContain("Microsoft.FluentUI");
+
+        var webRoot = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "HealthCare.Web"));
+        foreach (var file in Directory.GetFiles(webRoot, "*.razor", SearchOption.AllDirectories))
+        {
+            var razor = File.ReadAllText(file);
+            razor.Should().NotContain("<Fluent", because: $"{Path.GetFileName(file)} must not use Fluent UI components");
+            razor.Should().NotContain("@using Microsoft.FluentUI", because: $"{Path.GetFileName(file)} must not import Fluent UI");
+        }
     }
 
     [Fact]

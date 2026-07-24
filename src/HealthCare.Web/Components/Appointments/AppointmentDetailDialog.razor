@@ -1,5 +1,5 @@
 @namespace HealthCare.Web.Components.Appointments
-@implements IDialogContentComponent<AppointmentDetailDialog.Args>
+@inherits FeedbackComponent<AppointmentDetailDialog.Args>
 @using HealthCare.Contracts.Appointments
 @using HealthCare.Web.Appointments
 
@@ -9,16 +9,16 @@
 }
 else if (_appointment is null)
 {
-    <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">@(_error ?? "Appointment not found.")</FluentMessageBar>
+    <Alert Type="@AlertType.Error" Message="@(_error ?? "Appointment not found.")" ShowIcon="true" />
 }
 else
 {
     @if (!string.IsNullOrWhiteSpace(_error))
     {
-        <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false" Style="margin-bottom:0.75rem;">@_error</FluentMessageBar>
+        <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" Style="margin-bottom:0.75rem;" />
     }
 
-    <FluentStack Orientation="Orientation.Vertical" VerticalGap="8">
+    <div style="display:flex;flex-direction:column;gap:8px;">
         <div class="hc-caption">ID: @_appointment.Id</div>
         <div><strong>When:</strong> @ClinicTimeDisplay.FormatLocalWithZone(_appointment.AppointmentDateUtc, _appointment.ClinicTimeZoneId)</div>
         <div><strong>Duration:</strong> @_appointment.DurationMinutes min</div>
@@ -45,21 +45,21 @@ else
         {
             <div><strong>Cancellation reason:</strong> @_appointment.CancellationReason</div>
         }
-    </FluentStack>
+    </div>
 }
 
-<FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Wrap="true" Style="margin-top:1rem;justify-content:flex-end;">
-    <FluentButton Appearance="Appearance.Outline" OnClick="CloseAsync" Disabled="_busy">Close</FluentButton>
+<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:1rem;">
+    <Button OnClick="CloseAsync" Disabled="_busy">Close</Button>
     @if (_appointment is not null)
     {
         @foreach (var action in AppointmentActionRules.GetVisibleActions(_appointment.Status, Permissions))
         {
-            <FluentButton Appearance="Appearance.Accent" Disabled="_busy" OnClick="@(() => RunActionAsync(action))">
+            <Button Type="@ButtonType.Primary" Disabled="_busy" OnClick="@(() => RunActionAsync(action))">
                 @ActionLabel(action)
-            </FluentButton>
+            </Button>
         }
     }
-</FluentStack>
+</div>
 
 @code {
     public sealed class Args
@@ -68,15 +68,9 @@ else
         public bool PlatformAdminBypass { get; init; }
     }
 
-    [Parameter]
-    public Args Content { get; set; } = default!;
-
-    [CascadingParameter]
-    private FluentDialog Dialog { get; set; } = default!;
-
     [Inject] private IAppointmentApiClient AppointmentsApi { get; set; } = default!;
     [Inject] private IPermissionState Permissions { get; set; } = default!;
-    [Inject] private IDialogService DialogService { get; set; } = default!;
+    [Inject] private IUiModalService Modals { get; set; } = default!;
     [Inject] private IUserNotificationService Notify { get; set; } = default!;
 
     private AppointmentResponse? _appointment;
@@ -85,8 +79,8 @@ else
     private string? _error;
     private bool _changed;
 
-    private Guid AppointmentId => Content.AppointmentId;
-    private bool PlatformAdminBypass => Content.PlatformAdminBypass;
+    private Guid AppointmentId => Options.AppointmentId;
+    private bool PlatformAdminBypass => Options.PlatformAdminBypass;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -126,13 +120,10 @@ else
                 return;
         }
 
-        var confirm = await DialogService.ShowConfirmationAsync(
-            $"Confirm {ActionLabel(action).ToLowerInvariant()} for this appointment?",
+        var confirmed = await Modals.ConfirmAsync(
             ActionLabel(action),
-            ActionLabel(action),
-            "Cancel");
-        var confirmResult = await confirm.Result;
-        if (confirmResult.Cancelled)
+            $"Confirm {ActionLabel(action).ToLowerInvariant()} for this appointment?");
+        if (!confirmed)
         {
             return;
         }
@@ -165,13 +156,10 @@ else
         }
         catch (ApiProblemException ex) when (AppointmentProblemMessages.IsConcurrencyConflict(ex))
         {
-            var reload = await DialogService.ShowConfirmationAsync(
-                "This appointment was updated elsewhere. Reload the latest version?",
+            var reload = await Modals.ConfirmAsync(
                 "Appointment changed",
-                "Reload",
-                "Close");
-            var reloadResult = await reload.Result;
-            if (!reloadResult.Cancelled)
+                "This appointment was updated elsewhere. Reload the latest version?");
+            if (reload)
             {
                 await LoadAsync();
             }
@@ -198,16 +186,15 @@ else
             return;
         }
 
-        var dialog = await DialogService.ShowDialogAsync<CancelAppointmentDialog>(
+        var ok = await Modals.ShowAsync<CancelAppointmentDialog, CancelAppointmentDialog.Args>(
+            "Cancel appointment",
             new CancelAppointmentDialog.Args
             {
                 AppointmentId = _appointment.Id,
                 ExpectedVersion = _appointment.Version,
                 PlatformAdminBypass = PlatformAdminBypass,
-            },
-            FluentDialogDefaults.ContentOnly("Cancel appointment"));
-        var result = await dialog.Result;
-        if (!result.Cancelled)
+            });
+        if (ok)
         {
             _changed = true;
             await LoadAsync();
@@ -221,23 +208,26 @@ else
             return;
         }
 
-        var dialog = await DialogService.ShowDialogAsync<RescheduleAppointmentDialog>(
+        var ok = await Modals.ShowAsync<RescheduleAppointmentDialog, RescheduleAppointmentDialog.Args>(
+            "Reschedule appointment",
             new RescheduleAppointmentDialog.Args
             {
                 Appointment = _appointment,
                 PlatformAdminBypass = PlatformAdminBypass,
             },
-            FluentDialogDefaults.ContentOnly("Reschedule appointment", "560px"));
-        var result = await dialog.Result;
-        if (!result.Cancelled)
+            "560px");
+        if (ok)
         {
             _changed = true;
             await LoadAsync();
         }
     }
 
-    private async Task CloseAsync() =>
-        await Dialog.CloseAsync(_changed ? DialogResult.Ok(true) : DialogResult.Cancel());
+    private Task ConfirmOkAsync() => OkCancelRef!.OkAsync(new ModalClosingEventArgs());
+
+    private Task CancelCloseAsync() => OkCancelRef!.CancelAsync(new ModalClosingEventArgs());
+
+    private Task CloseAsync() => _changed ? ConfirmOkAsync() : CancelCloseAsync();
 
     private static string ActionLabel(AppointmentUiAction action) => action switch
     {

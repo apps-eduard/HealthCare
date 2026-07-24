@@ -1,21 +1,24 @@
-@implements IDialogContentComponent<StaffActivationDialog.Args>
+@inherits FeedbackComponent<StaffActivationDialog.Args>
 @inject IStaffManagementApiClient StaffApi
 @inject IPermissionState Permissions
 
 <p style="margin-top:0">
-    @(Content.Activate ? "Activate" : "Deactivate") <b>@Content.DisplayName</b>?
+    @(Options.Activate ? "Activate" : "Deactivate") <b>@Options.DisplayName</b>?
 </p>
-<FluentTextField @bind-Value="_reason" Label="Administrative reason (optional)" Disabled="_busy" Style="width:100%;" />
+<div>
+    <label>Administrative reason (optional)</label>
+    <Input @bind-Value="_reason" Disabled="_busy" Style="width:100%;" />
+</div>
 @if (!string.IsNullOrWhiteSpace(_error))
 {
-    <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false" Style="margin-top:0.75rem;">@_error</FluentMessageBar>
+    <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" Style="margin-top:0.75rem;" />
 }
-<FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Style="margin-top:1rem;justify-content:flex-end;">
-    <FluentButton Appearance="Appearance.Outline" OnClick="CancelAsync" Disabled="_busy">Cancel</FluentButton>
-    <FluentButton Appearance="Appearance.Accent" OnClick="SubmitAsync" Disabled="_busy">
-        @(Content.Activate ? "Activate" : "Deactivate")
-    </FluentButton>
-</FluentStack>
+<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;">
+    <Button OnClick="CancelCloseAsync" Disabled="_busy">Cancel</Button>
+    <Button Type="@ButtonType.Primary" OnClick="SubmitAsync" Loading="_busy" Disabled="_busy">
+        @(Options.Activate ? "Activate" : "Deactivate")
+    </Button>
+</div>
 
 @code {
     public sealed class Args
@@ -26,17 +29,13 @@
         public string DisplayName { get; init; } = string.Empty;
     }
 
-    [Parameter]
-    public Args Content { get; set; } = default!;
-
-    [CascadingParameter]
-    private FluentDialog Dialog { get; set; } = default!;
-
     private string? _reason;
     private string? _error;
     private bool _busy;
 
-    private async Task CancelAsync() => await Dialog.CancelAsync();
+    private Task CancelCloseAsync() => OkCancelRef!.CancelAsync(new ModalClosingEventArgs());
+
+    private Task ConfirmOkAsync() => OkCancelRef!.OkAsync(new ModalClosingEventArgs());
 
     private async Task SubmitAsync()
     {
@@ -47,20 +46,20 @@
             var bypass = Permissions.CurrentUser?.Roles.Contains(WebRoles.PlatformAdmin, StringComparer.Ordinal) == true;
             var request = new StaffActivationRequest
             {
-                ExpectedVersion = Content.ExpectedVersion,
+                ExpectedVersion = Options.ExpectedVersion,
                 Reason = string.IsNullOrWhiteSpace(_reason) ? null : _reason.Trim(),
             };
 
-            if (Content.Activate)
+            if (Options.Activate)
             {
-                await StaffApi.ActivateAsync(Content.StaffMemberId, request, bypass);
+                await StaffApi.ActivateAsync(Options.StaffMemberId, request, bypass);
             }
             else
             {
-                await StaffApi.DeactivateAsync(Content.StaffMemberId, request, bypass);
+                await StaffApi.DeactivateAsync(Options.StaffMemberId, request, bypass);
             }
 
-            await Dialog.CloseAsync(DialogResult.Ok(true));
+            await ConfirmOkAsync();
         }
         catch (ApiProblemException ex)
         {

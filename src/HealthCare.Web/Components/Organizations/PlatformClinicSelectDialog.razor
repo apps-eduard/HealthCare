@@ -1,12 +1,12 @@
 @namespace HealthCare.Web.Components.Organizations
-@implements IDialogContentComponent
+@inherits FeedbackComponent<object?>
 @inject IPlatformTenantContext PlatformTenant
 @inject IClinicDirectoryCache ClinicCache
 @inject IClinicDirectoryApiClient ClinicsApi
 
 @if (!PlatformTenant.HasOrganization)
 {
-    <FluentMessageBar Intent="MessageIntent.Warning" AllowDismiss="false">Select an organization first.</FluentMessageBar>
+    <Alert Type="@AlertType.Warning" Message="Select an organization first." ShowIcon="true" />
 }
 else
 {
@@ -23,14 +23,11 @@ else
                   PlatformOrganizationId="PlatformTenant.SelectedOrganizationId"
                   HelperText="Only clinics in the selected organization" />
 }
-<FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Style="margin-top:1rem;justify-content:flex-end;">
-    <FluentButton Appearance="Appearance.Outline" OnClick="CancelAsync">Close</FluentButton>
-</FluentStack>
+<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;">
+    <Button OnClick="CancelCloseAsync">Close</Button>
+</div>
 
 @code {
-    [CascadingParameter]
-    private FluentDialog Dialog { get; set; } = default!;
-
     private Guid? _clinicId;
 
     protected override void OnInitialized()
@@ -52,9 +49,11 @@ else
             }
             catch { }
             PlatformTenant.SelectClinic(id, name);
-            await Dialog.CloseAsync(DialogResult.Ok(true));
+            await ConfirmOkAsync();
         }
     }
 
-    private async Task CancelAsync() => await Dialog.CancelAsync();
+    private Task CancelCloseAsync() => OkCancelRef!.CancelAsync(new ModalClosingEventArgs());
+
+    private Task ConfirmOkAsync() => OkCancelRef!.OkAsync(new ModalClosingEventArgs());
 }

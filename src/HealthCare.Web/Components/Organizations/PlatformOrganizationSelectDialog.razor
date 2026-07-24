@@ -1,5 +1,5 @@
 @namespace HealthCare.Web.Components.Organizations
-@implements IDialogContentComponent
+@inherits FeedbackComponent<object?>
 @inject IPlatformTenantContext PlatformTenant
 
 <p class="hc-muted" style="margin-top:0">
@@ -12,14 +12,11 @@
                     AllowClear="false"
                     SyncPlatformContext="true"
                     HelperText="Server-side search by name or slug" />
-<FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Style="margin-top:1rem;justify-content:flex-end;">
-    <FluentButton Appearance="Appearance.Outline" OnClick="CancelAsync">Close</FluentButton>
-</FluentStack>
+<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;">
+    <Button OnClick="CancelCloseAsync">Close</Button>
+</div>
 
 @code {
-    [CascadingParameter]
-    private FluentDialog Dialog { get; set; } = default!;
-
     private Guid? _organizationId;
 
     protected override void OnInitialized()
@@ -32,9 +29,11 @@
         _organizationId = organizationId;
         if (organizationId is not null)
         {
-            await Dialog.CloseAsync(DialogResult.Ok(true));
+            await ConfirmOkAsync();
         }
     }
 
-    private async Task CancelAsync() => await Dialog.CancelAsync();
+    private Task CancelCloseAsync() => OkCancelRef!.CancelAsync(new ModalClosingEventArgs());
+
+    private Task ConfirmOkAsync() => OkCancelRef!.OkAsync(new ModalClosingEventArgs());
 }

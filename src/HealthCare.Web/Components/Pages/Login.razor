@@ -16,7 +16,7 @@
 
             @if (!string.IsNullOrWhiteSpace(_error))
             {
-                <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false" Class="mb-4">@_error</FluentMessageBar>
+                <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" Style="margin-bottom:16px;" />
             }
 
             @* Full browser POST to BFF — Set-Cookie must happen on an HTTP response, not the SignalR circuit. *@
@@ -47,12 +47,13 @@
                            class="hc-auth-input" />
                 </div>
 
-                <FluentButton Type="ButtonType.Submit"
-                              Appearance="Appearance.Accent"
-                              Class="hc-auth-submit"
-                              id="bff-login-submit">
+                <Button Type="@ButtonType.Primary"
+                        HtmlType="submit"
+                        Class="hc-auth-submit"
+                        Id="bff-login-submit"
+                        Block>
                     Sign in
-                </FluentButton>
+                </Button>
             </form>
             <script>
                 window.__hcLoginSubmit = function (form) {

@@ -1,7 +1,7 @@
 namespace HealthCare.Web.Design;
 
 /// <summary>
-/// Semantic status tone for badges and chips (Fluent UI–friendly presentation).
+/// Semantic status tone for badges and tags (Ant Design Tag presentation).
 /// </summary>
 public enum StatusTone
 {

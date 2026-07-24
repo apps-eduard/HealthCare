@@ -3,37 +3,38 @@
 
 <PageTitle>Access denied</PageTitle>
 
-<FluentCard Class="hc-card" Style="margin:1rem;padding:2rem;">
-    <h1 class="hc-page-title">Access denied</h1>
-    <p class="hc-page-subtitle" style="margin-bottom:1rem;">
-        You do not have permission to view this page.
-    </p>
-    @if (Permissions.IsPatientOnly)
-    {
-        <FluentMessageBar Intent="MessageIntent.Warning" AllowDismiss="false" Class="mb-4">
-            Patient accounts cannot use the staff application.
-        </FluentMessageBar>
-        <FluentButton Appearance="Appearance.Accent" OnClick="SignOutAsync">Sign out</FluentButton>
-    }
-    else
-    {
-        <FluentButton Appearance="Appearance.Accent" Href="/dashboard">Back to dashboard</FluentButton>
-    }
-</FluentCard>
+<HcPageHeader Title="Access denied" Subtitle="You do not have permission to view this page." />
+
+@if (Permissions.IsPatientOnly)
+{
+    <Alert Type="@AlertType.Error"
+           Message="Patient accounts cannot use the staff console. Sign out and use the patient experience instead."
+           ShowIcon="true"
+           Style="margin-bottom:16px;" />
+}
+else
+{
+    <Alert Type="@AlertType.Warning"
+           Message="Your account is signed in, but this page requires additional staff permissions."
+           ShowIcon="true"
+           Style="margin-bottom:16px;" />
+}
+
+<Space>
+    <Button Type="@ButtonType.Primary" OnClick='() => Navigation.NavigateTo("/dashboard")'>Dashboard</Button>
+    <Button OnClick="SignOutAsync">Sign out</Button>
+</Space>
 
 @code {
     [Inject]
     private IPermissionState Permissions { get; set; } = default!;
 
     [Inject]
-    private StaffAuthenticationStateProvider AuthState { get; set; } = default!;
-
-    [Inject]
     private NavigationManager Navigation { get; set; } = default!;
 
-    private async Task SignOutAsync()
+    private Task SignOutAsync()
     {
-        await AuthState.MarkLoggedOutAsync(callRemoteLogout: true);
         Navigation.NavigateTo("/logout", forceLoad: true);
+        return Task.CompletedTask;
     }
 }

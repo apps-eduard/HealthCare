@@ -1,20 +1,38 @@
-@implements IDialogContentComponent
+@inherits FeedbackComponent<object?>
 @inject IStaffManagementApiClient StaffApi
 @inject IPermissionState Permissions
 @inject IPlatformTenantContext PlatformTenant
 
-<FluentStack Orientation="Orientation.Vertical" VerticalGap="8">
-    <FluentTextField @bind-Value="_email" Label="Email" Required="true" Disabled="_busy" Style="width:100%;" />
-    <FluentTextField @bind-Value="_firstName" Label="First name" Required="true" Disabled="_busy" Style="width:100%;" />
-    <FluentTextField @bind-Value="_lastName" Label="Last name" Required="true" Disabled="_busy" Style="width:100%;" />
-    <FluentTextField @bind-Value="_displayName" Label="Display name" Disabled="_busy" Style="width:100%;" />
-    <FluentTextField @bind-Value="_jobTitle" Label="Job title" Disabled="_busy" Style="width:100%;" />
-    <FluentTextField @bind-Value="_phone" Label="Phone" Disabled="_busy" Style="width:100%;" />
+<div style="display:flex;flex-direction:column;gap:12px;">
+    <div>
+        <label>@FieldLabel.Mark("Email")</label>
+        <Input @bind-Value="_email" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label>@FieldLabel.Mark("First name")</label>
+        <Input @bind-Value="_firstName" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label>@FieldLabel.Mark("Last name")</label>
+        <Input @bind-Value="_lastName" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label>Display name</label>
+        <Input @bind-Value="_displayName" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label>Job title</label>
+        <Input @bind-Value="_jobTitle" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label>Phone</label>
+        <Input @bind-Value="_phone" Disabled="_busy" Style="width:100%;" />
+    </div>
     @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
     {
-        <FluentMessageBar Intent="MessageIntent.Warning" AllowDismiss="false">
-            Select an organization in the platform banner before creating staff.
-        </FluentMessageBar>
+        <Alert Type="@AlertType.Warning"
+               Message="Select an organization in the platform banner before creating staff."
+               ShowIcon="true" />
     }
     @if (Permissions.CanFilterByClinic)
     {
@@ -32,32 +50,40 @@
     {
         <ClinicPicker Label="Clinic" AllowClear="false" Disabled="true" />
     }
-    <FluentSelect TOption="string"
-                  Label="Initial role"
-                  @bind-Value="_role"
-                  Disabled="@(_busy || _rolesLoading)"
-                  Style="width:100%;">
-        @foreach (var role in _roles.Where(r => r.AssignableByCurrentUser))
-        {
-            <FluentOption Value="@role.Name">@role.DisplayLabel</FluentOption>
-        }
-    </FluentSelect>
-    <FluentTextField @bind-Value="_temporaryPassword" Label="Temporary password" TextFieldType="TextFieldType.Password" Required="true" Disabled="_busy" Style="width:100%;" />
-    <FluentTextField @bind-Value="_confirmPassword" Label="Confirm temporary password" TextFieldType="TextFieldType.Password" Required="true" Disabled="_busy" Style="width:100%;" />
+    <div>
+        <label>Initial role</label>
+        <Select TItemValue="string"
+                TItem="string"
+                @bind-Value="_role"
+                Disabled="@(_busy || _rolesLoading)"
+                Style="width:100%;">
+            <SelectOptions>
+                @foreach (var role in _roles.Where(r => r.AssignableByCurrentUser))
+                {
+                    <SelectOption TItemValue="string" TItem="string" Value="@role.Name" Label="@role.DisplayLabel" />
+                }
+            </SelectOptions>
+        </Select>
+    </div>
+    <div>
+        <label>@FieldLabel.Mark("Temporary password")</label>
+        <InputPassword @bind-Value="_temporaryPassword" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label>@FieldLabel.Mark("Confirm temporary password")</label>
+        <InputPassword @bind-Value="_confirmPassword" Disabled="_busy" Style="width:100%;" />
+    </div>
     @if (!string.IsNullOrWhiteSpace(_error))
     {
-        <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">@_error</FluentMessageBar>
+        <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" />
     }
-</FluentStack>
-<FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Style="margin-top:1rem;justify-content:flex-end;">
-    <FluentButton Appearance="Appearance.Outline" OnClick="CancelAsync" Disabled="_busy">Cancel</FluentButton>
-    <FluentButton Appearance="Appearance.Accent" OnClick="SubmitAsync" Disabled="_busy">Create</FluentButton>
-</FluentStack>
+</div>
+<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;">
+    <Button OnClick="CancelCloseAsync" Disabled="_busy">Cancel</Button>
+    <Button Type="@ButtonType.Primary" OnClick="SubmitAsync" Loading="_busy" Disabled="_busy">Create</Button>
+</div>
 
 @code {
-    [CascadingParameter]
-    private FluentDialog Dialog { get; set; } = default!;
-
     private List<StaffRoleInfoResponse> _roles = [];
     private bool _rolesLoading = true;
     private bool _busy;
@@ -103,7 +129,9 @@
         }
     }
 
-    private async Task CancelAsync() => await Dialog.CancelAsync();
+    private Task CancelCloseAsync() => OkCancelRef!.CancelAsync(new ModalClosingEventArgs());
+
+    private Task ConfirmOkAsync() => OkCancelRef!.OkAsync(new ModalClosingEventArgs());
 
     private async Task SubmitAsync()
     {
@@ -163,7 +191,7 @@
 
             _temporaryPassword = string.Empty;
             _confirmPassword = string.Empty;
-            await Dialog.CloseAsync(DialogResult.Ok(true));
+            await ConfirmOkAsync();
         }
         catch (ApiProblemException ex)
         {

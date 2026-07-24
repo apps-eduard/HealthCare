@@ -9,7 +9,7 @@
 @inject IStaffPatientApiClient PatientsApi
 @inject IPermissionState Permissions
 @inject IPlatformTenantContext PlatformTenant
-@inject IDialogService DialogService
+@inject IUiModalService Modals
 @inject IUserNotificationService Notify
 @inject IClinicDirectoryCache ClinicCache
 @inject IClinicDirectoryApiClient ClinicsApi
@@ -19,7 +19,7 @@
 
 @if (Permissions.IsPatientOnly)
 {
-    <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">Patient accounts cannot use the staff patient directory.</FluentMessageBar>
+    <Alert Type="@AlertType.Error" Message="Patient accounts cannot use the staff patient directory." ShowIcon="true" />
 }
 else if (!Permissions.Has(WebPermissions.PatientsSearch))
 {
@@ -27,40 +27,58 @@ else if (!Permissions.Has(WebPermissions.PatientsSearch))
 }
 else
 {
-    <PageHeader Title="Patient directory">
-        <FluentButton Appearance="Appearance.Outline" OnClick="ResetFiltersAsync" Disabled="_loading">Clear filters</FluentButton>
-        <FluentButton Appearance="Appearance.Outline" IconStart="@(new Icons.Regular.Size20.ArrowClockwise())" OnClick="RefreshClicked" Disabled="_loading">Refresh</FluentButton>
-    </PageHeader>
+    <HcPageHeader Title="Patient directory">
+        <Button OnClick="ResetFiltersAsync" Disabled="_loading">Clear filters</Button>
+        <Button OnClick="RefreshClicked" Disabled="_loading">
+            <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
+        </Button>
+    </HcPageHeader>
 
     @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
     {
-        <FluentMessageBar Intent="MessageIntent.Info" AllowDismiss="false" Style="margin-bottom:1rem;">
-            Select an organization in the platform banner before searching patients. Global patient search is not allowed.
-        </FluentMessageBar>
+        <Alert Type="@AlertType.Info"
+               Message="Select an organization in the platform banner before searching patients. Global patient search is not allowed."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
     }
     else if (Permissions.IsPlatformAdmin && !PlatformTenant.HasClinic)
     {
-        <FluentMessageBar Intent="MessageIntent.Info" AllowDismiss="false" Style="margin-bottom:1rem;">
-            Select a clinic in the platform banner (or below) before loading patients for the selected organization.
-        </FluentMessageBar>
+        <Alert Type="@AlertType.Info"
+               Message="Select a clinic in the platform banner (or below) before loading patients for the selected organization."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
     }
 
     <div class="hc-card">
         <div class="hc-filter-grid">
-            <FluentTextField Value="@_search" ValueChanged="OnSearchChanged" Label="Search" Disabled="_loading" Style="width:100%;" />
-            <FluentTextField Value="@_localNumber" ValueChanged="OnLocalNumberChanged" Label="Local patient number" Disabled="_loading" Style="width:100%;" />
-            <FluentSelect TOption="string" Value="_clinicPatientStatus" ValueChanged="OnClinicStatusChanged" Label="Enrollment status" Style="width:100%;">
-                <FluentOption Value="">Any</FluentOption>
-                @foreach (var status in PatientStatusPresentation.ClinicPatientStatuses)
-                {
-                    <FluentOption Value="@status">@status</FluentOption>
-                }
-            </FluentSelect>
-            <FluentSelect TOption="string" Value="_patientActiveFilter" ValueChanged="OnPatientActiveChanged" Label="Patient status" Style="width:100%;">
-                <FluentOption Value="">Any</FluentOption>
-                <FluentOption Value="active">Active</FluentOption>
-                <FluentOption Value="inactive">Inactive</FluentOption>
-            </FluentSelect>
+            <div>
+                <span class="hc-filter-label">Search</span>
+                <Input @bind-Value="_search" @bind-Value:after="DebouncedReloadAsync" Disabled="_loading" Style="width:100%;" />
+            </div>
+            <div>
+                <span class="hc-filter-label">Local patient number</span>
+                <Input @bind-Value="_localNumber" @bind-Value:after="DebouncedReloadAsync" Disabled="_loading" Style="width:100%;" />
+            </div>
+            <div>
+                <span class="hc-filter-label">Enrollment status</span>
+                <Select TItemValue="string" TItem="string" Value="_clinicPatientStatus" ValueChanged="OnClinicStatusChanged" Style="width:100%;" AllowClear>
+                    <SelectOptions>
+                        @foreach (var status in PatientStatusPresentation.ClinicPatientStatuses)
+                        {
+                            <SelectOption TItemValue="string" TItem="string" Value="@status" Label="@status" />
+                        }
+                    </SelectOptions>
+                </Select>
+            </div>
+            <div>
+                <span class="hc-filter-label">Patient status</span>
+                <Select TItemValue="string" TItem="string" Value="_patientActiveFilter" ValueChanged="OnPatientActiveChanged" Style="width:100%;" AllowClear>
+                    <SelectOptions>
+                        <SelectOption TItemValue="string" TItem="string" Value="@("active")" Label="Active" />
+                        <SelectOption TItemValue="string" TItem="string" Value="@("inactive")" Label="Inactive" />
+                    </SelectOptions>
+                </Select>
+            </div>
             @if (Permissions.CanFilterByClinic)
             {
                 <ClinicPicker Value="_clinicId" ValueChanged="OnClinicFilterChanged" Label="Clinic filter"
@@ -74,25 +92,43 @@ else
             {
                 <ClinicPicker Label="Clinic" AllowClear="false" Required="false" Disabled="true" />
             }
-            <FluentSelect TOption="string" @bind-Value="_sortBy" Label="Sort by" Style="width:100%;">
-                <FluentOption Value="registeredAtUtc">Enrollment date</FluentOption>
-                <FluentOption Value="localPatientNumber">Local number</FluentOption>
-                <FluentOption Value="lastName">Last name</FluentOption>
-                <FluentOption Value="firstName">First name</FluentOption>
-                <FluentOption Value="clinicPatientStatus">Enrollment status</FluentOption>
-                <FluentOption Value="patientIsActive">Patient status</FluentOption>
-            </FluentSelect>
-            <FluentSelect TOption="string" @bind-Value="_sortDirection" Label="Direction" Style="width:100%;">
-                <FluentOption Value="desc">Descending</FluentOption>
-                <FluentOption Value="asc">Ascending</FluentOption>
-            </FluentSelect>
-            <FluentSelect TOption="string" Value="@_pageSize.ToString()" ValueChanged="OnPageSizeChanged" Label="Page size" Style="width:100%;">
-                <FluentOption Value="10">10</FluentOption>
-                <FluentOption Value="20">20</FluentOption>
-                <FluentOption Value="50">50</FluentOption>
-            </FluentSelect>
-            <FluentButton Appearance="Appearance.Accent" OnClick="ApplyFiltersAsync"
-                          Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !_clinicId.HasValue))">Apply</FluentButton>
+            <div>
+                <span class="hc-filter-label">Sort by</span>
+                <Select TItemValue="string" TItem="string" @bind-Value="_sortBy" Style="width:100%;">
+                    <SelectOptions>
+                        <SelectOption TItemValue="string" TItem="string" Value="@("registeredAtUtc")" Label="Enrollment date" />
+                        <SelectOption TItemValue="string" TItem="string" Value="@("localPatientNumber")" Label="Local number" />
+                        <SelectOption TItemValue="string" TItem="string" Value="@("lastName")" Label="Last name" />
+                        <SelectOption TItemValue="string" TItem="string" Value="@("firstName")" Label="First name" />
+                        <SelectOption TItemValue="string" TItem="string" Value="@("clinicPatientStatus")" Label="Enrollment status" />
+                        <SelectOption TItemValue="string" TItem="string" Value="@("patientIsActive")" Label="Patient status" />
+                    </SelectOptions>
+                </Select>
+            </div>
+            <div>
+                <span class="hc-filter-label">Direction</span>
+                <Select TItemValue="string" TItem="string" @bind-Value="_sortDirection" Style="width:100%;">
+                    <SelectOptions>
+                        <SelectOption TItemValue="string" TItem="string" Value="@("desc")" Label="Descending" />
+                        <SelectOption TItemValue="string" TItem="string" Value="@("asc")" Label="Ascending" />
+                    </SelectOptions>
+                </Select>
+            </div>
+            <div>
+                <span class="hc-filter-label">Page size</span>
+                <Select TItemValue="string" TItem="string" Value="@_pageSize.ToString()" ValueChanged="OnPageSizeChanged" Style="width:100%;">
+                    <SelectOptions>
+                        <SelectOption TItemValue="string" TItem="string" Value="@("10")" Label="10" />
+                        <SelectOption TItemValue="string" TItem="string" Value="@("20")" Label="20" />
+                        <SelectOption TItemValue="string" TItem="string" Value="@("50")" Label="50" />
+                    </SelectOptions>
+                </Select>
+            </div>
+            <div>
+                <span class="hc-filter-label">&nbsp;</span>
+                <Button Type="@ButtonType.Primary" OnClick="ApplyFiltersAsync"
+                        Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !_clinicId.HasValue))">Apply</Button>
+            </div>
         </div>
     </div>
 
@@ -125,7 +161,9 @@ else
                         <td class="hc-actions">
                             @if (Permissions.Has(WebPermissions.PatientsRead))
                             {
-                                <FluentButton Appearance="Appearance.Stealth" IconStart="@(new Icons.Regular.Size16.Eye())" OnClick="@(() => OpenDetailAsync(row.PatientId))" aria-label="Details" />
+                                <Button Type="@ButtonType.Text" OnClick="@(() => OpenDetailAsync(row.PatientId))" AriaLabel="Details">
+                                    <Icon Type="eye" Theme="IconThemeType.Outline" />
+                                </Button>
                             }
                         </td>
                     </tr>
@@ -134,11 +172,11 @@ else
             </table>
             <div class="hc-pager">
                 <span class="hc-caption">Total: @_totalCount</span>
-                <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="4">
-                    <FluentButton Appearance="Appearance.Outline" Disabled="@(_page <= 1 || _loading)" OnClick="@(() => OnPageChanged(_page - 1))">Prev</FluentButton>
+                <Space>
+                    <Button Disabled="@(_page <= 1 || _loading)" OnClick="@(() => OnPageChanged(_page - 1))">Prev</Button>
                     <span class="hc-caption">Page @_page / @_pageCount</span>
-                    <FluentButton Appearance="Appearance.Outline" Disabled="@(_page >= _pageCount || _loading)" OnClick="@(() => OnPageChanged(_page + 1))">Next</FluentButton>
-                </FluentStack>
+                    <Button Disabled="@(_page >= _pageCount || _loading)" OnClick="@(() => OnPageChanged(_page + 1))">Next</Button>
+                </Space>
             </div>
         </div>
     }
@@ -251,12 +289,6 @@ else
         catch (OperationCanceledException)
         {
         }
-    }
-
-    private async Task OnSearchDebounced(string _)
-    {
-        _page = 1;
-        await LoadAsync();
     }
 
     private async Task OnClinicStatusChanged(string? value)
@@ -447,7 +479,7 @@ else
     private string ClinicLabel(Guid clinicId) =>
         _clinicLabels.TryGetValue(clinicId, out var name) ? name : "—";
 
-        private Task OnPageSizeChanged(string? value)
+    private Task OnPageSizeChanged(string? value)
     {
         if (int.TryParse(value, out var size) && size > 0)
         {
@@ -464,15 +496,14 @@ else
             return;
         }
 
-        var dialog = await DialogService.ShowDialogAsync<PatientDetailDialog>(
-            new PatientDetailDialog.Args
-            {
-                PatientId = patientId,
-                PlatformAdminBypass = Permissions.IsPlatformAdmin,
-            },
-            FluentDialogDefaults.ContentOnly("Patient", "560px"));
-        var result = await dialog.Result;
-        if (!result.Cancelled)
+        if (await Modals.ShowAsync<PatientDetailDialog, PatientDetailDialog.Args>(
+                "Patient",
+                new PatientDetailDialog.Args
+                {
+                    PatientId = patientId,
+                    PlatformAdminBypass = Permissions.IsPlatformAdmin,
+                },
+                "560px"))
         {
             await LoadAsync();
         }

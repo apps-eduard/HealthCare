@@ -4,8 +4,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <!-- NuGet audit advisories surface as NU19xx; keep audit on but do not fail the MVP foundation restore on transitive advisories. -->
-    <WarningsNotAsErrors>NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
+    <!-- NuGet audit: keep enabled, but do not fail restore on advisories or transient vulnerability-feed timeouts (NU1900). -->
+    <WarningsNotAsErrors>NU1900;NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
     <NuGetAudit>true</NuGetAudit>
     <LangVersion>latest</LangVersion>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>

@@ -1,9 +1,9 @@
-@implements IDialogContentComponent<StaffRolesDialog.Args>
+@inherits FeedbackComponent<StaffRolesDialog.Args>
 @inject IStaffManagementApiClient StaffApi
 @inject IPermissionState Permissions
 
-<p style="margin-top:0">Update role for <b>@Content.DisplayName</b></p>
-<div class="hc-caption" style="margin-bottom:0.75rem;">Current role: @Content.CurrentRole</div>
+<p style="margin-top:0">Update role for <b>@Options.DisplayName</b></p>
+<div class="hc-caption" style="margin-bottom:0.75rem;">Current role: @Options.CurrentRole</div>
 
 @if (_loading)
 {
@@ -11,16 +11,21 @@
 }
 else
 {
-    <FluentSelect TOption="string"
-                  Label="Assignable role"
-                  @bind-Value="_selectedRole"
-                  Disabled="_busy"
-                  Style="width:100%;">
-        @foreach (var role in _roles.Where(r => r.AssignableByCurrentUser))
-        {
-            <FluentOption Value="@role.Name">@role.DisplayLabel</FluentOption>
-        }
-    </FluentSelect>
+    <div>
+        <label>Assignable role</label>
+        <Select TItemValue="string"
+                TItem="string"
+                @bind-Value="_selectedRole"
+                Disabled="_busy"
+                Style="width:100%;">
+            <SelectOptions>
+                @foreach (var role in _roles.Where(r => r.AssignableByCurrentUser))
+                {
+                    <SelectOption TItemValue="string" TItem="string" Value="@role.Name" Label="@role.DisplayLabel" />
+                }
+            </SelectOptions>
+        </Select>
+    </div>
 
     @if (_roles.Any(r => !r.AssignableByCurrentUser))
     {
@@ -32,14 +37,17 @@ else
 
 @if (!string.IsNullOrWhiteSpace(_error))
 {
-    <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false" Style="margin-top:0.75rem;">@_error</FluentMessageBar>
+    <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" Style="margin-top:0.75rem;" />
 }
-<FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Style="margin-top:1rem;justify-content:flex-end;">
-    <FluentButton Appearance="Appearance.Outline" OnClick="CancelAsync" Disabled="_busy">Cancel</FluentButton>
-    <FluentButton Appearance="Appearance.Accent" OnClick="SubmitAsync" Disabled="_busy || string.IsNullOrWhiteSpace(_selectedRole)">
+<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;">
+    <Button OnClick="CancelCloseAsync" Disabled="_busy">Cancel</Button>
+    <Button Type="@ButtonType.Primary"
+            OnClick="SubmitAsync"
+            Loading="_busy"
+            Disabled="_busy || string.IsNullOrWhiteSpace(_selectedRole)">
         Assign role
-    </FluentButton>
-</FluentStack>
+    </Button>
+</div>
 
 @code {
     public sealed class Args
@@ -49,12 +57,6 @@ else
         public string CurrentRole { get; init; } = string.Empty;
         public string DisplayName { get; init; } = string.Empty;
     }
-
-    [Parameter]
-    public Args Content { get; set; } = default!;
-
-    [CascadingParameter]
-    private FluentDialog Dialog { get; set; } = default!;
 
     private List<StaffRoleInfoResponse> _roles = [];
     private string? _selectedRole;
@@ -74,7 +76,7 @@ else
         try
         {
             _roles = (await StaffApi.ListRolesAsync()).ToList();
-            _selectedRole = _roles.FirstOrDefault(r => r.AssignableByCurrentUser && r.Name != Content.CurrentRole)?.Name
+            _selectedRole = _roles.FirstOrDefault(r => r.AssignableByCurrentUser && r.Name != Options.CurrentRole)?.Name
                             ?? _roles.FirstOrDefault(r => r.AssignableByCurrentUser)?.Name;
         }
         catch (ApiProblemException ex)
@@ -87,7 +89,9 @@ else
         }
     }
 
-    private async Task CancelAsync() => await Dialog.CancelAsync();
+    private Task CancelCloseAsync() => OkCancelRef!.CancelAsync(new ModalClosingEventArgs());
+
+    private Task ConfirmOkAsync() => OkCancelRef!.OkAsync(new ModalClosingEventArgs());
 
     private async Task SubmitAsync()
     {
@@ -97,9 +101,9 @@ else
             return;
         }
 
-        if (string.Equals(_selectedRole, Content.CurrentRole, StringComparison.Ordinal))
+        if (string.Equals(_selectedRole, Options.CurrentRole, StringComparison.Ordinal))
         {
-            await Dialog.CloseAsync(DialogResult.Ok(true));
+            await ConfirmOkAsync();
             return;
         }
 
@@ -108,8 +112,8 @@ else
         try
         {
             var bypass = Permissions.CurrentUser?.Roles.Contains(WebRoles.PlatformAdmin, StringComparer.Ordinal) == true;
-            await StaffApi.AssignRoleAsync(Content.StaffMemberId, _selectedRole, bypass);
-            await Dialog.CloseAsync(DialogResult.Ok(true));
+            await StaffApi.AssignRoleAsync(Options.StaffMemberId, _selectedRole, bypass);
+            await ConfirmOkAsync();
         }
         catch (ApiProblemException ex)
         {

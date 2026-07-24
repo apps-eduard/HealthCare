@@ -159,7 +159,7 @@ Doctor directory and available-slots require authentication + `availability.read
 
 ## Staff web application (HealthCare.Web)
 
-Fluent UI Interactive Server app consumes the API. UI permissions (`staff.read` / `staff.manage` / `roles.read` / `roles.assign` / `clinics.read` / `organizations.read` / `organizations.select`) only control presentation; the API enforces authorization.
+Ant Design Interactive Server app consumes the API. UI permissions (`staff.read` / `staff.manage` / `roles.read` / `roles.assign` / `clinics.read` / `organizations.read` / `organizations.select`) only control presentation; the API enforces authorization.
 
 Pages:
 
@@ -193,7 +193,7 @@ Tenant behavior:
 - PLATFORM_ADMIN: select organization via platform banner/picker, then `platformAdminBypass=true` **and** `OrganizationId` required for listing; ClinicPicker disabled until organization selected
 - PATIENT: denied on staff clinic directory
 
-Staff UI uses `ClinicPicker` / `OrganizationPicker` (no free-text ClinicId or OrganizationId). Staff Web auth is BFF-based: HttpOnly cookie + server-side token session (no browser token storage). UI is Microsoft Fluent UI Blazor (MudBlazor removed).
+Staff UI uses `ClinicPicker` / `OrganizationPicker` (no free-text ClinicId or OrganizationId). Staff Web auth is BFF-based: HttpOnly cookie + server-side token session (no browser token storage). UI is Ant Design Blazor (Fluent UI removed).
 
 ## Securing new endpoints
 

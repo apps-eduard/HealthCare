@@ -8,7 +8,7 @@
 @inject IDoctorAvailabilityApiClient AvailabilityApi
 @inject IPermissionState Permissions
 @inject IPlatformTenantContext PlatformTenant
-@inject IDialogService DialogService
+@inject IUiModalService Modals
 @inject IUserNotificationService Notify
 @inject IClinicDirectoryApiClient ClinicsApi
 @inject IClinicDirectoryCache ClinicCache
@@ -17,7 +17,7 @@
 
 @if (Permissions.IsPatientOnly)
 {
-    <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">Patient accounts cannot manage staff availability.</FluentMessageBar>
+    <Alert Type="@AlertType.Error" Message="Patient accounts cannot manage staff availability." ShowIcon="true" />
 }
 else if (!AvailabilityPermissionRules.CanManage(Permissions))
 {
@@ -25,21 +25,25 @@ else if (!AvailabilityPermissionRules.CanManage(Permissions))
 }
 else
 {
-    <PageHeader Title="Availability" Subtitle="@(string.IsNullOrWhiteSpace(_timeZoneId) ? null : $"Clinic timezone: {_timeZoneId}")">
-        <FluentButton Appearance="Appearance.Outline" IconStart="@(new Icons.Regular.Size20.ArrowClockwise())" OnClick="RefreshAllAsync" Disabled="_loading">Refresh</FluentButton>
-    </PageHeader>
+    <HcPageHeader Title="Availability" Subtitle="@(string.IsNullOrWhiteSpace(_timeZoneId) ? null : $"Clinic timezone: {_timeZoneId}")">
+        <Button OnClick="RefreshAllAsync" Disabled="_loading">
+            <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
+        </Button>
+    </HcPageHeader>
 
     @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
     {
-        <FluentMessageBar Intent="MessageIntent.Info" AllowDismiss="false" Style="margin-bottom:1rem;">
-            Select an organization in the platform banner before managing availability. Global availability load is not allowed.
-        </FluentMessageBar>
+        <Alert Type="@AlertType.Info"
+               Message="Select an organization in the platform banner before managing availability. Global availability load is not allowed."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
     }
     else if (Permissions.IsPlatformAdmin && !PlatformTenant.HasClinic)
     {
-        <FluentMessageBar Intent="MessageIntent.Info" AllowDismiss="false" Style="margin-bottom:1rem;">
-            Select a clinic in the platform banner (or below) before loading availability for the selected organization.
-        </FluentMessageBar>
+        <Alert Type="@AlertType.Info"
+               Message="Select a clinic in the platform banner (or below) before loading availability for the selected organization."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
     }
 
     <div class="hc-card">
@@ -61,19 +65,26 @@ else
 
             @if (_selfOnly)
             {
-                <FluentTextField Value="@_selfDoctorLabel" Label="Doctor" Disabled="true" Style="width:100%;" />
+                <div>
+                    <span class="hc-filter-label">Doctor</span>
+                    <Input Value="@_selfDoctorLabel" Disabled="true" Style="width:100%;" />
+                </div>
             }
             else
             {
-                <FluentSelect TOption="string" Value="@(_doctorId?.ToString() ?? "")" ValueChanged="OnDoctorStringChanged" Label="Doctor" Required="true"
-                              Disabled="_doctorsLoading || string.IsNullOrWhiteSpace(_clinicSlug)" Style="width:100%;">
-                    @foreach (var doctor in _doctors)
-                    {
-                        <FluentOption Value="@doctor.StaffMemberId.ToString()">
-                            @doctor.DisplayName@(string.IsNullOrWhiteSpace(doctor.Specialty) ? "" : $" · {doctor.Specialty}")
-                        </FluentOption>
-                    }
-                </FluentSelect>
+                <div>
+                    <label>@FieldLabel.Mark("Doctor")</label>
+                    <Select TItemValue="string" TItem="string" Value="@(_doctorId?.ToString() ?? "")" ValueChanged="OnDoctorStringChanged"
+                            Disabled="_doctorsLoading || string.IsNullOrWhiteSpace(_clinicSlug)" Style="width:100%;">
+                        <SelectOptions>
+                            @foreach (var doctor in _doctors)
+                            {
+                                <SelectOption TItemValue="string" TItem="string" Value="@doctor.StaffMemberId.ToString()"
+                                              Label="@(doctor.DisplayName + (string.IsNullOrWhiteSpace(doctor.Specialty) ? "" : $" · {doctor.Specialty}"))" />
+                            }
+                        </SelectOptions>
+                    </Select>
+                </div>
             }
         </div>
     </div>
@@ -82,16 +93,18 @@ else
 
     @if (_doctorId is null)
     {
-        <FluentMessageBar Intent="MessageIntent.Info" AllowDismiss="false">Select a clinic and doctor to manage availability.</FluentMessageBar>
+        <Alert Type="@AlertType.Info" Message="Select a clinic and doctor to manage availability." ShowIcon="true" />
     }
     else
     {
-        <FluentTabs>
-            <FluentTab Label="Weekly windows">
+        <Tabs>
+            <TabPane Tab="Weekly windows" Key="windows">
                 <div style="padding:1rem 0;">
-                    <FluentStack Orientation="Orientation.Horizontal" Style="justify-content:flex-end;margin-bottom:0.75rem;">
-                        <FluentButton Appearance="Appearance.Accent" IconStart="@(new Icons.Regular.Size20.Add())" OnClick="OpenCreateWindowAsync" Disabled="_loading">Add window</FluentButton>
-                    </FluentStack>
+                    <div style="display:flex;justify-content:flex-end;margin-bottom:0.75rem;">
+                        <Button Type="@ButtonType.Primary" OnClick="OpenCreateWindowAsync" Disabled="_loading">
+                            <Icon Type="plus" Theme="IconThemeType.Outline" /> Add window
+                        </Button>
+                    </div>
                     @if (_loading) { <PageLoading /> }
                     else if (_windows.Count == 0) { <EmptyState Message="No weekly availability windows." /> }
                     else
@@ -112,8 +125,12 @@ else
                                             <td><StatusBadge Text="@AvailabilityPresentation.ActiveLabel(row.IsActive)" Tone="@AvailabilityPresentation.ActiveTone(row.IsActive)" /></td>
                                             <td>@row.Version</td>
                                             <td class="hc-actions">
-                                                <FluentButton Appearance="Appearance.Stealth" IconStart="@(new Icons.Regular.Size16.Edit())" OnClick="@(() => OpenEditWindowAsync(row))" aria-label="Edit" />
-                                                <FluentButton Appearance="Appearance.Stealth" IconStart="@(new Icons.Regular.Size16.Delete())" OnClick="@(() => DeleteWindowAsync(row))" aria-label="Delete" />
+                                                <Button Type="@ButtonType.Text" OnClick="@(() => OpenEditWindowAsync(row))" AriaLabel="Edit">
+                                                    <Icon Type="edit" Theme="IconThemeType.Outline" />
+                                                </Button>
+                                                <Button Type="@ButtonType.Text" OnClick="@(() => DeleteWindowAsync(row))" AriaLabel="Delete">
+                                                    <Icon Type="delete" Theme="IconThemeType.Outline" />
+                                                </Button>
                                             </td>
                                         </tr>
                                     }
@@ -123,12 +140,14 @@ else
                         }
                     }
                 </div>
-            </FluentTab>
-            <FluentTab Label="Exceptions">
+            </TabPane>
+            <TabPane Tab="Exceptions" Key="exceptions">
                 <div style="padding:1rem 0;">
-                    <FluentStack Orientation="Orientation.Horizontal" Style="justify-content:flex-end;margin-bottom:0.75rem;">
-                        <FluentButton Appearance="Appearance.Accent" IconStart="@(new Icons.Regular.Size20.Add())" OnClick="OpenCreateExceptionAsync" Disabled="_loading">Add exception</FluentButton>
-                    </FluentStack>
+                    <div style="display:flex;justify-content:flex-end;margin-bottom:0.75rem;">
+                        <Button Type="@ButtonType.Primary" OnClick="OpenCreateExceptionAsync" Disabled="_loading">
+                            <Icon Type="plus" Theme="IconThemeType.Outline" /> Add exception
+                        </Button>
+                    </div>
                     @if (_loading) { <PageLoading /> }
                     else if (_exceptions.Count == 0) { <EmptyState Message="No date-specific exceptions." /> }
                     else
@@ -146,7 +165,9 @@ else
                                         <td>@(row.Reason ?? "—")</td>
                                         <td>@row.Version</td>
                                         <td class="hc-actions">
-                                            <FluentButton Appearance="Appearance.Stealth" IconStart="@(new Icons.Regular.Size16.Delete())" OnClick="@(() => DeleteExceptionAsync(row))" aria-label="Delete exception" />
+                                            <Button Type="@ButtonType.Text" OnClick="@(() => DeleteExceptionAsync(row))" AriaLabel="Delete exception">
+                                                <Icon Type="delete" Theme="IconThemeType.Outline" />
+                                            </Button>
                                         </td>
                                     </tr>
                                 }
@@ -155,28 +176,45 @@ else
                         </div>
                     }
                 </div>
-            </FluentTab>
-            <FluentTab Label="Slot preview">
+            </TabPane>
+            <TabPane Tab="Slot preview" Key="slots">
                 <div style="padding:1rem 0;">
                     <div class="hc-filter-grid">
-                        <FluentDatePicker Value="_previewDate" ValueChanged="OnPreviewDateChanged" Label="Date" Style="width:100%;" />
-                        <FluentNumberField @bind-Value="_previewDuration" Label="Duration (minutes)" Min="10" Max="240" Style="width:100%;" @bind-Value:after="OnPreviewDurationChangedAfter" />
-                        <FluentButton Appearance="Appearance.Accent" OnClick="LoadSlotsAsync" Disabled="_slotsLoading || string.IsNullOrWhiteSpace(_clinicSlug)">Preview</FluentButton>
+                        <div>
+                            <span class="hc-filter-label">Date</span>
+                            <DatePicker TValue="DateTime?"
+                                        Value="_previewDate"
+                                        OnChange="OnPreviewDatePickerChanged"
+                                        Style="width:100%;" />
+                        </div>
+                        <div>
+                            <span class="hc-filter-label">Duration (minutes)</span>
+                            <AntDesign.InputNumber TValue="int"
+                                                    @bind-Value="_previewDuration"
+                                                    OnChange="OnPreviewDurationChanged"
+                                                    Min="10"
+                                                    Max="240"
+                                                    Style="width:100%;" />
+                        </div>
+                        <div>
+                            <span class="hc-filter-label">&nbsp;</span>
+                            <Button Type="@ButtonType.Primary" OnClick="LoadSlotsAsync" Disabled="_slotsLoading || string.IsNullOrWhiteSpace(_clinicSlug)">Preview</Button>
+                        </div>
                     </div>
                     @if (_slotsLoading) { <PageLoading /> }
                     else if (_slots.Count == 0) { <EmptyState Message="No available slots for this date." /> }
                     else
                     {
-                        <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="4" Wrap="true" Style="margin-top:0.75rem;">
+                        <Space Wrap Style="margin-top:0.75rem;">
                             @foreach (var slot in _slots)
                             {
                                 <StatusBadge Text="@($"{slot.StartLocal} – {slot.EndLocal}")" Tone="StatusTone.Neutral" />
                             }
-                        </FluentStack>
+                        </Space>
                     }
                 </div>
-            </FluentTab>
-        </FluentTabs>
+            </TabPane>
+        </Tabs>
     }
 }
 
@@ -346,7 +384,8 @@ else
         }
     }
 
-    private Task OnPreviewDurationChangedAfter() => OnPreviewDurationChanged(_previewDuration);
+    private Task OnPreviewDatePickerChanged(DateTimeChangedEventArgs<DateTime?> args) =>
+        OnPreviewDateChanged(args.Date);
 
     private async Task OnDoctorStringChanged(string? value)
     {
@@ -474,15 +513,13 @@ else
             return;
         }
 
-        var dialog = await DialogService.ShowDialogAsync<AvailabilityWindowDialog>(
-            new AvailabilityWindowDialog.Args
-            {
-                DoctorStaffMemberId = doctorId,
-                PlatformAdminBypass = Permissions.IsPlatformAdmin,
-            },
-            FluentDialogDefaults.ContentOnly("Add availability"));
-        var result = await dialog.Result;
-        if (!result.Cancelled)
+        if (await Modals.ShowAsync<AvailabilityWindowDialog, AvailabilityWindowDialog.Args>(
+                "Add availability",
+                new AvailabilityWindowDialog.Args
+                {
+                    DoctorStaffMemberId = doctorId,
+                    PlatformAdminBypass = Permissions.IsPlatformAdmin,
+                }))
         {
             await RefreshAllAsync();
         }
@@ -495,16 +532,14 @@ else
             return;
         }
 
-        var dialog = await DialogService.ShowDialogAsync<AvailabilityWindowDialog>(
-            new AvailabilityWindowDialog.Args
-            {
-                DoctorStaffMemberId = doctorId,
-                PlatformAdminBypass = Permissions.IsPlatformAdmin,
-                Existing = window,
-            },
-            FluentDialogDefaults.ContentOnly("Edit availability"));
-        var result = await dialog.Result;
-        if (!result.Cancelled)
+        if (await Modals.ShowAsync<AvailabilityWindowDialog, AvailabilityWindowDialog.Args>(
+                "Edit availability",
+                new AvailabilityWindowDialog.Args
+                {
+                    DoctorStaffMemberId = doctorId,
+                    PlatformAdminBypass = Permissions.IsPlatformAdmin,
+                    Existing = window,
+                }))
         {
             await RefreshAllAsync();
         }
@@ -517,13 +552,9 @@ else
             return;
         }
 
-        var confirm = await DialogService.ShowConfirmationAsync(
-            $"Delete {window.DayOfWeek} {window.StartLocalTime}–{window.EndLocalTime}?",
-            "Delete availability",
-            "Delete",
-            "Cancel");
-        var confirmResult = await confirm.Result;
-        if (confirmResult.Cancelled)
+        if (!await Modals.ConfirmAsync(
+                "Delete availability",
+                $"Delete {window.DayOfWeek} {window.StartLocalTime}–{window.EndLocalTime}?"))
         {
             return;
         }
@@ -552,15 +583,13 @@ else
             return;
         }
 
-        var dialog = await DialogService.ShowDialogAsync<AvailabilityExceptionDialog>(
-            new AvailabilityExceptionDialog.Args
-            {
-                DoctorStaffMemberId = doctorId,
-                PlatformAdminBypass = Permissions.IsPlatformAdmin,
-            },
-            FluentDialogDefaults.ContentOnly("Add exception"));
-        var result = await dialog.Result;
-        if (!result.Cancelled)
+        if (await Modals.ShowAsync<AvailabilityExceptionDialog, AvailabilityExceptionDialog.Args>(
+                "Add exception",
+                new AvailabilityExceptionDialog.Args
+                {
+                    DoctorStaffMemberId = doctorId,
+                    PlatformAdminBypass = Permissions.IsPlatformAdmin,
+                }))
         {
             await RefreshAllAsync();
         }
@@ -573,13 +602,9 @@ else
             return;
         }
 
-        var confirm = await DialogService.ShowConfirmationAsync(
-            $"Delete exception on {exception.Date:yyyy-MM-dd}?",
-            "Delete exception",
-            "Delete",
-            "Cancel");
-        var confirmResult = await confirm.Result;
-        if (confirmResult.Cancelled)
+        if (!await Modals.ConfirmAsync(
+                "Delete exception",
+                $"Delete exception on {exception.Date:yyyy-MM-dd}?"))
         {
             return;
         }

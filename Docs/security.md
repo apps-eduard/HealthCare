@@ -500,7 +500,7 @@ When added, require:
 
 ## 10. Web application security
 
-- Use Fluent UI Blazor only for presentation.
+- Use Ant Design Blazor only for presentation.
 - The web UI must not be treated as a security boundary.
 - Do not render controls based only on client-side role checks.
 - API authorization remains mandatory.
@@ -611,7 +611,7 @@ Configure appropriate headers:
 - Referrer-Policy
 - Frame restrictions
 
-Do not add headers blindly. Verify compatibility with Blazor and Fluent UI.
+Do not add headers blindly. Verify compatibility with Blazor and Ant Design Blazor.
 
 ---
 

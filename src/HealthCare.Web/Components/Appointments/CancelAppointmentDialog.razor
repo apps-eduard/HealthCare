@@ -1,32 +1,28 @@
 @namespace HealthCare.Web.Components.Appointments
-@implements IDialogContentComponent<CancelAppointmentDialog.Args>
+@inherits FeedbackComponent<CancelAppointmentDialog.Args>
 @using HealthCare.Contracts.Appointments
 @using HealthCare.Web.Appointments
 
-<FluentMessageBar Intent="MessageIntent.Warning" AllowDismiss="false">
-    Cancelling an appointment cannot be undone from this screen.
-</FluentMessageBar>
-<FluentTextField @bind-Value="_reason"
-                  Label="Cancellation reason"
-                  Required="true"
-                  TextFieldType="TextFieldType.Text"
-                  Rows="3"
-                  Disabled="_busy"
-                  Style="width:100%;margin-top:0.75rem;" />
+<Alert Type="@AlertType.Warning"
+       Message="Cancelling an appointment cannot be undone from this screen."
+       ShowIcon="true" />
+<div style="margin-top:0.75rem;">
+    <label>@FieldLabel.Mark("Cancellation reason")</label>
+    <TextArea @bind-Value="_reason" Rows="3" Disabled="_busy" Style="width:100%;" />
+</div>
 @if (!string.IsNullOrWhiteSpace(_error))
 {
-    <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false" Style="margin-top:0.5rem;">@_error</FluentMessageBar>
+    <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" Style="margin-top:0.5rem;" />
 }
-<FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Style="margin-top:1rem;justify-content:flex-end;">
-    <FluentButton Appearance="Appearance.Outline" OnClick="CancelAsync" Disabled="_busy">Back</FluentButton>
-    <FluentButton Appearance="Appearance.Accent" OnClick="SubmitAsync" Disabled="_busy || string.IsNullOrWhiteSpace(_reason)">
-        @if (_busy)
-        {
-            <FluentProgressRing Style="width:16px;height:16px;margin-right:0.35rem;" />
-        }
+<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;">
+    <Button OnClick="CancelCloseAsync" Disabled="_busy">Back</Button>
+    <Button Type="@ButtonType.Primary"
+            OnClick="SubmitAsync"
+            Loading="_busy"
+            Disabled="_busy || string.IsNullOrWhiteSpace(_reason)">
         Cancel appointment
-    </FluentButton>
-</FluentStack>
+    </Button>
+</div>
 
 @code {
     public sealed class Args
@@ -35,12 +31,6 @@
         public int ExpectedVersion { get; init; }
         public bool PlatformAdminBypass { get; init; }
     }
-
-    [Parameter]
-    public Args Content { get; set; } = default!;
-
-    [CascadingParameter]
-    private FluentDialog Dialog { get; set; } = default!;
 
     [Inject]
     private IAppointmentApiClient AppointmentsApi { get; set; } = default!;
@@ -52,7 +42,9 @@
     private bool _busy;
     private string? _error;
 
-    private async Task CancelAsync() => await Dialog.CancelAsync();
+    private Task CancelCloseAsync() => OkCancelRef!.CancelAsync(new ModalClosingEventArgs());
+
+    private Task ConfirmOkAsync() => OkCancelRef!.OkAsync(new ModalClosingEventArgs());
 
     private async Task SubmitAsync()
     {
@@ -65,16 +57,16 @@
         _error = null;
         try
         {
-            var updated = await AppointmentsApi.CancelAsync(
-                Content.AppointmentId,
+            await AppointmentsApi.CancelAsync(
+                Options.AppointmentId,
                 new AppointmentActionRequest
                 {
-                    ExpectedVersion = Content.ExpectedVersion,
+                    ExpectedVersion = Options.ExpectedVersion,
                     CancellationReason = _reason.Trim(),
                 },
-                Content.PlatformAdminBypass);
+                Options.PlatformAdminBypass);
             Notify.Success("Appointment cancelled.");
-            await Dialog.CloseAsync(DialogResult.Ok(updated));
+            await ConfirmOkAsync();
         }
         catch (ApiProblemException ex) when (AppointmentProblemMessages.IsConcurrencyConflict(ex))
         {

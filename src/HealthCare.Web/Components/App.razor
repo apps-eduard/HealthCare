@@ -7,20 +7,20 @@
     <base href="/" />
     <ResourcePreloader />
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link href="_content/Microsoft.FluentUI.AspNetCore.Components/css/reboot.css" rel="stylesheet" />
-    <link rel="stylesheet" href="@Assets["css/healthcare-enterprise.css"]" />
+    <link href="_content/AntDesign/css/ant-design-blazor.css" rel="stylesheet" />
+    <link rel="stylesheet" href="@Assets["css/healthcare-ant-enterprise.css"]" />
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["HealthCare.Web.styles.css"]" />
     <ImportMap />
     <HeadOutlet @rendermode="InteractiveServer" />
-    <script src="_content/Microsoft.FluentUI.AspNetCore.Components/js/loading-theme.js" type="text/javascript"></script>
-    <loading-theme storage-name="hc-theme" mode="light" primary-color="#0F766E"></loading-theme>
 </head>
 
 <body class="hc-body">
     <Routes @rendermode="InteractiveServer" />
+    <AntContainer @rendermode="InteractiveServer" />
     <ReconnectModal @rendermode="InteractiveServer" />
-    <script src="_content/Microsoft.FluentUI.AspNetCore.Components/Microsoft.FluentUI.AspNetCore.Components.lib.module.js" type="module" async></script>
+    <script src="_content/AntDesign/js/ant-design-blazor.js"></script>
+    <script src="@Assets["js/healthcare-shell.js"]"></script>
     <script src="@Assets["_framework/blazor.web.js"]"></script>
 </body>
 

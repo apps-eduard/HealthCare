@@ -1,8 +1,7 @@
 @namespace HealthCare.Web.Components.Shared
 
 <div class="hc-loading" role="status" aria-live="polite">
-    <FluentProgressRing />
-    <span>@(string.IsNullOrWhiteSpace(Message) ? "Loading…" : Message)</span>
+    <Spin Tip="@(string.IsNullOrWhiteSpace(Message) ? "Loading…" : Message)" />
 </div>
 
 @code {

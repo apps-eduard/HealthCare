@@ -8,8 +8,9 @@
 @inject IAppointmentApiClient AppointmentsApi
 @inject IPermissionState Permissions
 @inject IPlatformTenantContext PlatformTenant
-@inject IDialogService DialogService
+@inject IUiModalService Modals
 @inject IUserNotificationService Notify
+@inject NavigationManager Navigation
 @inject IClinicDirectoryCache ClinicCache
 @inject IClinicDirectoryApiClient ClinicsApi
 
@@ -17,7 +18,7 @@
 
 @if (Permissions.IsPatientOnly)
 {
-    <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">Patient accounts cannot use staff appointments.</FluentMessageBar>
+    <Alert Type="@AlertType.Error" Message="Patient accounts cannot use staff appointments." ShowIcon="true" />
 }
 else if (!Permissions.Has(WebPermissions.AppointmentsRead))
 {
@@ -25,50 +26,70 @@ else if (!Permissions.Has(WebPermissions.AppointmentsRead))
 }
 else
 {
-    <PageHeader Title="Calendar" Subtitle="@(string.IsNullOrWhiteSpace(_timezoneLabel) ? null : $"Clinic timezone: {_timezoneLabel}")">
-        <FluentButton Appearance="Appearance.Outline" Href="/appointments" IconStart="@(new Icons.Regular.Size20.TextBulletListLtr())">Queue</FluentButton>
-        <FluentButton Appearance="Appearance.Outline" IconStart="@(new Icons.Regular.Size20.ArrowClockwise())" OnClick="LoadAsync" Disabled="_loading">Refresh</FluentButton>
-    </PageHeader>
+    <HcPageHeader Title="Calendar" Subtitle="@(string.IsNullOrWhiteSpace(_timezoneLabel) ? null : $"Clinic timezone: {_timezoneLabel}")">
+        <Button OnClick='() => Navigation.NavigateTo("/appointments")'>
+            <Icon Type="unordered-list" Theme="IconThemeType.Outline" /> Queue
+        </Button>
+        <Button OnClick="LoadAsync" Disabled="_loading">
+            <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
+        </Button>
+    </HcPageHeader>
 
     @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
     {
-        <FluentMessageBar Intent="MessageIntent.Info" AllowDismiss="false" Style="margin-bottom:1rem;">
-            Select an organization in the platform banner before loading the calendar. Global calendar load is not allowed.
-        </FluentMessageBar>
+        <Alert Type="@AlertType.Info"
+               Message="Select an organization in the platform banner before loading the calendar. Global calendar load is not allowed."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
     }
     else if (Permissions.IsPlatformAdmin && !PlatformTenant.HasClinic)
     {
-        <FluentMessageBar Intent="MessageIntent.Info" AllowDismiss="false" Style="margin-bottom:1rem;">
-            Select a clinic in the platform banner (or below) before loading the calendar for the selected organization.
-        </FluentMessageBar>
+        <Alert Type="@AlertType.Info"
+               Message="Select a clinic in the platform banner (or below) before loading the calendar for the selected organization."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
     }
 
     <div class="hc-card">
         <div class="hc-filter-grid">
-            <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="4">
-                <FluentButton Appearance="@(_mode == CalendarMode.Day ? Appearance.Accent : Appearance.Outline)" OnClick="@(() => SetMode(CalendarMode.Day))">Day</FluentButton>
-                <FluentButton Appearance="@(_mode == CalendarMode.Week ? Appearance.Accent : Appearance.Outline)" OnClick="@(() => SetMode(CalendarMode.Week))">Week</FluentButton>
-            </FluentStack>
-            <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="4" VerticalAlignment="VerticalAlignment.Center">
-                <FluentButton Appearance="Appearance.Stealth" IconStart="@(new Icons.Regular.Size20.ChevronLeft())" OnClick="PreviousAsync" aria-label="Previous" />
-                <FluentButton Appearance="Appearance.Lightweight" OnClick="GoTodayAsync">Today</FluentButton>
-                <FluentButton Appearance="Appearance.Stealth" IconStart="@(new Icons.Regular.Size20.ChevronRight())" OnClick="NextAsync" aria-label="Next" />
+            <Space>
+                <Button Type="@(_mode == CalendarMode.Day ? ButtonType.Primary : ButtonType.Default)" OnClick="@(() => SetMode(CalendarMode.Day))">Day</Button>
+                <Button Type="@(_mode == CalendarMode.Week ? ButtonType.Primary : ButtonType.Default)" OnClick="@(() => SetMode(CalendarMode.Week))">Week</Button>
+            </Space>
+            <Space>
+                <Button Type="@ButtonType.Text" OnClick="PreviousAsync" AriaLabel="Previous">
+                    <Icon Type="left" Theme="IconThemeType.Outline" />
+                </Button>
+                <Button Type="@ButtonType.Link" OnClick="GoTodayAsync">Today</Button>
+                <Button Type="@ButtonType.Text" OnClick="NextAsync" AriaLabel="Next">
+                    <Icon Type="right" Theme="IconThemeType.Outline" />
+                </Button>
                 <strong>@_rangeLabel</strong>
-            </FluentStack>
-            <FluentSelect TOption="string" @bind-Value="_status" Label="Status" Style="width:100%;">
-                <FluentOption Value="">Any</FluentOption>
-                @foreach (var status in AppointmentStatusPresentation.AllStatuses)
-                {
-                    <FluentOption Value="@status">@status</FluentOption>
-                }
-            </FluentSelect>
-            <FluentSelect TOption="string" Value="@(_doctorId?.ToString() ?? "")" ValueChanged="OnDoctorFilterChanged" Label="Doctor" Style="width:100%;">
-                <FluentOption Value="">Any</FluentOption>
-                @foreach (var doctor in _doctors)
-                {
-                    <FluentOption Value="@doctor.StaffMemberId.ToString()">@doctor.DisplayName</FluentOption>
-                }
-            </FluentSelect>
+            </Space>
+            <div>
+                <span class="hc-filter-label">Status</span>
+                <Select TItemValue="string" TItem="string" @bind-Value="_status" Style="width:100%;" AllowClear>
+                    <SelectOptions>
+                        <SelectOption TItemValue="string" TItem="string" Value="@("")" Label="Any" />
+                        @foreach (var status in AppointmentStatusPresentation.AllStatuses)
+                        {
+                            <SelectOption TItemValue="string" TItem="string" Value="@status" Label="@status" />
+                        }
+                    </SelectOptions>
+                </Select>
+            </div>
+            <div>
+                <span class="hc-filter-label">Doctor</span>
+                <Select TItemValue="string" TItem="string" Value="@(_doctorId?.ToString() ?? "")" ValueChanged="OnDoctorFilterChanged" Style="width:100%;" AllowClear>
+                    <SelectOptions>
+                        <SelectOption TItemValue="string" TItem="string" Value="@("")" Label="Any" />
+                        @foreach (var doctor in _doctors)
+                        {
+                            <SelectOption TItemValue="string" TItem="string" Value="@doctor.StaffMemberId.ToString()" Label="@doctor.DisplayName" />
+                        }
+                    </SelectOptions>
+                </Select>
+            </div>
             @if (Permissions.CanFilterByClinic)
             {
                 <ClinicPicker Value="_clinicId" ValueChanged="OnClinicFilterChanged" Label="Clinic" AllowClear="false" Required="true"
@@ -77,8 +98,11 @@ else
                               PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
                               Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)" />
             }
-            <FluentButton Appearance="Appearance.Accent" OnClick="LoadAsync"
-                          Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !_clinicId.HasValue))">Apply</FluentButton>
+            <div>
+                <span class="hc-filter-label">&nbsp;</span>
+                <Button Type="@ButtonType.Primary" OnClick="LoadAsync"
+                        Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !_clinicId.HasValue))">Apply</Button>
+            </div>
         </div>
     </div>
 
@@ -447,15 +471,14 @@ else
 
     private async Task OpenDetailAsync(Guid appointmentId)
     {
-        var dialog = await DialogService.ShowDialogAsync<AppointmentDetailDialog>(
-            new AppointmentDetailDialog.Args
-            {
-                AppointmentId = appointmentId,
-                PlatformAdminBypass = Permissions.IsPlatformAdmin,
-            },
-            FluentDialogDefaults.ContentOnly("Appointment", "640px"));
-        var result = await dialog.Result;
-        if (!result.Cancelled)
+        if (await Modals.ShowAsync<AppointmentDetailDialog, AppointmentDetailDialog.Args>(
+                "Appointment",
+                new AppointmentDetailDialog.Args
+                {
+                    AppointmentId = appointmentId,
+                    PlatformAdminBypass = Permissions.IsPlatformAdmin,
+                },
+                "640px"))
         {
             await LoadAsync();
         }

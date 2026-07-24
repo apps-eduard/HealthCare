@@ -2,7 +2,7 @@
 @implements IDisposable
 @inject IPermissionState Permissions
 @inject IPlatformTenantContext PlatformTenant
-@inject IDialogService DialogService
+@inject IUiModalService Modals
 
 @if (Permissions.IsPlatformAdmin)
 {
@@ -14,22 +14,22 @@
                     ? $"{PlatformTenant.SelectedOrganizationName}{(PlatformTenant.HasClinic ? $" / {PlatformTenant.SelectedClinicName ?? PlatformTenant.SelectedClinicId.ToString()}" : string.Empty)}"
                     : "(none selected)")
             </strong>
-            <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="4" Wrap="true">
-                <FluentButton Appearance="Appearance.Outline" OnClick="OpenSelectOrganizationAsync">
+            <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                <Button OnClick="OpenSelectOrganizationAsync">
                     @(PlatformTenant.HasOrganization ? "Change organization" : "Select organization")
-                </FluentButton>
+                </Button>
                 @if (PlatformTenant.HasOrganization)
                 {
-                    <FluentButton Appearance="Appearance.Outline" OnClick="OpenSelectClinicAsync">
+                    <Button OnClick="OpenSelectClinicAsync">
                         @(PlatformTenant.HasClinic ? "Change clinic" : "Select clinic")
-                    </FluentButton>
+                    </Button>
                     @if (PlatformTenant.HasClinic)
                     {
-                        <FluentButton Appearance="Appearance.Lightweight" OnClick="ClearClinic">Clear clinic</FluentButton>
+                        <Button Type="@ButtonType.Link" OnClick="ClearClinic">Clear clinic</Button>
                     }
-                    <FluentButton Appearance="Appearance.Lightweight" OnClick="ClearOrganization">Clear organization</FluentButton>
+                    <Button Type="@ButtonType.Link" OnClick="ClearOrganization">Clear organization</Button>
                 }
-            </FluentStack>
+            </div>
         </div>
         <p class="hc-caption" style="margin:0.5rem 0 0;">
             Elevated platform access. Selection is a usability aid only — API authorization and explicit bypass remain required.
@@ -63,13 +63,7 @@
 
     private async Task OpenSelectOrganizationAsync()
     {
-        await DialogService.ShowDialogAsync<PlatformOrganizationSelectDialog>(new DialogParameters
-        {
-            Title = "Select organization",
-            Width = "480px",
-            PrimaryAction = null,
-            SecondaryAction = null,
-        });
+        await Modals.ShowAsync<PlatformOrganizationSelectDialog>("Select organization", "480px");
     }
 
     private async Task OpenSelectClinicAsync()
@@ -79,12 +73,6 @@
             return;
         }
 
-        await DialogService.ShowDialogAsync<PlatformClinicSelectDialog>(new DialogParameters
-        {
-            Title = "Select clinic",
-            Width = "480px",
-            PrimaryAction = null,
-            SecondaryAction = null,
-        });
+        await Modals.ShowAsync<PlatformClinicSelectDialog>("Select clinic", "480px");
     }
 }

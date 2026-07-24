@@ -1,7 +1,7 @@
 @namespace HealthCare.Web.Components.Shared
 @using HealthCare.Web.Design
 
-<span class="hc-badge hc-badge-@ToneCss">@Text</span>
+<Tag Color="@ToneColor">@Text</Tag>
 
 @code {
     [Parameter]
@@ -10,14 +10,14 @@
     [Parameter]
     public StatusTone Tone { get; set; } = StatusTone.Default;
 
-    private string ToneCss => Tone switch
+    private string ToneColor => Tone switch
     {
         StatusTone.Success => "success",
         StatusTone.Warning => "warning",
         StatusTone.Error => "error",
-        StatusTone.Info => "info",
-        StatusTone.Primary => "primary",
-        StatusTone.Neutral => "neutral",
+        StatusTone.Info => "processing",
+        StatusTone.Primary => "cyan",
+        StatusTone.Neutral => "default",
         _ => "default",
     };
 }

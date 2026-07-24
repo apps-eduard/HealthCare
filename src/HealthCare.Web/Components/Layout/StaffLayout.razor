@@ -1,104 +1,123 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject IPermissionState Permissions
-@inject StaffAuthenticationStateProvider AuthState
 @inject NavigationManager Navigation
-@inject IUserNotificationService Notify
+@inject IJSRuntime Js
 
-<div class="hc-layout">
-    <FluentHeader Class="hc-header">
-        <FluentButton Appearance="Appearance.Stealth"
-                      IconStart="@(new Icons.Regular.Size20.Navigation())"
-                      OnClick="ToggleDrawer"
-                      aria-label="Toggle navigation" />
-        <div class="hc-brand">
-            <span class="hc-brand-title">HealthCare</span>
-            <span class="hc-brand-subtitle">Staff console</span>
+<Layout Class="hc-pro-layout" Style="min-height:100vh">
+    <Sider Collapsible
+           @bind-Collapsed="_collapsed"
+           Breakpoint="@BreakpointType.Lg"
+           CollapsedWidth="64"
+           Width="240"
+           Theme="SiderTheme.Dark"
+           Class="hc-pro-sider">
+        <div class="hc-pro-logo" @onclick="GoDashboard">
+            <span class="hc-pro-logo-mark">HC</span>
+            @if (!_collapsed)
+            {
+                <div class="hc-pro-logo-text">
+                    <strong>HealthCare</strong>
+                    <span>Staff console</span>
+                </div>
+            }
         </div>
-        <div class="hc-spacer"></div>
-        @if (Permissions.CurrentUser is { } user)
-        {
-            <span class="hc-user-email">@user.Email</span>
-            <FluentPersona Name="@user.Email"
-                           Status="PresenceStatus.Available"
-                           ImageSize="32px"
-                           Initials="@GetInitials(user.Email)" />
-            <FluentButton id="user-menu"
-                          Appearance="Appearance.Stealth"
-                          IconEnd="@(new Icons.Regular.Size16.ChevronDown())"
-                          aria-label="User menu">
-                Account
-            </FluentButton>
-            <FluentMenu Anchor="user-menu">
-                <FluentMenuItem OnClick="LogoutAsync">Sign out</FluentMenuItem>
-            </FluentMenu>
-        }
-    </FluentHeader>
+        <Menu Theme="MenuTheme.Dark"
+              Mode="MenuMode.Inline"
+              InlineCollapsed="_collapsed"
+              SelectedKeys="_selectedKeys"
+              Class="hc-pro-menu">
+            <MenuItem Key="dashboard" RouterLink="/dashboard" RouterMatch="NavLinkMatch.All">
+                <Icon Type="home" Theme="IconThemeType.Outline" />
+                <span>Dashboard</span>
+            </MenuItem>
+            @if (Permissions.Has(WebPermissions.AppointmentsRead))
+            {
+                <MenuItem Key="appointments" RouterLink="/appointments" RouterMatch="NavLinkMatch.All">
+                    <Icon Type="calendar" Theme="IconThemeType.Outline" />
+                    <span>Appointments</span>
+                </MenuItem>
+                <MenuItem Key="calendar" RouterLink="/appointments/calendar" RouterMatch="NavLinkMatch.Prefix">
+                    <Icon Type="schedule" Theme="IconThemeType.Outline" />
+                    <span>Appointment Calendar</span>
+                </MenuItem>
+            }
+            @if (Permissions.Has(WebPermissions.PatientsSearch))
+            {
+                <MenuItem Key="patients" RouterLink="/patients" RouterMatch="NavLinkMatch.Prefix">
+                    <Icon Type="team" Theme="IconThemeType.Outline" />
+                    <span>Patients</span>
+                </MenuItem>
+            }
+            @if (AvailabilityPermissionRules.CanManage(Permissions))
+            {
+                <MenuItem Key="availability" RouterLink="/availability" RouterMatch="NavLinkMatch.Prefix">
+                    <Icon Type="clock-circle" Theme="IconThemeType.Outline" />
+                    <span>Availability</span>
+                </MenuItem>
+            }
+            @if (Permissions.Has(WebPermissions.StaffRead))
+            {
+                <MenuItem Key="staff" RouterLink="/staff" RouterMatch="NavLinkMatch.Prefix">
+                    <Icon Type="user" Theme="IconThemeType.Outline" />
+                    <span>Staff Management</span>
+                </MenuItem>
+            }
+        </Menu>
+    </Sider>
 
-    <div class="hc-shell">
-        <nav class="hc-nav-rail @(_drawerOpen ? "hc-nav-open" : "hc-nav-collapsed")">
-            <FluentNavMenu Class="hc-nav">
-                <FluentNavLink Href="/dashboard"
-                               Match="NavLinkMatch.All"
-                               Icon="@(new Icons.Regular.Size20.Home())">
-                    Dashboard
-                </FluentNavLink>
-                @if (Permissions.Has(WebPermissions.AppointmentsRead))
-                {
-                    <FluentNavLink Href="/appointments"
-                                   Match="NavLinkMatch.All"
-                                   Icon="@(new Icons.Regular.Size20.CalendarLtr())">
-                        Appointments
-                    </FluentNavLink>
-                    <FluentNavLink Href="/appointments/calendar"
-                                   Match="NavLinkMatch.Prefix"
-                                   Icon="@(new Icons.Regular.Size20.CalendarWeekStart())">
-                        Appointment Calendar
-                    </FluentNavLink>
-                }
-                @if (Permissions.Has(WebPermissions.PatientsSearch))
-                {
-                    <FluentNavLink Href="/patients"
-                                   Match="NavLinkMatch.Prefix"
-                                   Icon="@(new Icons.Regular.Size20.People())">
-                        Patients
-                    </FluentNavLink>
-                }
-                @if (AvailabilityPermissionRules.CanManage(Permissions))
-                {
-                    <FluentNavLink Href="/availability"
-                                   Match="NavLinkMatch.Prefix"
-                                   Icon="@(new Icons.Regular.Size20.Clock())">
-                        Availability
-                    </FluentNavLink>
-                }
-                @if (Permissions.Has(WebPermissions.StaffRead))
-                {
-                    <FluentNavLink Href="/staff"
-                                   Match="NavLinkMatch.Prefix"
-                                   Icon="@(new Icons.Regular.Size20.PeopleTeam())">
-                        Staff Management
-                    </FluentNavLink>
-                }
-            </FluentNavMenu>
-        </nav>
-
-        <main class="hc-main">
+    <Layout Class="hc-pro-main-layout">
+        <Header Class="hc-pro-header">
+            <Button Type="@ButtonType.Text"
+                    Class="hc-pro-trigger"
+                    OnClick="ToggleCollapsed"
+                    AriaLabel="Toggle navigation">
+                <Icon Type="@(_collapsed ? "menu-unfold" : "menu-fold")" Theme="IconThemeType.Outline" />
+            </Button>
+            <div class="hc-pro-header-brand">HealthCare</div>
+            <div class="hc-spacer"></div>
+            @if (Permissions.CurrentUser is { } user)
+            {
+                <Dropdown>
+                    <Overlay>
+                        <Menu>
+                            <MenuItem Disabled="true">
+                                <span class="hc-caption">@user.Email</span>
+                            </MenuItem>
+                            <MenuDivider />
+                            <MenuItem OnClick="LogoutAsync">Sign out</MenuItem>
+                        </Menu>
+                    </Overlay>
+                    <ChildContent>
+                        <a class="hc-pro-account" @onclick:preventDefault>
+                            <Avatar Style="background-color:#0F766E" Size="AvatarSize.Small">@GetInitials(user.Email)</Avatar>
+                            <span class="hc-pro-account-label">@ShortEmail(user.Email)</span>
+                        </a>
+                    </ChildContent>
+                </Dropdown>
+            }
+        </Header>
+        <Content Class="hc-pro-content hc-main-enter">
             @if (Permissions.IsPatientOnly)
             {
-                <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">
-                    Patient accounts cannot use the staff application.
-                </FluentMessageBar>
-                <FluentButton Appearance="Appearance.Accent" Href="/forbidden">View access details</FluentButton>
+                <Alert Type="@AlertType.Error"
+                       Message="Patient accounts cannot use the staff application."
+                       ShowIcon="true"
+                       Style="margin-bottom:1rem;" />
+                <Button Type="@ButtonType.Primary" OnClick='() => Navigation.NavigateTo("/forbidden")'>
+                    View access details
+                </Button>
             }
             else
             {
                 <PlatformTenantBanner />
-                @Body
+                <div class="hc-pro-page">
+                    @Body
+                </div>
             }
-        </main>
-    </div>
-</div>
+        </Content>
+    </Layout>
+</Layout>
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
@@ -107,21 +126,73 @@
 </div>
 
 @code {
-    private bool _drawerOpen = true;
+    private bool _collapsed;
+    private string[] _selectedKeys = ["dashboard"];
+    private bool _viewportChecked;
 
     protected override void OnInitialized()
     {
         Permissions.Changed += OnPermissionsChanged;
+        Navigation.LocationChanged += OnLocationChanged;
+        UpdateSelectedKeys(Navigation.Uri);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _viewportChecked)
+        {
+            return;
+        }
+
+        _viewportChecked = true;
+        try
+        {
+            var narrow = await Js.InvokeAsync<bool>("healthcareShell.isNarrow", 992);
+            if (narrow && !_collapsed)
+            {
+                _collapsed = true;
+                StateHasChanged();
+            }
+        }
+        catch
+        {
+            // JS helper not ready — keep desktop default open.
+        }
     }
 
     public void Dispose()
     {
         Permissions.Changed -= OnPermissionsChanged;
+        Navigation.LocationChanged -= OnLocationChanged;
     }
 
     private void OnPermissionsChanged() => InvokeAsync(StateHasChanged);
 
-    private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) =>
+        UpdateSelectedKeys(e.Location);
+
+    private void UpdateSelectedKeys(string location)
+    {
+        var path = new Uri(location).AbsolutePath.TrimEnd('/').ToLowerInvariant();
+        _selectedKeys =
+        [
+            path switch
+            {
+                "/dashboard" or "" => "dashboard",
+                "/appointments" => "appointments",
+                var p when p.StartsWith("/appointments/calendar", StringComparison.Ordinal) => "calendar",
+                var p when p.StartsWith("/patients", StringComparison.Ordinal) => "patients",
+                var p when p.StartsWith("/availability", StringComparison.Ordinal) => "availability",
+                var p when p.StartsWith("/staff", StringComparison.Ordinal) => "staff",
+                _ => "dashboard",
+            }
+        ];
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void ToggleCollapsed() => _collapsed = !_collapsed;
+
+    private void GoDashboard() => Navigation.NavigateTo("/dashboard");
 
     private static string GetInitials(string? email)
     {
@@ -134,17 +205,20 @@
         return local.Length >= 2 ? local[..2].ToUpperInvariant() : local.ToUpperInvariant();
     }
 
-    private async Task LogoutAsync()
+    private static string ShortEmail(string? email)
     {
-        try
+        if (string.IsNullOrWhiteSpace(email))
         {
-            await AuthState.MarkLoggedOutAsync(callRemoteLogout: true);
-        }
-        catch
-        {
-            Notify.Info("Signed out locally.");
+            return "Account";
         }
 
+        var local = email.Split('@')[0];
+        return local.Length > 18 ? local[..18] + "…" : local;
+    }
+
+    private Task LogoutAsync()
+    {
         Navigation.NavigateTo("/logout", forceLoad: true);
+        return Task.CompletedTask;
     }
 }

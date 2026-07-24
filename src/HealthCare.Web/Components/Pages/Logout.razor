@@ -7,14 +7,14 @@
 <div class="hc-auth-shell">
     <div class="hc-auth-container">
         <div class="hc-auth-card">
-            <h1 class="hc-auth-brand" style="font-size:1.15rem">Signing out…</h1>
+            <h1 class="hc-auth-brand" style="font-size:18px">Signing out…</h1>
             <p class="hc-auth-sub">Please wait while we end your session securely.</p>
             <form id="bff-logout-form" method="post" action="/bff/auth/logout" data-enhance="false">
                 <AntiforgeryToken />
                 <noscript>
-                    <FluentButton Type="ButtonType.Submit" Appearance="Appearance.Accent" Class="hc-auth-submit">
+                    <Button Type="@ButtonType.Primary" HtmlType="submit" Class="hc-auth-submit" Block>
                         Confirm sign out
-                    </FluentButton>
+                    </Button>
                 </noscript>
             </form>
         </div>

@@ -8,8 +8,6 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.FluentUI.AspNetCore.Components;
-
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<ApiOptions>(builder.Configuration.GetSection(ApiOptions.SectionName));
@@ -120,8 +118,9 @@ builder.Services.AddScoped<IStaffPatientApiClient, StaffPatientApiClient>();
 builder.Services.AddScoped<IDoctorAvailabilityApiClient, DoctorAvailabilityApiClient>();
 
 builder.Services.AddHttpClient();
-builder.Services.AddFluentUIComponents();
-builder.Services.AddScoped<IUserNotificationService, FluentUserNotificationService>();
+builder.Services.AddAntDesign();
+builder.Services.AddScoped<IUserNotificationService, AntUserNotificationService>();
+builder.Services.AddScoped<IUiModalService, AntUiModalService>();
 
 var app = builder.Build();
 

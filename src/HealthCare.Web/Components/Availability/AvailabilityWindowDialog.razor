@@ -1,36 +1,67 @@
 @namespace HealthCare.Web.Components.Availability
-@implements IDialogContentComponent<AvailabilityWindowDialog.Args>
+@inherits FeedbackComponent<AvailabilityWindowDialog.Args>
 @using HealthCare.Contracts.Appointments
 @using HealthCare.Web.Availability
 
-<FluentStack Orientation="Orientation.Vertical" VerticalGap="12">
-    <FluentSelect TOption="string" @bind-Value="_day" Label="Day of week" Required="true" Disabled="@(_busy || IsEdit)" Style="width:100%;">
-        @foreach (var day in AvailabilityPresentation.DaysOfWeekOrdered)
-        {
-            <FluentOption Value="@day">@day</FluentOption>
-        }
-    </FluentSelect>
-    <FluentTextField @bind-Value="_start" Label="Start (clinic local HH:mm)" Required="true" Disabled="_busy" Style="width:100%;" />
-    <FluentTextField @bind-Value="_end" Label="End (clinic local HH:mm)" Required="true" Disabled="_busy" Style="width:100%;" />
-    <FluentNumberField @bind-Value="_duration" Label="Slot duration (minutes)" Min="10" Max="240" Disabled="_busy" Style="width:100%;" />
-    <FluentDatePicker @bind-Value="_effectiveFrom" Label="Effective from" Disabled="_busy" Style="width:100%;" />
-    <FluentDatePicker @bind-Value="_effectiveTo" Label="Effective to (optional)" Disabled="_busy" Style="width:100%;" />
+<div style="display:flex;flex-direction:column;gap:12px;">
+    <div>
+        <label>@FieldLabel.Mark("Day of week")</label>
+        <Select TItemValue="string"
+                TItem="string"
+                @bind-Value="_day"
+                Disabled="@(_busy || IsEdit)"
+                Style="width:100%;">
+            <SelectOptions>
+                @foreach (var day in AvailabilityPresentation.DaysOfWeekOrdered)
+                {
+                    <SelectOption TItemValue="string" TItem="string" Value="@day" Label="@day" />
+                }
+            </SelectOptions>
+        </Select>
+    </div>
+    <div>
+        <label>@FieldLabel.Mark("Start (clinic local HH:mm)")</label>
+        <Input @bind-Value="_start" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label>@FieldLabel.Mark("End (clinic local HH:mm)")</label>
+        <Input @bind-Value="_end" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label>Slot duration (minutes)</label>
+        <AntDesign.InputNumber TValue="int"
+                               @bind-Value="_duration"
+                               Disabled="_busy"
+                               Style="width:100%;"
+                               Min="10"
+                               Max="240" />
+    </div>
+    <div>
+        <label>Effective from</label>
+        <DatePicker TValue="DateTime?" @bind-Value="_effectiveFrom" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label>Effective to (optional)</label>
+        <DatePicker TValue="DateTime?" @bind-Value="_effectiveTo" Disabled="_busy" Style="width:100%;" />
+    </div>
     @if (IsEdit)
     {
-        <FluentSwitch @bind-Value="_isActive" Label="Active" Disabled="_busy" />
+        <div style="display:flex;align-items:center;gap:8px;">
+            <Switch @bind-Checked="_isActive" Disabled="_busy" />
+            <span>Active</span>
+        </div>
     }
     @if (!string.IsNullOrWhiteSpace(_error))
     {
-        <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">@_error</FluentMessageBar>
+        <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" />
     }
-</FluentStack>
-<FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8" Style="margin-top:1rem;justify-content:flex-end;">
-    <FluentButton Appearance="Appearance.Outline" OnClick="CancelAsync" Disabled="_busy">Cancel</FluentButton>
-    <FluentButton Appearance="Appearance.Accent" OnClick="SubmitAsync" Disabled="_busy || !ClientValid">
-        @if (_busy) { <FluentProgressRing Style="width:16px;height:16px;margin-right:0.35rem;" /> }
+</div>
+<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;">
+    <Button OnClick="CancelCloseAsync" Disabled="_busy">Cancel</Button>
+    <Button Type="@ButtonType.Primary" OnClick="SubmitAsync" Loading="_busy" Disabled="_busy || !ClientValid">
         @(IsEdit ? "Save" : "Create")
-    </FluentButton>
-</FluentStack>
+    </Button>
+</div>
 
 @code {
     public sealed class Args
@@ -40,13 +71,11 @@
         public DoctorAvailabilityResponse? Existing { get; init; }
     }
 
-    [Parameter] public Args Content { get; set; } = default!;
-    [CascadingParameter] private FluentDialog Dialog { get; set; } = default!;
     [Inject] private IDoctorAvailabilityApiClient Api { get; set; } = default!;
     [Inject] private IUserNotificationService Notify { get; set; } = default!;
-    [Inject] private IDialogService DialogService { get; set; } = default!;
+    [Inject] private IUiModalService Modals { get; set; } = default!;
 
-    private bool IsEdit => Content.Existing is not null;
+    private bool IsEdit => Options.Existing is not null;
     private string _day = "Monday";
     private string _start = "09:00";
     private string _end = "12:00";
@@ -66,21 +95,23 @@
 
     protected override void OnInitialized()
     {
-        if (Content.Existing is null)
+        if (Options.Existing is null)
         {
             return;
         }
 
-        _day = Content.Existing.DayOfWeek;
-        _start = Content.Existing.StartLocalTime;
-        _end = Content.Existing.EndLocalTime;
-        _duration = Content.Existing.SlotDurationMinutes;
-        _effectiveFrom = Content.Existing.EffectiveFrom.ToDateTime(TimeOnly.MinValue);
-        _effectiveTo = Content.Existing.EffectiveTo?.ToDateTime(TimeOnly.MinValue);
-        _isActive = Content.Existing.IsActive;
+        _day = Options.Existing.DayOfWeek;
+        _start = Options.Existing.StartLocalTime;
+        _end = Options.Existing.EndLocalTime;
+        _duration = Options.Existing.SlotDurationMinutes;
+        _effectiveFrom = Options.Existing.EffectiveFrom.ToDateTime(TimeOnly.MinValue);
+        _effectiveTo = Options.Existing.EffectiveTo?.ToDateTime(TimeOnly.MinValue);
+        _isActive = Options.Existing.IsActive;
     }
 
-    private async Task CancelAsync() => await Dialog.CancelAsync();
+    private Task CancelCloseAsync() => OkCancelRef!.CancelAsync(new ModalClosingEventArgs());
+
+    private Task ConfirmOkAsync() => OkCancelRef!.OkAsync(new ModalClosingEventArgs());
 
     private async Task SubmitAsync()
     {
@@ -94,14 +125,14 @@
         _error = null;
         try
         {
-            if (IsEdit && Content.Existing is not null)
+            if (IsEdit && Options.Existing is not null)
             {
-                var updated = await Api.UpdateAvailabilityAsync(
-                    Content.DoctorStaffMemberId,
-                    Content.Existing.Id,
+                await Api.UpdateAvailabilityAsync(
+                    Options.DoctorStaffMemberId,
+                    Options.Existing.Id,
                     new UpdateDoctorAvailabilityRequest
                     {
-                        ExpectedVersion = Content.Existing.Version,
+                        ExpectedVersion = Options.Existing.Version,
                         StartLocalTime = _start.Trim(),
                         EndLocalTime = _end.Trim(),
                         SlotDurationMinutes = _duration,
@@ -110,14 +141,14 @@
                         ClearEffectiveTo = _effectiveTo is null,
                         IsActive = _isActive,
                     },
-                    Content.PlatformAdminBypass);
+                    Options.PlatformAdminBypass);
                 Notify.Success("Availability updated.");
-                await Dialog.CloseAsync(DialogResult.Ok(updated));
+                await ConfirmOkAsync();
             }
             else
             {
-                var created = await Api.CreateAvailabilityAsync(
-                    Content.DoctorStaffMemberId,
+                await Api.CreateAvailabilityAsync(
+                    Options.DoctorStaffMemberId,
                     new CreateDoctorAvailabilityRequest
                     {
                         DayOfWeek = _day,
@@ -127,23 +158,20 @@
                         EffectiveFrom = DateOnly.FromDateTime(_effectiveFrom.Value),
                         EffectiveTo = _effectiveTo is DateTime to ? DateOnly.FromDateTime(to) : null,
                     },
-                    Content.PlatformAdminBypass);
+                    Options.PlatformAdminBypass);
                 Notify.Success("Availability created.");
-                await Dialog.CloseAsync(DialogResult.Ok(created));
+                await ConfirmOkAsync();
             }
         }
         catch (ApiProblemException ex) when (AvailabilityProblemMessages.IsConcurrencyConflict(ex))
         {
-            var confirm = await DialogService.ShowConfirmationAsync(
-                "This availability was updated elsewhere. Close and reload?",
+            var confirmed = await Modals.ConfirmAsync(
                 "Record changed",
-                "OK",
-                "Stay");
-            var result = await confirm.Result;
+                "This availability was updated elsewhere. Close and reload?");
             _error = AvailabilityProblemMessages.ToUserMessage(ex);
-            if (!result.Cancelled)
+            if (confirmed)
             {
-                await Dialog.CloseAsync(DialogResult.Ok(false));
+                await ConfirmOkAsync();
             }
         }
         catch (ApiProblemException ex)
