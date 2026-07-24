@@ -120,6 +120,8 @@ builder.Services.AddScoped<IAppointmentApiClient, AppointmentApiClient>();
 builder.Services.AddScoped<IStaffPatientApiClient, StaffPatientApiClient>();
 builder.Services.AddScoped<IDoctorAvailabilityApiClient, DoctorAvailabilityApiClient>();
 builder.Services.AddScoped<IStaffOperationsApiClient, StaffOperationsApiClient>();
+builder.Services.AddScoped<IOrganizationReportApiClient, OrganizationReportApiClient>();
+builder.Services.AddScoped<IBrowserFileDownload, BrowserFileDownload>();
 
 builder.Services.AddHttpClient();
 builder.Services.AddAntDesign();

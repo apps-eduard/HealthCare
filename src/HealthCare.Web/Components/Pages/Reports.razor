@@ -1,0 +1,823 @@
+@page "/reports"
+@attribute [Authorize]
+@using HealthCare.Contracts.Organizations
+@using HealthCare.Web.Reports
+@implements IDisposable
+@inject IOrganizationReportApiClient ReportsApi
+@inject IBrowserFileDownload FileDownload
+@inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
+@inject IClinicWorkingContext ClinicContext
+@inject IUserNotificationService Notify
+
+<PageTitle>Organization Reports</PageTitle>
+
+@if (Permissions.IsPatientOnly)
+{
+    <Alert Type="@AlertType.Error" Message="Patient accounts cannot use organization reports." ShowIcon="true" />
+}
+else if (!Permissions.Has(WebPermissions.OrganizationReportsRead))
+{
+    <PermissionDeniedState Message="You do not have permission to view organization reports." />
+}
+else
+{
+    <HcPageHeader Title="Organization Reports"
+                  Subtitle="@(_contextSubtitle ?? "Organization-scoped operational aggregates")">
+        <Breadcrumb>
+            <Breadcrumb>
+                <BreadcrumbItem Href="/dashboard">Home</BreadcrumbItem>
+                <BreadcrumbItem>Reports</BreadcrumbItem>
+            </Breadcrumb>
+        </Breadcrumb>
+        <ChildContent>
+            <Space>
+                <Button OnClick="RunAsync" Disabled="_loading || _exporting" AriaLabel="Run report">
+                    <Icon Type="play-circle" Theme="IconThemeType.Outline" /> Run
+                </Button>
+                <Button OnClick="ExportAsync"
+                        Disabled="_loading || _exporting || !_hasData"
+                        AriaLabel="Export report CSV">
+                    <Icon Type="download" Theme="IconThemeType.Outline" />
+                    @(_exporting ? "Exporting…" : "Export CSV")
+                </Button>
+            </Space>
+        </ChildContent>
+    </HcPageHeader>
+
+    @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+    {
+        <Alert Type="@AlertType.Info"
+               Message="Select an organization in the platform banner before loading reports."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
+    }
+
+    <div class="hc-card">
+        <div class="hc-filter-grid">
+            <div>
+                <label class="hc-filter-label" for="report-type">Report</label>
+                <Select Id="report-type"
+                        TItemValue="string"
+                        TItem="string"
+                        Value="_reportType"
+                        ValueChanged="OnReportTypeChanged"
+                        Style="width:100%;"
+                        AriaLabel="Select report type">
+                    <SelectOptions>
+                        @foreach (var report in OrganizationReportCatalog.All)
+                        {
+                            <SelectOption TItemValue="string"
+                                          TItem="string"
+                                          Value="@report.Type"
+                                          Label="@($"{report.Group} · {report.Name}")" />
+                        }
+                    </SelectOptions>
+                </Select>
+            </div>
+            @if (Permissions.CanFilterByClinic)
+            {
+                <ClinicPicker Value="_clinicId"
+                              ValueChanged="OnClinicFilterChanged"
+                              Label="Clinic"
+                              HelperText="Leave empty for all clinics in the organization"
+                              AllowClear="true"
+                              Required="false"
+                              ActiveOnly="null"
+                              PlatformAdminBypass="@(Permissions.IsPlatformAdmin && PlatformTenant.ExplicitBypassEnabled)"
+                              PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
+                              Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)" />
+            }
+            @if (_selectedDefinition?.SupportsDateRange == true)
+            {
+                <div>
+                    <label class="hc-filter-label" for="report-from">From date</label>
+                    <DatePicker Id="report-from" TValue="DateTime?" @bind-Value="_fromDate" Style="width:100%;" AriaLabel="Report from date" />
+                </div>
+                <div>
+                    <label class="hc-filter-label" for="report-to">To date</label>
+                    <DatePicker Id="report-to" TValue="DateTime?" @bind-Value="_toDate" Style="width:100%;" AriaLabel="Report to date" />
+                </div>
+            }
+            <div style="display:flex;gap:8px;align-items:flex-end;">
+                <Button Type="@ButtonType.Primary" OnClick="RunAsync"
+                        Disabled="_loading || _exporting || (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)"
+                        AriaLabel="Run selected report">
+                    Run
+                </Button>
+                <Button OnClick="ResetFiltersAsync" Disabled="_loading || _exporting" AriaLabel="Reset report filters">Reset</Button>
+            </div>
+        </div>
+        @if (_selectedDefinition is not null)
+        {
+            <div class="hc-caption" style="margin-top:0.75rem;">
+                @_selectedDefinition.Description
+                · Filters: @_selectedDefinition.SupportedFilters
+                · Max range: @OrganizationReportCatalog.MaxInclusiveDays inclusive days
+                · Permission: @WebPermissions.OrganizationReportsRead
+                · CSV: @(_selectedDefinition.SupportsCsv ? "Yes" : "No")
+            </div>
+        }
+        @if (_lastContext is not null)
+        {
+            <div class="hc-caption" style="margin-top:0.35rem;">
+                Timezone: @OrganizationReportPresentation.TimeZoneStrategyLabel(_lastContext.TimeZoneStrategy)
+                @if (!string.IsNullOrWhiteSpace(_lastContext.TimeZoneId))
+                {
+                    <span> (@_lastContext.TimeZoneId)</span>
+                }
+                · Range: @(_lastContext.FromDate ?? "—") → @(_lastContext.ToDate ?? "—")
+                · Aggregates are API-authored; browser timezone is not used.
+            </div>
+        }
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error)) { <ErrorState Message="@_error" /> }
+    @if (_loading) { <PageLoading /> }
+    else if (!_hasData)
+    {
+        <EmptyState Title="No report loaded" Message="Choose a report and click Run." />
+    }
+    else
+    {
+        @switch (_reportType)
+        {
+            case OrganizationReportTypes.Appointments when _appointments is not null:
+                @RenderAppointments(_appointments)
+                break;
+            case OrganizationReportTypes.Staff when _staff is not null:
+                @RenderStaff(_staff)
+                break;
+            case OrganizationReportTypes.Patients when _patients is not null:
+                @RenderPatients(_patients)
+                break;
+            case OrganizationReportTypes.Availability when _availability is not null:
+                @RenderAvailability(_availability)
+                break;
+            case OrganizationReportTypes.ReminderFailures when _reminderFailures is not null:
+                @RenderReminderFailures(_reminderFailures)
+                break;
+            case OrganizationReportTypes.SummaryFailures when _summaryFailures is not null:
+                @RenderSummaryFailures(_summaryFailures)
+                break;
+        }
+    }
+}
+
+@code {
+    private string _reportType = OrganizationReportTypes.Appointments;
+    private Guid? _clinicId;
+    private DateTime? _fromDate = DateTime.UtcNow.Date.AddDays(-30);
+    private DateTime? _toDate = DateTime.UtcNow.Date;
+    private bool _loading;
+    private bool _exporting;
+    private string? _error;
+    private string? _contextSubtitle;
+    private bool _subscribedPlatform;
+    private bool _subscribedClinic;
+    private CancellationTokenSource? _cts;
+
+    private OrganizationAppointmentReportResponse? _appointments;
+    private OrganizationStaffReportResponse? _staff;
+    private OrganizationPatientReportResponse? _patients;
+    private OrganizationAvailabilityReportResponse? _availability;
+    private OrganizationReminderFailureReportResponse? _reminderFailures;
+    private OrganizationSummaryFailureReportResponse? _summaryFailures;
+    private OrganizationReportContext? _lastContext;
+
+    private OrganizationReportCatalog.ReportDefinition? _selectedDefinition =>
+        OrganizationReportCatalog.Find(_reportType);
+
+    private bool _hasData =>
+        _appointments is not null
+        || _staff is not null
+        || _patients is not null
+        || _availability is not null
+        || _reminderFailures is not null
+        || _summaryFailures is not null;
+
+    private bool PlatformBypass =>
+        Permissions.IsPlatformAdmin && PlatformTenant.ExplicitBypassEnabled;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Permissions.IsPatientOnly || !Permissions.Has(WebPermissions.OrganizationReportsRead))
+        {
+            return;
+        }
+
+        if (Permissions.IsPlatformAdmin)
+        {
+            PlatformTenant.Changed += OnPlatformTenantChanged;
+            _subscribedPlatform = true;
+            if (PlatformTenant.HasClinic)
+            {
+                _clinicId = PlatformTenant.SelectedClinicId;
+            }
+        }
+        else if (Permissions.IsOrganizationAdmin)
+        {
+            ClinicContext.Changed += OnClinicContextChanged;
+            _subscribedClinic = true;
+            if (ClinicContext.HasClinic)
+            {
+                _clinicId = ClinicContext.SelectedClinicId;
+            }
+        }
+
+        await RunAsync();
+    }
+
+    public void Dispose()
+    {
+        if (_subscribedPlatform)
+        {
+            PlatformTenant.Changed -= OnPlatformTenantChanged;
+        }
+
+        if (_subscribedClinic)
+        {
+            ClinicContext.Changed -= OnClinicContextChanged;
+        }
+
+        _cts?.Cancel();
+        _cts?.Dispose();
+    }
+
+    private void OnPlatformTenantChanged() => InvokeAsync(async () =>
+    {
+        if (PlatformTenant.HasClinic)
+        {
+            _clinicId = PlatformTenant.SelectedClinicId;
+        }
+
+        ClearResults();
+        await RunAsync();
+        StateHasChanged();
+    });
+
+    private void OnClinicContextChanged() => InvokeAsync(async () =>
+    {
+        _clinicId = ClinicContext.SelectedClinicId;
+        await RunAsync();
+        StateHasChanged();
+    });
+
+    private async Task OnReportTypeChanged(string value)
+    {
+        _reportType = value;
+        ClearResults();
+        await RunAsync();
+    }
+
+    private async Task OnClinicFilterChanged(Guid? clinicId)
+    {
+        _clinicId = clinicId;
+        if (Permissions.IsPlatformAdmin)
+        {
+            if (clinicId is Guid id && id != Guid.Empty)
+            {
+                if (PlatformTenant.SelectedClinicId != id)
+                {
+                    PlatformTenant.SelectClinic(id);
+                }
+            }
+            else if (PlatformTenant.HasClinic)
+            {
+                PlatformTenant.ClearClinic();
+            }
+
+            await RunAsync();
+            return;
+        }
+
+        if (Permissions.IsOrganizationAdmin)
+        {
+            if (clinicId is Guid id && id != Guid.Empty)
+            {
+                ClinicContext.SelectClinic(id);
+            }
+            else
+            {
+                ClinicContext.ClearClinic();
+            }
+
+            return;
+        }
+
+        await RunAsync();
+    }
+
+    private async Task ResetFiltersAsync()
+    {
+        _fromDate = DateTime.UtcNow.Date.AddDays(-30);
+        _toDate = DateTime.UtcNow.Date;
+        if (Permissions.IsPlatformAdmin)
+        {
+            _clinicId = PlatformTenant.SelectedClinicId;
+        }
+        else if (_subscribedClinic && ClinicContext.HasClinic)
+        {
+            ClinicContext.ClearClinic();
+            return;
+        }
+        else if (Permissions.CanFilterByClinic)
+        {
+            _clinicId = null;
+        }
+
+        await RunAsync();
+    }
+
+    private void ClearResults()
+    {
+        _appointments = null;
+        _staff = null;
+        _patients = null;
+        _availability = null;
+        _reminderFailures = null;
+        _summaryFailures = null;
+        _lastContext = null;
+        _contextSubtitle = null;
+        _error = null;
+    }
+
+    private OrganizationReportQuery BuildQuery()
+    {
+        var supportsDates = _selectedDefinition?.SupportsDateRange == true;
+        return new OrganizationReportQuery
+        {
+            OrganizationId = Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null,
+            ClinicId = _clinicId,
+            FromDate = supportsDates && _fromDate is DateTime from
+                ? DateOnly.FromDateTime(from).ToString("yyyy-MM-dd")
+                : null,
+            ToDate = supportsDates && _toDate is DateTime to
+                ? DateOnly.FromDateTime(to).ToString("yyyy-MM-dd")
+                : null,
+        };
+    }
+
+    private async Task RunAsync()
+    {
+        if (!Permissions.Has(WebPermissions.OrganizationReportsRead))
+        {
+            return;
+        }
+
+        if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+        {
+            ClearResults();
+            return;
+        }
+
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        var token = _cts.Token;
+
+        _loading = true;
+        _error = null;
+        try
+        {
+            var query = BuildQuery();
+            switch (_reportType)
+            {
+                case OrganizationReportTypes.Appointments:
+                    _appointments = await ReportsApi.GetAppointmentsAsync(query, PlatformBypass, token);
+                    ApplyContext(_appointments.Context);
+                    _staff = null; _patients = null; _availability = null; _reminderFailures = null; _summaryFailures = null;
+                    break;
+                case OrganizationReportTypes.Staff:
+                    _staff = await ReportsApi.GetStaffAsync(query, PlatformBypass, token);
+                    ApplyContext(_staff.Context);
+                    _appointments = null; _patients = null; _availability = null; _reminderFailures = null; _summaryFailures = null;
+                    break;
+                case OrganizationReportTypes.Patients:
+                    _patients = await ReportsApi.GetPatientsAsync(query, PlatformBypass, token);
+                    ApplyContext(_patients.Context);
+                    _appointments = null; _staff = null; _availability = null; _reminderFailures = null; _summaryFailures = null;
+                    break;
+                case OrganizationReportTypes.Availability:
+                    _availability = await ReportsApi.GetAvailabilityAsync(query, PlatformBypass, token);
+                    ApplyContext(_availability.Context);
+                    _appointments = null; _staff = null; _patients = null; _reminderFailures = null; _summaryFailures = null;
+                    break;
+                case OrganizationReportTypes.ReminderFailures:
+                    _reminderFailures = await ReportsApi.GetReminderFailuresAsync(query, PlatformBypass, token);
+                    ApplyContext(_reminderFailures.Context);
+                    _appointments = null; _staff = null; _patients = null; _availability = null; _summaryFailures = null;
+                    break;
+                case OrganizationReportTypes.SummaryFailures:
+                    _summaryFailures = await ReportsApi.GetSummaryFailuresAsync(query, PlatformBypass, token);
+                    ApplyContext(_summaryFailures.Context);
+                    _appointments = null; _staff = null; _patients = null; _availability = null; _reminderFailures = null;
+                    break;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ApiProblemException ex)
+        {
+            ClearResults();
+            _error = OrganizationReportProblemMessages.ToUserMessage(ex);
+            Notify.Error(_error);
+        }
+        finally
+        {
+            if (!token.IsCancellationRequested)
+            {
+                _loading = false;
+            }
+        }
+    }
+
+    private void ApplyContext(OrganizationReportContext context)
+    {
+        _lastContext = context;
+        _contextSubtitle = $"{context.OrganizationName}"
+                           + (string.IsNullOrWhiteSpace(context.SelectedClinicName)
+                               ? " · All clinics"
+                               : $" · {context.SelectedClinicName}");
+    }
+
+    private async Task ExportAsync()
+    {
+        if (_exporting || _selectedDefinition?.SupportsCsv != true)
+        {
+            return;
+        }
+
+        if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+        {
+            return;
+        }
+
+        _exporting = true;
+        try
+        {
+            var file = await ReportsApi.ExportCsvAsync(_reportType, BuildQuery(), PlatformBypass);
+            await FileDownload.DownloadAsync(file);
+            Notify.Success("CSV download started.");
+        }
+        catch (ApiProblemException ex)
+        {
+            Notify.Error(OrganizationReportProblemMessages.ToUserMessage(ex));
+        }
+        finally
+        {
+            _exporting = false;
+        }
+    }
+
+    private RenderFragment RenderAppointments(OrganizationAppointmentReportResponse report) => __builder =>
+    {
+        var totals = report.Totals;
+        var daySpan = InclusiveDaySpan(report.Context.FromDate, report.Context.ToDate);
+        var avg = daySpan > 0 ? totals.TotalAppointments / (double)daySpan : 0;
+
+        <AntDesign.Row Gutter="(16, 16)" Style="margin-bottom:1rem;">
+            <AntDesign.Col Xs="12" Sm="8" Md="6"><Statistic Title="Total" Value="@totals.TotalAppointments" /></AntDesign.Col>
+            <AntDesign.Col Xs="12" Sm="8" Md="6"><Statistic Title="Requested" Value="@totals.RequestedCount" /></AntDesign.Col>
+            <AntDesign.Col Xs="12" Sm="8" Md="6"><Statistic Title="Confirmed" Value="@totals.ConfirmedCount" /></AntDesign.Col>
+            <AntDesign.Col Xs="12" Sm="8" Md="6"><Statistic Title="Completed" Value="@totals.CompletedCount" /></AntDesign.Col>
+            <AntDesign.Col Xs="12" Sm="8" Md="6"><Statistic Title="Cancelled" Value="@totals.CancellationCount" /></AntDesign.Col>
+            <AntDesign.Col Xs="12" Sm="8" Md="6"><Statistic Title="No-show" Value="@totals.NoShowCount" /></AntDesign.Col>
+            <AntDesign.Col Xs="12" Sm="8" Md="6"><Statistic Title="Clinics included" Value="@report.ByClinic.Count" /></AntDesign.Col>
+            <AntDesign.Col Xs="12" Sm="8" Md="6"><Statistic Title="Avg / day" Value="@avg" /></AntDesign.Col>
+        </AntDesign.Row>
+
+        <Tabs>
+            <TabPane Tab="By clinic" Key="clinic">
+                <div class="hc-table-wrap" style="padding-top:0.75rem;">
+                    <table class="hc-table" aria-label="Appointments by clinic">
+                        <thead>
+                            <tr>
+                                <th>Clinic</th>
+                                <th>Total</th>
+                                <th>Cancelled</th>
+                                <th>No-show</th>
+                                <th>Cancellation rate</th>
+                                <th>No-show rate</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var row in report.ByClinic)
+                        {
+                            <tr>
+                                <td>@row.ClinicName</td>
+                                <td>@row.TotalAppointments</td>
+                                <td>@row.CancellationCount</td>
+                                <td>@row.NoShowCount</td>
+                                <td>@OrganizationReportPresentation.FormatPercent(row.CancellationCount, row.TotalAppointments)</td>
+                                <td>@OrganizationReportPresentation.FormatPercent(row.NoShowCount, row.TotalAppointments)</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </TabPane>
+            <TabPane Tab="By status" Key="status">
+                <div class="hc-table-wrap" style="padding-top:0.75rem;">
+                    <table class="hc-table" aria-label="Appointments by status">
+                        <thead>
+                            <tr><th>Status</th><th>Count</th><th>Share</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var row in report.ByStatus)
+                        {
+                            var pct = OrganizationReportPresentation.ProgressPercent(row.Count, totals.TotalAppointments);
+                            <tr>
+                                <td>@row.Status</td>
+                                <td>@row.Count</td>
+                                <td>@OrganizationReportPresentation.FormatPercent(row.Count, totals.TotalAppointments)</td>
+                                <td style="min-width:120px;"><Progress Percent="@pct" ShowInfo="false" Size="ProgressSize.Small" /></td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </TabPane>
+            <TabPane Tab="By doctor" Key="doctor">
+                <div class="hc-table-wrap" style="padding-top:0.75rem;">
+                    <table class="hc-table" aria-label="Appointments by doctor">
+                        <thead>
+                            <tr><th>Doctor</th><th>Clinic</th><th>Total</th></tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var row in report.ByDoctor)
+                        {
+                            <tr>
+                                <td>@row.DoctorDisplayName</td>
+                                <td>@row.ClinicName</td>
+                                <td>@row.Count</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </TabPane>
+            <TabPane Tab="Cancellations & no-shows" Key="failures">
+                <Alert Type="@AlertType.Info"
+                       Message="Rates are display ratios from API-returned counts (zero denominators show as —)."
+                       ShowIcon="true"
+                       Style="margin:0.75rem 0;" />
+                <div class="hc-table-wrap">
+                    <table class="hc-table" aria-label="Cancellation and no-show summary by clinic">
+                        <thead>
+                            <tr>
+                                <th>Clinic</th>
+                                <th>Cancellations</th>
+                                <th>No-shows</th>
+                                <th>Total appointments</th>
+                                <th>Cancellation rate</th>
+                                <th>No-show rate</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var row in report.ByClinic)
+                        {
+                            <tr>
+                                <td>@row.ClinicName</td>
+                                <td>@row.CancellationCount</td>
+                                <td>@row.NoShowCount</td>
+                                <td>@row.TotalAppointments</td>
+                                <td>@OrganizationReportPresentation.FormatPercent(row.CancellationCount, row.TotalAppointments)</td>
+                                <td>@OrganizationReportPresentation.FormatPercent(row.NoShowCount, row.TotalAppointments)</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </TabPane>
+        </Tabs>
+    };
+
+    private RenderFragment RenderStaff(OrganizationStaffReportResponse report) => __builder =>
+    {
+        <AntDesign.Row Gutter="(16, 16)" Style="margin-bottom:1rem;">
+            <AntDesign.Col Xs="12" Md="8"><Statistic Title="Active staff" Value="@report.TotalActiveStaff" /></AntDesign.Col>
+            <AntDesign.Col Xs="12" Md="8"><Statistic Title="Inactive staff" Value="@report.TotalInactiveStaff" /></AntDesign.Col>
+            <AntDesign.Col Xs="12" Md="8"><Statistic Title="Clinics" Value="@report.ByClinic.Count" /></AntDesign.Col>
+        </AntDesign.Row>
+        <div class="hc-table-wrap">
+            <table class="hc-table" aria-label="Staff by clinic">
+                <thead>
+                    <tr>
+                        <th>Clinic</th>
+                        <th>Active</th>
+                        <th>Inactive</th>
+                        <th>Clinic Admins</th>
+                        <th>Doctors</th>
+                        <th>Nurses</th>
+                        <th>Receptionists</th>
+                        <th>Org Admins</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var row in report.ByClinic)
+                {
+                    <tr>
+                        <td>@row.ClinicName</td>
+                        <td>@row.ActiveStaffCount</td>
+                        <td>@row.InactiveStaffCount</td>
+                        <td>@row.ClinicAdminCount</td>
+                        <td>@row.DoctorCount</td>
+                        <td>@row.NurseCount</td>
+                        <td>@row.ReceptionistCount</td>
+                        <td>@row.OrganizationAdminCount</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    };
+
+    private RenderFragment RenderPatients(OrganizationPatientReportResponse report) => __builder =>
+    {
+        <Alert Type="@AlertType.Info"
+               Message="Distinct patient count is organization-wide. Clinic rows count enrollments and may include the same person in multiple clinics."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
+        <AntDesign.Row Gutter="(16, 16)" Style="margin-bottom:1rem;">
+            <AntDesign.Col Xs="12" Md="8"><Statistic Title="Distinct patients" Value="@report.DistinctPatientCount" /></AntDesign.Col>
+            <AntDesign.Col Xs="12" Md="8"><Statistic Title="Active enrollments" Value="@report.TotalActiveEnrollments" /></AntDesign.Col>
+            <AntDesign.Col Xs="12" Md="8"><Statistic Title="Inactive enrollments" Value="@report.TotalInactiveEnrollments" /></AntDesign.Col>
+        </AntDesign.Row>
+        <div class="hc-table-wrap">
+            <table class="hc-table" aria-label="Patients by clinic">
+                <thead>
+                    <tr><th>Clinic</th><th>Active enrollments</th><th>Inactive enrollments</th></tr>
+                </thead>
+                <tbody>
+                @foreach (var row in report.ByClinic)
+                {
+                    <tr>
+                        <td>@row.ClinicName</td>
+                        <td>@row.ActiveEnrollmentCount</td>
+                        <td>@row.InactiveEnrollmentCount</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    };
+
+    private RenderFragment RenderAvailability(OrganizationAvailabilityReportResponse report) => __builder =>
+    {
+        <Alert Type="@AlertType.Info"
+               Message="Coverage is based on active weekly windows and exception counts from the API — not slot-level recalculation."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
+        <div class="hc-table-wrap">
+            <table class="hc-table" aria-label="Availability coverage by clinic">
+                <thead>
+                    <tr>
+                        <th>Clinic</th>
+                        <th>Active</th>
+                        <th>Active doctors</th>
+                        <th>With availability</th>
+                        <th>Windows</th>
+                        <th>Exceptions</th>
+                        <th>Coverage</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var row in report.ByClinic)
+                {
+                    var pct = OrganizationReportPresentation.ProgressPercent(
+                        row.DoctorsWithActiveAvailability,
+                        row.ActiveDoctorCount);
+                    <tr>
+                        <td>@row.ClinicName</td>
+                        <td>@(row.ClinicIsActive ? "Yes" : "No")</td>
+                        <td>@row.ActiveDoctorCount</td>
+                        <td>@row.DoctorsWithActiveAvailability</td>
+                        <td>@row.ActiveAvailabilityWindowCount</td>
+                        <td>@row.AvailabilityExceptionCount</td>
+                        <td>
+                            <StatusBadge Text="@OrganizationReportPresentation.GapLabel(row.HasCoverageGap)"
+                                         Tone="@OrganizationReportPresentation.GapTone(row.HasCoverageGap)" />
+                        </td>
+                        <td style="min-width:120px;"><Progress Percent="@pct" Size="ProgressSize.Small" /></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    };
+
+    private RenderFragment RenderReminderFailures(OrganizationReminderFailureReportResponse report) => __builder =>
+    {
+        <AntDesign.Row Gutter="(16, 16)" Style="margin-bottom:1rem;">
+            <AntDesign.Col Xs="12" Md="8"><Statistic Title="Failed reminders" Value="@report.FailedCount" /></AntDesign.Col>
+            <AntDesign.Col Xs="12" Md="8"><Statistic Title="Clinics with failures" Value="@report.ByClinic.Count" /></AntDesign.Col>
+            <AntDesign.Col Xs="12" Md="8"><Statistic Title="Detail rows" Value="@report.Items.Count" /></AntDesign.Col>
+        </AntDesign.Row>
+        <h3 style="font-size:1rem;margin:0 0 0.5rem;">By clinic</h3>
+        <div class="hc-table-wrap" style="margin-bottom:1rem;">
+            <table class="hc-table" aria-label="Reminder failures by clinic">
+                <thead><tr><th>Clinic</th><th>Failed count</th></tr></thead>
+                <tbody>
+                @foreach (var row in report.ByClinic)
+                {
+                    <tr><td>@row.ClinicName</td><td>@row.FailedCount</td></tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        <h3 style="font-size:1rem;margin:0 0 0.5rem;">Failure detail (safe fields)</h3>
+        <Alert Type="@AlertType.Info"
+               Message="Message bodies, patient contacts, and provider payloads are never included."
+               ShowIcon="true"
+               Style="margin-bottom:0.75rem;" />
+        <div class="hc-table-wrap">
+            <table class="hc-table" aria-label="Reminder failure details">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Error code</th>
+                        <th>Attempts</th>
+                        <th>Scheduled (UTC)</th>
+                        <th>Job</th>
+                        <th>Appointment</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var row in report.Items)
+                {
+                    <tr>
+                        <td>@row.ReminderType</td>
+                        <td>@(row.ErrorCode ?? "—")</td>
+                        <td>@row.AttemptCount</td>
+                        <td><span class="hc-caption">@row.ScheduledAtUtc.UtcDateTime.ToString("u")</span></td>
+                        <td><span class="hc-caption">@(row.BackgroundJobId ?? "—")</span></td>
+                        <td><span class="hc-caption">@row.AppointmentId.ToString("D")[..8]…</span></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    };
+
+    private RenderFragment RenderSummaryFailures(OrganizationSummaryFailureReportResponse report) => __builder =>
+    {
+        <AntDesign.Row Gutter="(16, 16)" Style="margin-bottom:1rem;">
+            <AntDesign.Col Xs="12" Md="8"><Statistic Title="Failed runs" Value="@report.FailedCount" /></AntDesign.Col>
+            <AntDesign.Col Xs="12" Md="8"><Statistic Title="Clinics with failures" Value="@report.ByClinic.Count" /></AntDesign.Col>
+            <AntDesign.Col Xs="12" Md="8"><Statistic Title="Detail rows" Value="@report.Items.Count" /></AntDesign.Col>
+        </AntDesign.Row>
+        <h3 style="font-size:1rem;margin:0 0 0.5rem;">By clinic</h3>
+        <div class="hc-table-wrap" style="margin-bottom:1rem;">
+            <table class="hc-table" aria-label="Summary failures by clinic">
+                <thead><tr><th>Clinic</th><th>Failed count</th></tr></thead>
+                <tbody>
+                @foreach (var row in report.ByClinic)
+                {
+                    <tr><td>@row.ClinicName</td><td>@row.FailedCount</td></tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        <h3 style="font-size:1rem;margin:0 0 0.5rem;">Failure detail (safe fields)</h3>
+        <div class="hc-table-wrap">
+            <table class="hc-table" aria-label="Clinic summary failure details">
+                <thead>
+                    <tr>
+                        <th>Summary date</th>
+                        <th>Error code</th>
+                        <th>Attempts</th>
+                        <th>Scheduled (UTC)</th>
+                        <th>Job</th>
+                        <th>Clinic</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var row in report.Items)
+                {
+                    <tr>
+                        <td>@row.SummaryDate</td>
+                        <td>@(row.LastErrorCode ?? "—")</td>
+                        <td>@row.AttemptCount</td>
+                        <td><span class="hc-caption">@row.ScheduledAtUtc.UtcDateTime.ToString("u")</span></td>
+                        <td><span class="hc-caption">@(row.BackgroundJobId ?? "—")</span></td>
+                        <td><span class="hc-caption">@row.ClinicId.ToString("D")[..8]…</span></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    };
+
+    private static int InclusiveDaySpan(string? from, string? to)
+    {
+        if (!DateOnly.TryParse(from, out var f) || !DateOnly.TryParse(to, out var t) || t < f)
+        {
+            return 0;
+        }
+
+        return t.DayNumber - f.DayNumber + 1;
+    }
+}

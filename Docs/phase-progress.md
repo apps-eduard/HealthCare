@@ -1021,6 +1021,7 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 | 2026-07-24 | 8 | Org Admin Frontend Phase 4 — appointment queue + calendar UI (queue/calendar APIs, clinic context, tests) |
 | 2026-07-24 | 8 | Org Admin Frontend Phase 5 — doctor availability UI (windows/exceptions/effective/slots, clinic context, tests) |
 | 2026-07-24 | 8 | Org Admin Frontend Phase 6 — reminders + clinic-summary ops UI (search/retry/health, clinic context, tests) |
+| 2026-07-24 | 8 | Org Admin Frontend Phase 7 — organization reports UI (catalog, aggregates, CSV export, clinic context, tests) |
 
 ---
 

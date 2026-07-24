@@ -282,6 +282,12 @@ else if (Permissions.Has(WebPermissions.OrganizationDashboardRead))
                             <Icon Type="heart" Theme="IconThemeType.Outline" /> Operations Health
                         </Button>
                     }
+                    @if (Permissions.Has(WebPermissions.OrganizationReportsRead))
+                    {
+                        <Button Type="@ButtonType.Primary" OnClick='() => Navigation.NavigateTo("/reports")'>
+                            <Icon Type="bar-chart" Theme="IconThemeType.Outline" /> Reports
+                        </Button>
+                    }
                 </Space>
             </Card>
         }

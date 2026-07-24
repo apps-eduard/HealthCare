@@ -699,7 +699,7 @@ The Organization Admin must not:
 - Organization usage and limit visibility on `GET /api/v1/organization/usage` (`organization_usage.read`) with remaining capacity and warning flags. Clinic/staff create enforce platform limits (`clinic.limit_reached` / `staff.limit_reached`). Org Admin cannot increase limits.
 
 **Frontend status (2026-07-24) — Phase 1 (Dashboard + Clinic management):**
-- `/dashboard` — organization metrics from `GET /api/v1/organization/dashboard` via `IOrganizationDashboardApiClient`; clinic filter (“All clinics” supported); manual refresh + last-refreshed; backend date/timezone strategy displayed; permission-aware quick links to existing pages only (`/clinics`, `/staff`, `/patients`, `/appointments`, calendar, availability). Reports/security/audit UI routes are deferred.
+- `/dashboard` — organization metrics from `GET /api/v1/organization/dashboard` via `IOrganizationDashboardApiClient`; clinic filter (“All clinics” supported); manual refresh + last-refreshed; backend date/timezone strategy displayed; permission-aware quick links to existing pages only (`/clinics`, `/staff`, `/patients`, `/appointments`, calendar, availability, operations, reports). Security/audit UI routes are deferred.
 - `/clinics` — organization clinic directory via `IClinicManagementApiClient` (`clinics.read` for list; create/update/activate/deactivate gated per permission). Server-side search, status filter, sort, pagination; detail `Drawer`; create/edit modals; activate/deactivate confirmations with safe Problem Details mapping; optional initial Clinic Admin on create; concurrency reload on edit; clinic picker cache refresh after mutations.
 - Org Admin clinic working context: circuit-scoped `IClinicWorkingContext` (All clinics = null), header `ClinicContextBanner`, cleared on logout. No free-text tenant GUIDs; no browser API token storage (BFF unchanged).
 
@@ -724,6 +724,10 @@ The Organization Admin must not:
 - `/operations/clinic-summaries` — summary-run search/paging (`summaries.read`); retry (`summaries.retry`); safe run detail.
 - `/operations/health` — safe sender/Hangfire flags (`reminders.read` or `summaries.read`).
 - Appointment detail shows per-appointment reminders + retry when permitted. Nav: Operations → Reminders / Clinic Summaries / Operations Health.
+
+**Frontend status (2026-07-24) — Phase 7 (Organization reports):**
+- `/reports` — organization report selector via `IOrganizationReportApiClient` (`organization_reports.read`). Reports: appointments (summary + by clinic/status/doctor + cancel/no-show ratios from returned counts), staff, patients, availability coverage, reminder failures, clinic-summary failures.
+- Clinic + date filters (max 93 days) synced with `IClinicWorkingContext`; timezone strategy from API context; CSV export via BFF-authenticated download (`IBrowserFileDownload`). No patient clinical detail; aggregates remain API-authored.
 
 ### Phase 2 — Scheduling and operations
 

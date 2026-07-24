@@ -85,6 +85,13 @@
                     </ChildContent>
                 </SubMenu>
             }
+            @if (Permissions.Has(WebPermissions.OrganizationReportsRead))
+            {
+                <MenuItem Key="reports" RouterLink="/reports" RouterMatch="NavLinkMatch.Prefix">
+                    <Icon Type="bar-chart" Theme="IconThemeType.Outline" />
+                    <span>Reports</span>
+                </MenuItem>
+            }
             @if (Permissions.Has(WebPermissions.ClinicsRead))
             {
                 <MenuItem Key="clinics" RouterLink="/clinics" RouterMatch="NavLinkMatch.Prefix">
@@ -223,6 +230,7 @@
                 var p when p.StartsWith("/operations/reminders", StringComparison.Ordinal) => "ops-reminders",
                 var p when p.StartsWith("/operations/clinic-summaries", StringComparison.Ordinal) => "ops-summaries",
                 var p when p.StartsWith("/operations/health", StringComparison.Ordinal) => "ops-health",
+                var p when p.StartsWith("/reports", StringComparison.Ordinal) => "reports",
                 var p when p.StartsWith("/clinics", StringComparison.Ordinal) => "clinics",
                 var p when p.StartsWith("/staff", StringComparison.Ordinal) => "staff",
                 _ => "dashboard",

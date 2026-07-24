@@ -108,6 +108,12 @@ Shape: **4px** radius, minimal shadow, compact controls, **8px** spacing scale.
 | `/operations/clinic-summaries` | Clinic-summary run search/paging + retry |
 | `/operations/health` | Safe sender / Hangfire worker flags |
 
+## Org Admin Phase 7 pages
+
+| Route | Notes |
+|-------|-------|
+| `/reports` | Organization reports selector + CSV export |
+
 ## NU1900
 
 `Directory.Build.props` keeps `NuGetAudit=true` and adds `NU1900` to `WarningsNotAsErrors` so transient nuget.org vulnerability-feed timeouts do not fail restore under `TreatWarningsAsErrors`. Advisory codes NU1901–NU1904 remain non-fatal as before; audit is not disabled.
