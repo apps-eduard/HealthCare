@@ -123,7 +123,7 @@ Not automatically allowed:
 Authoritative Clinic Admin Web MVP scope:  
 `Docs/mvp-clinic-admin-scope.md` (**approved** 2026-07-24).
 
-**Implementation note (2026-07-24):** staff, patients, appointments, availability, and operations for the membership clinic are implemented under existing permissions. **CA-1 delivered:** `clinic_dashboard.read` + `GET /api/v1/clinic/dashboard` + Clinic Dashboard UI. Approved but **not yet coded:** clinic profile (`clinic_profile.*`), clinic reports (`clinic_reports.read`), clinic-filtered audit (`clinic_audit_logs.read`). Clinic Admin must not receive organization-wide dashboard, reports, unfiltered audit, usage/limits, security-console, or medical-note permissions by admin role alone.
+**Implementation note (2026-07-24):** staff, patients, appointments, availability, and operations for the membership clinic are implemented under existing permissions. **CA-1 delivered:** `clinic_dashboard.read` + `GET /api/v1/clinic/dashboard` + Clinic Dashboard UI. **CA-2 delivered:** `clinic_profile.read` / `clinic_profile.update` + `GET`/`PATCH /api/v1/clinic/settings` + Clinic Profile UI (`/clinic/settings`). Approved but **not yet coded:** clinic reports (`clinic_reports.read`), clinic-filtered audit (`clinic_audit_logs.read`). Clinic Admin must not receive organization-wide dashboard, reports, unfiltered audit, usage/limits, security-console, or medical-note permissions by admin role alone.
 
 ### 4.4 DOCTOR
 

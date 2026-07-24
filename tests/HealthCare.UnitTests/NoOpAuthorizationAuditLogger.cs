@@ -28,11 +28,12 @@ internal class NoOpAuthorizationAuditLogger : IAuthorizationAuditLogger
     {
     }
 
-    public void ClinicOperation(
+    public virtual void ClinicOperation(
         string operation,
         string resultCode,
         Guid? organizationId = null,
-        Guid? clinicId = null)
+        Guid? clinicId = null,
+        IReadOnlyList<string>? changedFields = null)
     {
     }
 

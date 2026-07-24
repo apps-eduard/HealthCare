@@ -136,6 +136,20 @@
                     </ChildContent>
                 </SubMenu>
             }
+            @if (ClinicSettingsPermissionRules.CanView(Permissions))
+            {
+                <SubMenu Key="clinic">
+                    <TitleTemplate>
+                        <Icon Type="medicine-box" Theme="IconThemeType.Outline" />
+                        <span>Clinic</span>
+                    </TitleTemplate>
+                    <ChildContent>
+                        <MenuItem Key="clinic-settings" RouterLink="/clinic/settings" RouterMatch="NavLinkMatch.Prefix">
+                            <span>Clinic Profile</span>
+                        </MenuItem>
+                    </ChildContent>
+                </SubMenu>
+            }
             @if (Permissions.Has(WebPermissions.ClinicsRead))
             {
                 <MenuItem Key="clinics" RouterLink="/clinics" RouterMatch="NavLinkMatch.Prefix">
@@ -279,6 +293,7 @@
                 var p when p.StartsWith("/audit-logs", StringComparison.Ordinal) => "audit-logs",
                 var p when p.StartsWith("/usage", StringComparison.Ordinal) => "usage",
                 var p when p.StartsWith("/organization/settings", StringComparison.Ordinal) => "org-settings",
+                var p when p.StartsWith("/clinic/settings", StringComparison.Ordinal) => "clinic-settings",
                 var p when p.StartsWith("/clinics", StringComparison.Ordinal) => "clinics",
                 var p when p.StartsWith("/staff", StringComparison.Ordinal) => "staff",
                 _ => "dashboard",

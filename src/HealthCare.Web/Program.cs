@@ -117,6 +117,7 @@ builder.Services.AddScoped<IClinicManagementApiClient, ClinicManagementApiClient
 builder.Services.AddScoped<IOrganizationDirectoryApiClient, OrganizationDirectoryApiClient>();
 builder.Services.AddScoped<IOrganizationDashboardApiClient, OrganizationDashboardApiClient>();
 builder.Services.AddScoped<IClinicDashboardApiClient, ClinicDashboardApiClient>();
+builder.Services.AddScoped<IClinicSettingsApiClient, ClinicSettingsApiClient>();
 builder.Services.AddScoped<IAppointmentApiClient, AppointmentApiClient>();
 builder.Services.AddScoped<IStaffPatientApiClient, StaffPatientApiClient>();
 builder.Services.AddScoped<IDoctorAvailabilityApiClient, DoctorAvailabilityApiClient>();

@@ -19,7 +19,7 @@
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Clinic Admin Web MVP CA-2 (clinic profile) — CA-1 delivered
+**Current focus:** Clinic Admin Web MVP CA-3 (staff UI hardening) — CA-1 and CA-2 delivered
 
 ### All phases at a glance
 
@@ -1029,6 +1029,7 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 | 2026-07-24 | docs | Clinic Admin MVP scope drafted (`Docs/mvp-clinic-admin-scope.md`) — decisions A–D + phases; **no application code**; awaiting PO approval |
 | 2026-07-24 | docs | Clinic Admin MVP scope **approved** (profile, reports JSON, audit, usage counts, dashboard API, five `clinic_*` permissions); CA-1 next |
 | 2026-07-24 | 8 | Clinic Admin CA-1 — clinic dashboard API/UI + `clinic_dashboard.read` + E2E smoke |
+| 2026-07-24 | 8 | Clinic Admin CA-2 — clinic profile settings API/UI + `clinic_profile.*` + E2E smoke |
 
 ### Clinic Admin Web MVP (approved scope)
 
@@ -1037,7 +1038,7 @@ Authoritative scope: **`Docs/mvp-clinic-admin-scope.md`** (product-owner approve
 | Phase | Theme | Complexity | Status |
 |-------|--------|------------|--------|
 | CA-1 | Nav + clinic dashboard (`GET /api/v1/clinic/dashboard`) | Medium | **Delivered** (2026-07-24) |
-| CA-2 | Clinic profile settings API/UI | Medium | Not started |
+| CA-2 | Clinic profile settings API/UI | Medium | **Delivered** (2026-07-24) |
 | CA-3 | Staff UI hardening (clinic actor) | Small | Not started |
 | CA-4 | Doctor directory + availability verify | Small | Not started |
 | CA-5 | Patients verify (hide cross-clinic enroll) | Small | Not started |
@@ -1047,7 +1048,7 @@ Authoritative scope: **`Docs/mvp-clinic-admin-scope.md`** (product-owner approve
 | CA-9 | Clinic-filtered audit | Medium | Approved |
 | CA-10 | Hardening + Playwright E2E | Medium | Not started |
 
-Existing backend covers clinic-scoped staff/patients/appointments/availability/operations for `CLINIC_ADMIN`. Gaps: clinic dashboard, clinic profile, clinic reports, clinic-filtered audit.
+Existing backend covers clinic-scoped staff/patients/appointments/availability/operations for `CLINIC_ADMIN`. Gaps: clinic reports, clinic-filtered audit.
 
 ---
 

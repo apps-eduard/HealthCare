@@ -21,7 +21,8 @@ public interface IAuthorizationAuditLogger
         string operation,
         string resultCode,
         Guid? organizationId = null,
-        Guid? clinicId = null);
+        Guid? clinicId = null,
+        IReadOnlyList<string>? changedFields = null);
 
     /// <summary>
     /// Staff security/admin operation audit. Must never include passwords, tokens, or PHI.

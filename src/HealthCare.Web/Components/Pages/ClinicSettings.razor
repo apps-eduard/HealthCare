@@ -1,0 +1,425 @@
+@page "/clinic/settings"
+@attribute [Authorize]
+@using HealthCare.Contracts.Clinics
+@using HealthCare.Web.ClinicSettings
+@implements IDisposable
+@inject IClinicSettingsApiClient SettingsApi
+@inject IClinicManagementApiClient ClinicsApi
+@inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
+@inject IUserNotificationService Notify
+@inject NavigationManager Navigation
+
+<PageTitle>Clinic Profile</PageTitle>
+
+@if (Permissions.IsPatientOnly)
+{
+    <Alert Type="@AlertType.Error" Message="Patient accounts cannot use clinic profile settings." ShowIcon="true" />
+}
+else if (!ClinicSettingsPermissionRules.CanView(Permissions))
+{
+    <PermissionDeniedState Message="You do not have permission to view clinic profile settings." />
+}
+else
+{
+    <HcPageHeader Title="Clinic Profile"
+                  Subtitle="@(_subtitle ?? "Clinic contact details and operational defaults")">
+        <Breadcrumb>
+            <Breadcrumb>
+                <BreadcrumbItem Href="/dashboard">Home</BreadcrumbItem>
+                <BreadcrumbItem>Clinic</BreadcrumbItem>
+                <BreadcrumbItem>Clinic Profile</BreadcrumbItem>
+            </Breadcrumb>
+        </Breadcrumb>
+        <ChildContent>
+            <Button OnClick="LoadAsync" Disabled="_loading || _saving" AriaLabel="Refresh clinic profile">
+                <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
+            </Button>
+        </ChildContent>
+    </HcPageHeader>
+
+    @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasClinic)
+    {
+        <Alert Type="@AlertType.Info"
+               Message="Select a clinic in the platform banner before loading profile settings."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
+    }
+    else if (Permissions.IsPlatformAdmin && !PlatformTenant.ExplicitBypassEnabled)
+    {
+        <Alert Type="@AlertType.Warning"
+               Message="Enable explicit platform bypass and select a clinic before loading clinic profile settings."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <ErrorState Message="@_error" />
+    }
+
+    @if (_loading && _settings is null)
+    {
+        <PageLoading />
+    }
+    else if (_settings is null)
+    {
+        <EmptyState Message="Load clinic profile to view settings." />
+    }
+    else
+    {
+        <div class="hc-card" style="margin-bottom:1rem;">
+            <AntDesign.Row Gutter="(16, 16)" Align="RowAlign.Middle">
+                <AntDesign.Col Xs="24" Md="14">
+                    <div class="hc-caption" style="margin-bottom:4px;text-transform:uppercase;letter-spacing:0.04em;">Clinic identity</div>
+                    <h2 style="margin:0 0 0.5rem;font-size:1.25rem;">@_settings.Name</h2>
+                    <div class="hc-caption">Clinic ID: @_settings.ClinicId</div>
+                    <div class="hc-caption" style="margin-top:0.35rem;">Slug: @_settings.Slug (read-only)</div>
+                    <div class="hc-caption" style="margin-top:0.35rem;">
+                        Organization: @_settings.OrganizationName (read-only)
+                    </div>
+                    <div class="hc-caption" style="margin-top:0.35rem;">
+                        Created @_settings.CreatedAtUtc.UtcDateTime:u · Updated @_settings.UpdatedAtUtc.UtcDateTime:u (UTC)
+                    </div>
+                </AntDesign.Col>
+                <AntDesign.Col Xs="24" Md="10" Style="text-align:right;">
+                    <StatusBadge Text="@ClinicSettingsPresentation.StatusText(_settings.IsActive)"
+                                 Tone="@ClinicSettingsPresentation.StatusTone(_settings.IsActive)" />
+                    <div class="hc-caption" style="margin-top:0.5rem;">Status is read-only</div>
+                </AntDesign.Col>
+            </AntDesign.Row>
+        </div>
+
+        <div class="hc-card" style="margin-bottom:1rem;">
+            <h3 style="margin:0 0 0.75rem;font-size:1rem;">Profile</h3>
+            @if (_concurrencyConflict)
+            {
+                <Alert Type="@AlertType.Error"
+                       Message="Another change was saved first. Reload the latest profile and try again."
+                       ShowIcon="true"
+                       Style="margin-bottom:0.75rem;" />
+                <Button OnClick="LoadAsync"
+                        Disabled="_loading || _saving"
+                        Style="margin-bottom:0.75rem;"
+                        AriaLabel="Reload latest clinic profile">
+                    Reload latest
+                </Button>
+            }
+            @if (!CanEdit)
+            {
+                <Alert Type="@AlertType.Info"
+                       Message="You can view this profile. Updating requires clinic_profile.update."
+                       ShowIcon="true"
+                       Style="margin-bottom:0.75rem;" />
+            }
+            <Alert Type="@AlertType.Warning"
+                   Message="Changing the clinic timezone affects how scheduling windows are interpreted."
+                   ShowIcon="true"
+                   Style="margin-bottom:0.75rem;" />
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                <div>
+                    <label for="clinic-settings-name">@FieldLabel.Mark("Clinic name")</label>
+                    <Input Id="clinic-settings-name"
+                           @bind-Value="_form.Name"
+                           Disabled="@(!CanEdit || _saving || _concurrencyConflict)"
+                           Style="width:100%;"
+                           AriaLabel="Clinic name" />
+                </div>
+                <div>
+                    <label for="clinic-settings-specialty">Specialty</label>
+                    <Input Id="clinic-settings-specialty"
+                           @bind-Value="_form.Specialty"
+                           Disabled="@(!CanEdit || _saving || _concurrencyConflict)"
+                           Style="width:100%;"
+                           AriaLabel="Specialty" />
+                </div>
+                <div>
+                    <label for="clinic-settings-email">Contact email</label>
+                    <Input Id="clinic-settings-email"
+                           @bind-Value="_form.ContactEmail"
+                           Disabled="@(!CanEdit || _saving || _concurrencyConflict)"
+                           Style="width:100%;"
+                           AriaLabel="Contact email" />
+                </div>
+                <div>
+                    <label for="clinic-settings-phone">Contact phone</label>
+                    <Input Id="clinic-settings-phone"
+                           @bind-Value="_form.ContactPhone"
+                           Disabled="@(!CanEdit || _saving || _concurrencyConflict)"
+                           Style="width:100%;"
+                           AriaLabel="Contact phone" />
+                </div>
+                <div>
+                    <label for="clinic-settings-address">Address</label>
+                    <Input Id="clinic-settings-address"
+                           @bind-Value="_form.Address"
+                           Disabled="@(!CanEdit || _saving || _concurrencyConflict)"
+                           Style="width:100%;"
+                           AriaLabel="Address" />
+                </div>
+                <div>
+                    <label for="clinic-settings-city">City</label>
+                    <Input Id="clinic-settings-city"
+                           @bind-Value="_form.City"
+                           Disabled="@(!CanEdit || _saving || _concurrencyConflict)"
+                           Style="width:100%;"
+                           AriaLabel="City" />
+                </div>
+                <div>
+                    <label for="clinic-settings-country">Country</label>
+                    <Input Id="clinic-settings-country"
+                           @bind-Value="_form.Country"
+                           Disabled="@(!CanEdit || _saving || _concurrencyConflict)"
+                           Style="width:100%;"
+                           AriaLabel="Country" />
+                </div>
+                <div>
+                    <label for="clinic-settings-tz">Default operational timezone</label>
+                    <Select @bind-Value="_form.DefaultTimeZoneId"
+                            Id="clinic-settings-tz"
+                            Disabled="@(!CanEdit || _saving || _concurrencyConflict || _timeZonesLoading)"
+                            Style="width:100%;"
+                            TItemValue="string"
+                            TItem="string"
+                            Placeholder="Select clinic timezone"
+                            AriaLabel="Default operational timezone">
+                        <SelectOptions>
+                            @foreach (var tz in _timeZones)
+                            {
+                                <SelectOption TItemValue="string" TItem="string" Value="@tz.TimeZoneId" Label="@($"{tz.DisplayName} ({tz.TimeZoneId})")" />
+                            }
+                        </SelectOptions>
+                    </Select>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(_validationError))
+                {
+                    <Alert Type="@AlertType.Error" Message="@_validationError" ShowIcon="true" role="alert" />
+                }
+                @if (CanEdit)
+                {
+                    <div style="display:flex;gap:8px;justify-content:flex-end;">
+                        <Button OnClick="ResetFormFromLoaded" Disabled="_saving || _loading" AriaLabel="Reset clinic profile form">
+                            Reset
+                        </Button>
+                        <Button Type="@ButtonType.Primary"
+                                OnClick="SaveAsync"
+                                Loading="_saving"
+                                Disabled="@(_saving || _loading || _concurrencyConflict)"
+                                AriaLabel="Save clinic profile">
+                            Save
+                        </Button>
+                    </div>
+                }
+            </div>
+            <div class="hc-caption" style="margin-top:0.75rem;">
+                Permission: @WebPermissions.ClinicProfileRead
+                @if (CanEdit)
+                {
+                    <span> · @WebPermissions.ClinicProfileUpdate</span>
+                }
+                · Version @_form.ExpectedVersion
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private bool _loading;
+    private bool _saving;
+    private bool _timeZonesLoading;
+    private bool _concurrencyConflict;
+    private bool _subscribedPlatform;
+    private string? _error;
+    private string? _validationError;
+    private string? _subtitle;
+    private CancellationTokenSource? _cts;
+    private ClinicSettingsResponse? _settings;
+    private ClinicSettingsFormState _form = new();
+    private List<TimeZoneInfoResponse> _timeZones = [];
+
+    private bool CanEdit => ClinicSettingsPermissionRules.CanUpdate(Permissions);
+
+    private bool PlatformBypass =>
+        Permissions.IsPlatformAdmin && PlatformTenant.ExplicitBypassEnabled;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Permissions.IsPatientOnly || !ClinicSettingsPermissionRules.CanView(Permissions))
+        {
+            return;
+        }
+
+        if (Permissions.IsPlatformAdmin)
+        {
+            PlatformTenant.Changed += OnPlatformTenantChanged;
+            _subscribedPlatform = true;
+        }
+
+        await LoadTimeZonesAsync();
+        await LoadAsync();
+    }
+
+    public void Dispose()
+    {
+        if (_subscribedPlatform)
+        {
+            PlatformTenant.Changed -= OnPlatformTenantChanged;
+        }
+
+        _cts?.Cancel();
+        _cts?.Dispose();
+    }
+
+    private void OnPlatformTenantChanged() => InvokeAsync(async () =>
+    {
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    private async Task LoadTimeZonesAsync()
+    {
+        _timeZonesLoading = true;
+        try
+        {
+            _timeZones = (await ClinicsApi.ListTimeZonesAsync()).ToList();
+            if (_timeZones.All(t => !string.Equals(t.TimeZoneId, "Asia/Riyadh", StringComparison.OrdinalIgnoreCase)))
+            {
+                _timeZones.Insert(0, new TimeZoneInfoResponse
+                {
+                    TimeZoneId = "Asia/Riyadh",
+                    DisplayName = "Asia/Riyadh",
+                    UtcOffset = "+03:00",
+                });
+            }
+        }
+        catch
+        {
+            _timeZones =
+            [
+                new TimeZoneInfoResponse { TimeZoneId = "Asia/Riyadh", DisplayName = "Asia/Riyadh", UtcOffset = "+03:00" },
+                new TimeZoneInfoResponse { TimeZoneId = "UTC", DisplayName = "UTC", UtcOffset = "+00:00" },
+            ];
+        }
+        finally
+        {
+            _timeZonesLoading = false;
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Permissions.IsPlatformAdmin && (!PlatformTenant.HasClinic || !PlatformTenant.ExplicitBypassEnabled))
+        {
+            _settings = null;
+            _error = null;
+            _validationError = null;
+            _concurrencyConflict = false;
+            return;
+        }
+
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        _loading = true;
+        _error = null;
+        _validationError = null;
+        _concurrencyConflict = false;
+
+        try
+        {
+            var query = new ClinicSettingsQuery
+            {
+                ClinicId = Permissions.IsPlatformAdmin ? PlatformTenant.SelectedClinicId : null,
+            };
+            _settings = await SettingsApi.GetAsync(query, PlatformBypass, _cts.Token);
+            _form = ClinicSettingsFormState.FromResponse(_settings);
+            _subtitle = _settings.Name;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ApiProblemException ex)
+        {
+            _settings = null;
+            _error = ClinicSettingsProblemMessages.ToUserMessage(ex);
+            Notify.Error(_error);
+        }
+        catch (Exception)
+        {
+            _settings = null;
+            _error = "Unable to load clinic profile settings.";
+            Notify.Error(_error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ResetFormFromLoaded()
+    {
+        if (_settings is null)
+        {
+            return;
+        }
+
+        _form = ClinicSettingsFormState.FromResponse(_settings);
+        _validationError = null;
+        _concurrencyConflict = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!CanEdit || _settings is null || _concurrencyConflict)
+        {
+            return;
+        }
+
+        var request = _form.TryBuildUpdateRequest(out var validationError);
+        if (request is null)
+        {
+            _validationError = validationError;
+            return;
+        }
+
+        _validationError = null;
+        _saving = true;
+        _error = null;
+
+        try
+        {
+            var query = new ClinicSettingsQuery
+            {
+                ClinicId = Permissions.IsPlatformAdmin ? PlatformTenant.SelectedClinicId : null,
+            };
+            _settings = await SettingsApi.UpdateAsync(request, query, PlatformBypass);
+            _form = ClinicSettingsFormState.FromResponse(_settings);
+            _subtitle = _settings.Name;
+            _concurrencyConflict = false;
+            Notify.Success("Clinic profile saved.");
+        }
+        catch (ApiProblemException ex)
+        {
+            if (ex.StatusCode == 409
+                || string.Equals(ex.ErrorCode, ClinicSettingsErrorCodes.ConcurrencyConflict, StringComparison.Ordinal))
+            {
+                _concurrencyConflict = true;
+                _validationError = null;
+            }
+            else
+            {
+                _validationError = ClinicSettingsProblemMessages.ToUserMessage(ex);
+                Notify.Error(_validationError);
+            }
+        }
+        catch (Exception)
+        {
+            _validationError = "Unable to save clinic profile settings.";
+            Notify.Error(_validationError);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

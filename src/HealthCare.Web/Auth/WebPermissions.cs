@@ -19,6 +19,8 @@ public static class WebPermissions
     public const string ClinicsActivate = "clinics.activate";
     public const string ClinicsDeactivate = "clinics.deactivate";
     public const string ClinicDashboardRead = "clinic_dashboard.read";
+    public const string ClinicProfileRead = "clinic_profile.read";
+    public const string ClinicProfileUpdate = "clinic_profile.update";
     public const string OrganizationsRead = "organizations.read";
     public const string OrganizationsSelect = "organizations.select";
     public const string OrganizationDashboardRead = "organization_dashboard.read";

@@ -167,6 +167,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IClinicDirectoryService, ClinicDirectoryService>();
         services.AddScoped<IClinicManagementService, ClinicManagementService>();
         services.AddScoped<IClinicDashboardService, ClinicDashboardService>();
+        services.AddScoped<IClinicSettingsService, ClinicSettingsService>();
         services.AddScoped<IOrganizationDirectoryService, OrganizationDirectoryService>();
         services.AddScoped<IOrganizationDashboardService, OrganizationDashboardService>();
         services.AddScoped<IOrganizationReportService, OrganizationReportService>();

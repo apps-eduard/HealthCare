@@ -156,18 +156,23 @@ public sealed class AuthorizationAuditLogger : IAuthorizationAuditLogger
         string operation,
         string resultCode,
         Guid? organizationId = null,
-        Guid? clinicId = null)
+        Guid? clinicId = null,
+        IReadOnlyList<string>? changedFields = null)
     {
         var orgId = organizationId ?? _currentUser.OrganizationId;
         var clinic = clinicId ?? _currentUser.ClinicId;
         var correlationId = CorrelationId();
+        var safeFields = changedFields is { Count: > 0 }
+            ? string.Join(',', changedFields.Where(f => !string.IsNullOrWhiteSpace(f)))
+            : null;
         _logger.LogInformation(
-            "Clinic operation. Event=clinic_operation UserId={UserId} Operation={Operation} ResultCode={ResultCode} OrganizationId={OrganizationId} ClinicId={ClinicId} CorrelationId={CorrelationId}",
+            "Clinic operation. Event=clinic_operation UserId={UserId} Operation={Operation} ResultCode={ResultCode} OrganizationId={OrganizationId} ClinicId={ClinicId} ChangedFields={ChangedFields} CorrelationId={CorrelationId}",
             _currentUser.UserId,
             operation,
             resultCode,
             orgId,
             clinic,
+            safeFields,
             correlationId);
 
         TryPersistOrgAudit(

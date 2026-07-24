@@ -81,3 +81,4 @@ E2E tests share one host fixture and use an xUnit collection with `DisableParall
 
 - Organization Admin smoke suite (`OrganizationAdminSmokeTests`)
 - Clinic Admin CA-1: login → Clinic Dashboard → org settings denied (`ClinicAdminDashboardSmokeTests`)
+- Clinic Admin CA-2: login → Clinic Profile → edit → save → reload persistence (`ClinicAdminSettingsSmokeTests`)
