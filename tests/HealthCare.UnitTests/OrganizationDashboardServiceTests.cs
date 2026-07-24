@@ -420,6 +420,62 @@ internal sealed class DashboardHarness : IAsyncDisposable
             NullLogger<OrganizationDashboardService>.Instance);
     }
 
+    public OrganizationReportService CreateReportService((ApplicationUser User, Domain.Staff.StaffMember Staff) actor)
+    {
+        var currentUser = new FakeCurrentUser
+        {
+            IsAuthenticated = true,
+            UserId = actor.User.Id,
+            Email = actor.User.Email,
+            Roles = [actor.Staff.Role],
+            OrganizationId = actor.Staff.OrganizationId,
+            ClinicId = actor.Staff.ClinicId,
+            StaffMemberId = actor.Staff.Id,
+        };
+        var currentStaff = new FakeCurrentStaff
+        {
+            HasActiveMembership = true,
+            StaffMemberId = actor.Staff.Id,
+            OrganizationId = actor.Staff.OrganizationId,
+            ClinicId = actor.Staff.ClinicId,
+            Role = actor.Staff.Role,
+        };
+        return BuildReportService(currentUser, currentStaff);
+    }
+
+    public OrganizationReportService CreatePlatformReportService(ApplicationUser platformUser)
+    {
+        var currentUser = new FakeCurrentUser
+        {
+            IsAuthenticated = true,
+            UserId = platformUser.Id,
+            Email = platformUser.Email,
+            Roles = [AppRoles.PlatformAdmin],
+        };
+        var currentStaff = new FakeCurrentStaff { HasActiveMembership = false };
+        return BuildReportService(currentUser, currentStaff);
+    }
+
+    public OrganizationReportService BuildReportService(FakeCurrentUser currentUser, FakeCurrentStaff currentStaff)
+    {
+        var audit = new NoOpAuthorizationAuditLogger();
+        var permissions = new PermissionService(
+            currentUser,
+            currentStaff,
+            new FakeCurrentPatient(),
+            audit);
+
+        return new OrganizationReportService(
+            Db,
+            currentUser,
+            currentStaff,
+            permissions,
+            audit,
+            new ClinicTimeZoneConverter(NullLogger<ClinicTimeZoneConverter>.Instance),
+            Clock,
+            NullLogger<OrganizationReportService>.Instance);
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_provider is not null)

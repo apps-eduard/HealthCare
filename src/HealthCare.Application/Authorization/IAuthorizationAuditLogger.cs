@@ -73,4 +73,14 @@ public interface IAuthorizationAuditLogger
         Guid? organizationId = null,
         Guid? clinicId = null,
         Guid? runId = null);
+
+    /// <summary>
+    /// Organization report operational audit. Must never include clinical payloads, secrets, or PHI.
+    /// </summary>
+    void ReportOperation(
+        string operation,
+        string resultCode,
+        Guid? organizationId = null,
+        Guid? clinicId = null,
+        string? reportType = null);
 }

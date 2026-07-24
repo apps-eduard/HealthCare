@@ -32,6 +32,7 @@ Resolution uses server-side Identity roles (DB) + active staff membership + pati
 | `organizations.read` | PLATFORM_ADMIN organization directory search/detail |
 | `organizations.select` | PLATFORM_ADMIN UI tenant selection (Web usability aid; API remains authoritative) |
 | `organization_dashboard.read` | Organization Admin (and PLATFORM_ADMIN with explicit tenant bypass) operational dashboard aggregates |
+| `organization_reports.read` | Organization Admin (and PLATFORM_ADMIN with explicit tenant bypass) operational reports + safe CSV export |
 | `staff.read` / `staff.manage` / `staff.password_reset` | Staff list/detail/create/update/activate + admin password-reset initiation |
 | `roles.read` / `roles.assign` | Assignable-role catalog and role assignment |
 | `security_sessions.revoke` | Explicit refresh-token / security-stamp revocation for in-scope staff |
@@ -44,8 +45,8 @@ Resolution uses server-side Identity roles (DB) + active staff membership + pati
 
 ## Role mappings (assumptions)
 
-- **PLATFORM_ADMIN:** broad permissions including `organization_dashboard.read` + `organizations.read` / `organizations.select`; **does not** auto-bypass tenants — requires `PlatformAdminBypass.Explicit`. Organization directory listing is a platform operation and does **not** grant clinic/resource access. No `medical_notes.*`.
-- **ORGANIZATION_ADMIN:** org-scoped ops including `organization_dashboard.read` and clinic CRUD (`clinics.create/update/activate/deactivate`); can assign roles except PLATFORM_ADMIN. **No** global organization directory. **No** `appointments.complete` (clinical completion remains clinic clinical roles).
+- **PLATFORM_ADMIN:** broad permissions including `organization_dashboard.read` / `organization_reports.read` + `organizations.read` / `organizations.select`; **does not** auto-bypass tenants — requires `PlatformAdminBypass.Explicit`. Organization directory listing is a platform operation and does **not** grant clinic/resource access. No `medical_notes.*`.
+- **ORGANIZATION_ADMIN:** org-scoped ops including `organization_dashboard.read`, `organization_reports.read`, and clinic CRUD (`clinics.create/update/activate/deactivate`); can assign roles except PLATFORM_ADMIN. **No** global organization directory. **No** `appointments.complete` (clinical completion remains clinic clinical roles).
 - **CLINIC_ADMIN:** clinic-scoped ops; `clinics.read` only (no organization clinic create/update/activate/deactivate); cannot assign ORG/PLATFORM admin.
 - **DOCTOR:** clinic appointments + own availability; no clinic administration.
 - **NURSE:** clinical-operational appointment actions (no create/reschedule/availability manage); medical notes: `medical_notes.read/create/update_draft/sign` limited to **Nursing** note type in services.
@@ -213,6 +214,8 @@ Staff UI uses `ClinicPicker` / `OrganizationPicker` (no free-text ClinicId or Or
 ### Organization dashboard
 
 - `GET /api/v1/organization/dashboard` — org-scoped operational aggregates (`organization_dashboard.read`)
+- `GET /api/v1/organization/reports/{appointments|staff|patients|availability|reminder-failures|summary-failures}` — org-scoped operational reports (`organization_reports.read`)
+- `GET /api/v1/organization/reports/{type}/export.csv` — safe CSV export of approved operational aggregates/failure rows
 - Optional `ClinicId`, `Date` (yyyy-MM-dd); optional `OrganizationId` **only** for PLATFORM_ADMIN with `platformAdminBypass=true`
 - ORGANIZATION_ADMIN: trusted membership organization; client OrganizationId overrides rejected
 - Appointment “today” uses each clinic’s local calendar date when no date is supplied and multiple clinics are in scope

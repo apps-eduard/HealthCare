@@ -162,6 +162,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IClinicManagementService, ClinicManagementService>();
         services.AddScoped<IOrganizationDirectoryService, OrganizationDirectoryService>();
         services.AddScoped<IOrganizationDashboardService, OrganizationDashboardService>();
+        services.AddScoped<IOrganizationReportService, OrganizationReportService>();
         services.AddScoped<ISecuritySessionInvalidationService, SecuritySessionInvalidationService>();
         services.AddScoped<IAppointmentService, AppointmentService>();
         services.AddScoped<IClinicTimeZoneConverter, ClinicTimeZoneConverter>();

@@ -693,6 +693,7 @@ The Organization Admin must not:
 - Organization-scoped appointment queue/calendar on `/api/v1/staff/appointments`, `/queue`, `/calendar` with create/confirm/check-in/cancel/reschedule/no-show. Org Admin does **not** receive `appointments.complete`. Audited via `IAuthorizationAuditLogger.AppointmentOperation`. No migration required for this slice.
 - Organization-scoped doctor availability on `/api/v1/staff/doctors/{id}/availability*` plus `GET /api/v1/staff/clinics/{clinicId}/doctors` (validated ClinicId). Optional `clinicId` query must match the doctor’s clinic. Responses include `ClinicTimeZoneId`. Audited via `IAuthorizationAuditLogger.AvailabilityOperation`. No migration required.
 - Organization-scoped reminder and clinic-summary operations on `GET /api/v1/staff/reminders`, appointment reminder list/retry, `GET /api/v1/staff/appointment-summary-runs`, summary get/retry, and `GET /api/v1/staff/operations/health` (safe sender/Hangfire flags only). Responses include `BackgroundJobId` correlation; no provider secrets or delivery payloads. Audited via `ReminderOperation` / `SummaryOperation`. No migration required.
+- Organization-scoped operational reports on `/api/v1/organization/reports/*` (appointments, staff, patients, availability, reminder-failures, summary-failures) with optional validated `ClinicId`, date-range hardening (max 93 days), and safe CSV export (`…/export.csv`). Permission `organization_reports.read`. Audited via `ReportOperation`. No migration required.
 
 ### Phase 2 — Scheduling and operations
 

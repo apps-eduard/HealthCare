@@ -1012,6 +1012,7 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 | 2026-07-24 | 4 | Org Admin appointment queue/calendar backend (queue+calendar endpoints, Complete denied, audits) |
 | 2026-07-24 | 4 | Org Admin doctor availability backend (staff clinic doctors, ClinicId check, audits) |
 | 2026-07-24 | 4 / 10 | Org Admin reminder + clinic-summary operations (search/runs/health/retry/audits) |
+| 2026-07-24 | 4 | Org Admin organization reports backend (JSON + safe CSV, scope/audits) |
 
 ---
 

@@ -63,6 +63,7 @@ public static class Permissions
         public const string Read = "organizations.read";
         public const string Select = "organizations.select";
         public const string DashboardRead = "organization_dashboard.read";
+        public const string ReportsRead = "organization_reports.read";
     }
 
     public static class Staff
@@ -129,6 +130,7 @@ public static class Permissions
         Organizations.Read,
         Organizations.Select,
         Organizations.DashboardRead,
+        Organizations.ReportsRead,
         Staff.Read,
         Staff.Manage,
         Staff.PasswordReset,
