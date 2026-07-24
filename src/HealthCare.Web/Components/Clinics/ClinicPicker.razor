@@ -296,9 +296,16 @@ else
         await ValueChanged.InvokeAsync(null);
     }
 
-    private static string FormatClinic(ClinicDirectoryItemResponse? clinic) =>
-        clinic is null ? string.Empty : $"{clinic.Name} ({clinic.Slug})";
+    private static string FormatClinic(ClinicDirectoryItemResponse? clinic)
+    {
+        if (clinic is null)
+        {
+            return string.Empty;
+        }
 
+        var label = $"{clinic.Name} ({clinic.Slug})";
+        return clinic.IsActive ? label : $"{label} · Inactive";
+    }
     private static ClinicDirectoryItemResponse ToItem(ClinicDetailResponse detail) =>
         new()
         {

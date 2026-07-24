@@ -1,0 +1,248 @@
+@inherits FeedbackComponent<object?>
+@using HealthCare.Contracts.Clinics
+@inject IClinicManagementApiClient ClinicsApi
+@inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
+
+<div style="display:flex;flex-direction:column;gap:12px;max-height:70vh;overflow:auto;">
+    @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+    {
+        <Alert Type="@AlertType.Warning"
+               Message="Select an organization in the platform banner before creating a clinic."
+               ShowIcon="true" />
+    }
+
+    <div>
+        <label>@FieldLabel.Mark("Name")</label>
+        <Input @bind-Value="_name" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label>@FieldLabel.Mark("Slug")</label>
+        <Input @bind-Value="_slug" Disabled="_busy" Style="width:100%;" Placeholder="e.g. downtown-clinic" />
+        <div class="hc-caption">Lowercase letters, numbers, and hyphens only. Used in public registration URLs.</div>
+    </div>
+    <div>
+        <label>Specialty</label>
+        <Input @bind-Value="_specialty" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label>@FieldLabel.Mark("Timezone")</label>
+        <Select @bind-Value="_timeZoneId"
+                Disabled="@(_busy || _timeZonesLoading)"
+                Style="width:100%;"
+                TItemValue="string"
+                TItem="string"
+                AllowClear="false">
+            <SelectOptions>
+                @foreach (var tz in _timeZones)
+                {
+                    <SelectOption TItemValue="string" TItem="string" Value="@tz.TimeZoneId" Label="@($"{tz.DisplayName} ({tz.TimeZoneId})")" />
+                }
+            </SelectOptions>
+        </Select>
+    </div>
+    <div>
+        <label>Phone</label>
+        <Input @bind-Value="_phone" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label>Email</label>
+        <Input @bind-Value="_email" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label>Address line 1</label>
+        <Input @bind-Value="_address1" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label>Address line 2</label>
+        <Input @bind-Value="_address2" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label>City</label>
+        <Input @bind-Value="_city" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label>Region / Province</label>
+        <Input @bind-Value="_region" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label>Postal code</label>
+        <Input @bind-Value="_postal" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label>Country</label>
+        <Input @bind-Value="_country" Disabled="_busy" Style="width:100%;" />
+    </div>
+
+    <div class="hc-caption" style="margin-top:8px;font-weight:600;">Optional initial Clinic Admin</div>
+    <div>
+        <label>Admin email</label>
+        <Input @bind-Value="_adminEmail" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label>Admin first name</label>
+        <Input @bind-Value="_adminFirst" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label>Admin last name</label>
+        <Input @bind-Value="_adminLast" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label>Admin job title</label>
+        <Input @bind-Value="_adminJob" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label>Temporary password</label>
+        <InputPassword @bind-Value="_adminPassword" Disabled="_busy" Style="width:100%;" />
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" />
+    }
+</div>
+<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;">
+    <Button OnClick="CancelCloseAsync" Disabled="_busy">Cancel</Button>
+    <Button Type="@ButtonType.Primary" OnClick="SubmitAsync" Loading="_busy" Disabled="_busy">Create</Button>
+</div>
+
+@code {
+    private string _name = string.Empty;
+    private string _slug = string.Empty;
+    private string? _specialty;
+    private string _timeZoneId = "Asia/Riyadh";
+    private string? _phone;
+    private string? _email;
+    private string? _address1;
+    private string? _address2;
+    private string? _city;
+    private string? _region;
+    private string? _postal;
+    private string? _country;
+    private string? _adminEmail;
+    private string? _adminFirst;
+    private string? _adminLast;
+    private string? _adminJob;
+    private string? _adminPassword;
+    private bool _busy;
+    private string? _error;
+    private bool _timeZonesLoading = true;
+    private List<TimeZoneInfoResponse> _timeZones = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _timeZones = (await ClinicsApi.ListTimeZonesAsync()).ToList();
+            if (_timeZones.All(t => !string.Equals(t.TimeZoneId, "Asia/Riyadh", StringComparison.OrdinalIgnoreCase)))
+            {
+                _timeZones.Insert(0, new TimeZoneInfoResponse
+                {
+                    TimeZoneId = "Asia/Riyadh",
+                    DisplayName = "(UTC+03:00) Riyadh",
+                    UtcOffset = "UTC+03:00",
+                });
+            }
+        }
+        catch
+        {
+            _timeZones =
+            [
+                new TimeZoneInfoResponse
+                {
+                    TimeZoneId = "Asia/Riyadh",
+                    DisplayName = "(UTC+03:00) Riyadh",
+                    UtcOffset = "UTC+03:00",
+                }
+            ];
+        }
+        finally
+        {
+            _timeZonesLoading = false;
+        }
+    }
+
+    private Task CancelCloseAsync() => OkCancelRef!.CancelAsync(new ModalClosingEventArgs());
+
+    private Task ConfirmOkAsync() => OkCancelRef!.OkAsync(new ModalClosingEventArgs());
+
+    private async Task SubmitAsync()
+    {
+        _error = null;
+        if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+        {
+            _error = "Select an organization first.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_name) || string.IsNullOrWhiteSpace(_slug) || string.IsNullOrWhiteSpace(_timeZoneId))
+        {
+            _error = "Name, slug, and timezone are required.";
+            return;
+        }
+
+        CreateClinicInitialAdminRequest? admin = null;
+        var hasAnyAdmin = !string.IsNullOrWhiteSpace(_adminEmail)
+            || !string.IsNullOrWhiteSpace(_adminFirst)
+            || !string.IsNullOrWhiteSpace(_adminLast)
+            || !string.IsNullOrWhiteSpace(_adminPassword);
+        if (hasAnyAdmin)
+        {
+            if (string.IsNullOrWhiteSpace(_adminEmail)
+                || string.IsNullOrWhiteSpace(_adminFirst)
+                || string.IsNullOrWhiteSpace(_adminLast)
+                || string.IsNullOrWhiteSpace(_adminPassword))
+            {
+                _error = "Initial Clinic Admin requires email, name, and temporary password.";
+                return;
+            }
+
+            admin = new CreateClinicInitialAdminRequest
+            {
+                Email = _adminEmail.Trim(),
+                FirstName = _adminFirst.Trim(),
+                LastName = _adminLast.Trim(),
+                TemporaryPassword = _adminPassword,
+                JobTitle = string.IsNullOrWhiteSpace(_adminJob) ? null : _adminJob.Trim(),
+            };
+        }
+
+        _busy = true;
+        try
+        {
+            await ClinicsApi.CreateAsync(
+                new CreateOrganizationClinicRequest
+                {
+                    Name = _name.Trim(),
+                    Slug = _slug.Trim(),
+                    Specialty = _specialty,
+                    PhoneNumber = _phone,
+                    Email = _email,
+                    AddressLine1 = _address1,
+                    AddressLine2 = _address2,
+                    City = _city,
+                    Region = _region,
+                    PostalCode = _postal,
+                    Country = _country,
+                    TimeZoneId = _timeZoneId,
+                    OrganizationId = Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null,
+                    InitialClinicAdmin = admin,
+                },
+                platformAdminBypass: Permissions.IsPlatformAdmin && PlatformTenant.ExplicitBypassEnabled);
+
+            await ConfirmOkAsync();
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = ex.ToUserMessage();
+        }
+        catch
+        {
+            _error = "Unable to create clinic.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

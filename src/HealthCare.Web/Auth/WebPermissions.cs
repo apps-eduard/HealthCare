@@ -10,6 +10,11 @@ public static class WebPermissions
     public const string RolesRead = "roles.read";
     public const string RolesAssign = "roles.assign";
     public const string ClinicsRead = "clinics.read";
+    public const string ClinicsManage = "clinics.manage";
+    public const string ClinicsCreate = "clinics.create";
+    public const string ClinicsUpdate = "clinics.update";
+    public const string ClinicsActivate = "clinics.activate";
+    public const string ClinicsDeactivate = "clinics.deactivate";
     public const string OrganizationsRead = "organizations.read";
     public const string OrganizationsSelect = "organizations.select";
     public const string OrganizationDashboardRead = "organization_dashboard.read";

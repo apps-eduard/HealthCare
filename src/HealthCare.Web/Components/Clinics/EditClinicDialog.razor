@@ -1,0 +1,196 @@
+@inherits FeedbackComponent<EditClinicDialog.Args>
+@using HealthCare.Contracts.Clinics
+@inject IClinicManagementApiClient ClinicsApi
+@inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
+
+@if (_loading)
+{
+    <PageLoading />
+}
+else
+{
+    <div style="display:flex;flex-direction:column;gap:12px;max-height:70vh;overflow:auto;">
+        <Alert Type="@AlertType.Warning"
+               Message="Changing the slug updates the public patient registration URL for this clinic."
+               ShowIcon="true" />
+        <div>
+            <label>@FieldLabel.Mark("Name")</label>
+            <Input @bind-Value="_name" Disabled="_busy" Style="width:100%;" />
+        </div>
+        <div>
+            <label>@FieldLabel.Mark("Slug")</label>
+            <Input @bind-Value="_slug" Disabled="_busy" Style="width:100%;" />
+        </div>
+        <div>
+            <label>Specialty</label>
+            <Input @bind-Value="_specialty" Disabled="_busy" Style="width:100%;" />
+        </div>
+        <div>
+            <label>@FieldLabel.Mark("Timezone")</label>
+            <Select @bind-Value="_timeZoneId"
+                    Disabled="@(_busy || _timeZonesLoading)"
+                    Style="width:100%;"
+                    TItemValue="string"
+                    TItem="string"
+                    AllowClear="false">
+                <SelectOptions>
+                    @foreach (var tz in _timeZones)
+                    {
+                        <SelectOption TItemValue="string" TItem="string" Value="@tz.TimeZoneId" Label="@($"{tz.DisplayName} ({tz.TimeZoneId})")" />
+                    }
+                </SelectOptions>
+            </Select>
+        </div>
+        <div>
+            <label>Phone</label>
+            <Input @bind-Value="_phone" Disabled="_busy" Style="width:100%;" />
+        </div>
+        <div>
+            <label>Email</label>
+            <Input @bind-Value="_email" Disabled="_busy" Style="width:100%;" />
+        </div>
+        <div>
+            <label>Address line 1</label>
+            <Input @bind-Value="_address1" Disabled="_busy" Style="width:100%;" />
+        </div>
+        <div>
+            <label>Address line 2</label>
+            <Input @bind-Value="_address2" Disabled="_busy" Style="width:100%;" />
+        </div>
+        <div>
+            <label>City</label>
+            <Input @bind-Value="_city" Disabled="_busy" Style="width:100%;" />
+        </div>
+        <div>
+            <label>Region / Province</label>
+            <Input @bind-Value="_region" Disabled="_busy" Style="width:100%;" />
+        </div>
+        <div>
+            <label>Postal code</label>
+            <Input @bind-Value="_postal" Disabled="_busy" Style="width:100%;" />
+        </div>
+        <div>
+            <label>Country</label>
+            <Input @bind-Value="_country" Disabled="_busy" Style="width:100%;" />
+        </div>
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" />
+        }
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;">
+        <Button OnClick="CancelCloseAsync" Disabled="_busy">Cancel</Button>
+        <Button Type="@ButtonType.Primary" OnClick="SubmitAsync" Loading="_busy" Disabled="_busy">Save</Button>
+    </div>
+}
+
+@code {
+    public sealed record Args(Guid ClinicId);
+
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+    private int _version;
+    private string _name = string.Empty;
+    private string _slug = string.Empty;
+    private string? _specialty;
+    private string _timeZoneId = "Asia/Riyadh";
+    private string? _phone;
+    private string? _email;
+    private string? _address1;
+    private string? _address2;
+    private string? _city;
+    private string? _region;
+    private string? _postal;
+    private string? _country;
+    private bool _timeZonesLoading = true;
+    private List<TimeZoneInfoResponse> _timeZones = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _timeZones = (await ClinicsApi.ListTimeZonesAsync()).ToList();
+            var detail = await ClinicsApi.GetByIdAsync(
+                Options.ClinicId,
+                platformAdminBypass: Permissions.IsPlatformAdmin && PlatformTenant.ExplicitBypassEnabled);
+            _version = detail.Version;
+            _name = detail.Name;
+            _slug = detail.Slug;
+            _specialty = detail.Specialty;
+            _timeZoneId = detail.TimeZoneId;
+            _phone = detail.PhoneNumber;
+            _email = detail.Email;
+            _address1 = detail.AddressLine1;
+            _address2 = detail.AddressLine2;
+            _city = detail.City;
+            _region = detail.Region;
+            _postal = detail.PostalCode;
+            _country = detail.Country;
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = ex.ToUserMessage();
+        }
+        finally
+        {
+            _timeZonesLoading = false;
+            _loading = false;
+        }
+    }
+
+    private Task CancelCloseAsync() => OkCancelRef!.CancelAsync(new ModalClosingEventArgs());
+
+    private Task ConfirmOkAsync() => OkCancelRef!.OkAsync(new ModalClosingEventArgs());
+
+    private async Task SubmitAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_name) || string.IsNullOrWhiteSpace(_slug) || string.IsNullOrWhiteSpace(_timeZoneId))
+        {
+            _error = "Name, slug, and timezone are required.";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await ClinicsApi.UpdateAsync(
+                Options.ClinicId,
+                new UpdateOrganizationClinicRequest
+                {
+                    Name = _name.Trim(),
+                    Slug = _slug.Trim(),
+                    Specialty = _specialty,
+                    PhoneNumber = _phone,
+                    Email = _email,
+                    AddressLine1 = _address1,
+                    AddressLine2 = _address2,
+                    City = _city,
+                    Region = _region,
+                    PostalCode = _postal,
+                    Country = _country,
+                    TimeZoneId = _timeZoneId,
+                    ExpectedVersion = _version,
+                },
+                platformAdminBypass: Permissions.IsPlatformAdmin && PlatformTenant.ExplicitBypassEnabled);
+
+            await ConfirmOkAsync();
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = ex.ErrorCode == ClinicManagementErrorCodes.ConcurrencyConflict
+                ? "This clinic changed. Close and try again."
+                : ex.ToUserMessage();
+        }
+        catch
+        {
+            _error = "Unable to update clinic.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

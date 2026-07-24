@@ -24,6 +24,16 @@ public sealed class Clinic
 
     public string? Email { get; set; }
 
+    public string? AddressLine1 { get; set; }
+
+    public string? AddressLine2 { get; set; }
+
+    public string? Region { get; set; }
+
+    public string? PostalCode { get; set; }
+
+    public string? Country { get; set; }
+
     /// <summary>
     /// IANA timezone identifier used for local availability windows (e.g. Asia/Riyadh).
     /// Appointment instants are always stored in UTC.
@@ -31,6 +41,9 @@ public sealed class Clinic
     public string TimeZoneId { get; set; } = "Asia/Riyadh";
 
     public bool IsActive { get; set; } = true;
+
+    /// <summary>Optimistic concurrency token for clinic profile/activation mutations.</summary>
+    public int Version { get; set; }
 
     public DateTimeOffset CreatedAtUtc { get; set; }
 

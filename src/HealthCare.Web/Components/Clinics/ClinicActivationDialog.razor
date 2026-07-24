@@ -1,0 +1,81 @@
+@inherits FeedbackComponent<ClinicActivationDialog.Args>
+@using HealthCare.Contracts.Clinics
+@inject IClinicManagementApiClient ClinicsApi
+@inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
+
+<p style="margin-top:0">
+    @(Options.Activate ? "Activate" : "Deactivate") <b>@Options.ClinicName</b>?
+</p>
+@if (!Options.Activate)
+{
+    <Alert Type="@AlertType.Warning"
+           Message="Deactivation preserves history. New appointments and staff login for this clinic are blocked until reactivation. The last active clinic in the organization cannot be deactivated."
+           ShowIcon="true"
+           Style="margin-bottom:12px;" />
+}
+<div>
+    <label>Administrative reason (optional)</label>
+    <Input @bind-Value="_reason" Disabled="_busy" Style="width:100%;" />
+</div>
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" Style="margin-top:0.75rem;" />
+}
+<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;">
+    <Button OnClick="CancelCloseAsync" Disabled="_busy">Cancel</Button>
+    <Button Type="@ButtonType.Primary" OnClick="SubmitAsync" Loading="_busy" Disabled="_busy">
+        @(Options.Activate ? "Activate" : "Deactivate")
+    </Button>
+</div>
+
+@code {
+    public sealed record Args(Guid ClinicId, string ClinicName, int ExpectedVersion, bool Activate);
+
+    private string? _reason;
+    private string? _error;
+    private bool _busy;
+
+    private Task CancelCloseAsync() => OkCancelRef!.CancelAsync(new ModalClosingEventArgs());
+
+    private Task ConfirmOkAsync() => OkCancelRef!.OkAsync(new ModalClosingEventArgs());
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var request = new ClinicActivationRequest
+            {
+                ExpectedVersion = Options.ExpectedVersion,
+                Reason = string.IsNullOrWhiteSpace(_reason) ? null : _reason.Trim(),
+            };
+
+            var bypass = Permissions.IsPlatformAdmin && PlatformTenant.ExplicitBypassEnabled;
+            if (Options.Activate)
+            {
+                await ClinicsApi.ActivateAsync(Options.ClinicId, request, bypass);
+            }
+            else
+            {
+                await ClinicsApi.DeactivateAsync(Options.ClinicId, request, bypass);
+            }
+
+            await ConfirmOkAsync();
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = ex.ErrorCode switch
+            {
+                ClinicManagementErrorCodes.ConcurrencyConflict => "This clinic changed. Reload and try again.",
+                ClinicManagementErrorCodes.DeactivationNotAllowed => ex.Title,
+                _ => ex.ToUserMessage(),
+            };
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

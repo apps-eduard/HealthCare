@@ -1,0 +1,288 @@
+@page "/clinics"
+@attribute [Authorize]
+@implements IDisposable
+@using HealthCare.Contracts.Clinics
+@inject IClinicManagementApiClient ClinicsApi
+@inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
+@inject IUiModalService Modals
+@inject IUserNotificationService Notify
+
+<PageTitle>Clinics</PageTitle>
+
+@if (!Permissions.Has(WebPermissions.ClinicsCreate) && !Permissions.Has(WebPermissions.ClinicsUpdate))
+{
+    <PermissionDeniedState Message="You do not have permission to manage clinics." />
+}
+else
+{
+    <HcPageHeader Title="Clinics"
+                  Subtitle="Manage clinics in your organization">
+        <Button OnClick="RefreshAsync" Disabled="_loading">
+            <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
+        </Button>
+        @if (Permissions.Has(WebPermissions.ClinicsCreate))
+        {
+            <Button Type="@ButtonType.Primary"
+                    OnClick="OpenCreateAsync"
+                    Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)">
+                <Icon Type="plus" Theme="IconThemeType.Outline" /> Create Clinic
+            </Button>
+        }
+    </HcPageHeader>
+
+    @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+    {
+        <Alert Type="@AlertType.Info"
+               Message="Select an organization in the platform banner before managing clinics."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
+    }
+
+    <div class="hc-card">
+        <div class="hc-filter-grid">
+            <div>
+                <span class="hc-filter-label">Search</span>
+                <Input @bind-Value="_search" Disabled="_loading" Style="width:100%;" @onkeyup="OnSearchKeyUp" />
+            </div>
+            <div>
+                <span class="hc-filter-label">Status</span>
+                <Select TItemValue="string" TItem="string" @bind-Value="_activeFilter" Style="width:100%;" AllowClear>
+                    <SelectOptions>
+                        <SelectOption TItemValue="string" TItem="string" Value="@("active")" Label="Active" />
+                        <SelectOption TItemValue="string" TItem="string" Value="@("inactive")" Label="Inactive" />
+                    </SelectOptions>
+                </Select>
+            </div>
+            <div style="display:flex;gap:8px;align-items:flex-end;">
+                <Button Type="@ButtonType.Primary" OnClick="SearchAsync" Loading="_loading">Search</Button>
+                <Button OnClick="ResetAsync" Disabled="_loading">Reset</Button>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <ErrorState Message="@_error" />
+    }
+    else if (_loading && _items.Count == 0)
+    {
+        <PageLoading />
+    }
+    else if (_items.Count == 0)
+    {
+        <EmptyState Title="No clinics found" Message="Try adjusting filters or create a clinic." />
+    }
+    else
+    {
+        <div class="hc-card" style="overflow:auto;">
+            <table class="hc-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Slug</th>
+                        <th>Specialty</th>
+                        <th>City</th>
+                        <th>Timezone</th>
+                        <th>Staff</th>
+                        <th>Doctors</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _items)
+                    {
+                        <tr>
+                            <td>@row.Name</td>
+                            <td><code>@row.Slug</code></td>
+                            <td>@(row.Specialty ?? "—")</td>
+                            <td>@(row.City ?? "—")</td>
+                            <td>@row.TimeZoneId</td>
+                            <td>@row.ActiveStaffCount</td>
+                            <td>@row.ActiveDoctorCount</td>
+                            <td>
+                                <Tag Color="@(row.IsActive ? "success" : "default")">@(row.IsActive ? "Active" : "Inactive")</Tag>
+                            </td>
+                            <td>
+                                <Space>
+                                    @if (Permissions.Has(WebPermissions.ClinicsUpdate))
+                                    {
+                                        <Button Type="@ButtonType.Link" OnClick="@(() => OpenEditAsync(row))">Edit</Button>
+                                    }
+                                    @if (row.IsActive && Permissions.Has(WebPermissions.ClinicsDeactivate))
+                                    {
+                                        <Button Type="@ButtonType.Link" OnClick="@(() => OpenActivationAsync(row, activate: false))">Deactivate</Button>
+                                    }
+                                    else if (!row.IsActive && Permissions.Has(WebPermissions.ClinicsActivate))
+                                    {
+                                        <Button Type="@ButtonType.Link" OnClick="@(() => OpenActivationAsync(row, activate: true))">Activate</Button>
+                                    }
+                                </Space>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px;align-items:center;">
+            <Button Disabled="@(_page <= 1 || _loading)" OnClick="@(() => ChangePageAsync(_page - 1))">Prev</Button>
+            <span class="hc-caption">Page @_page / @_totalPages · @_totalCount clinics</span>
+            <Button Disabled="@(_page >= _totalPages || _loading)" OnClick="@(() => ChangePageAsync(_page + 1))">Next</Button>
+        </div>
+    }
+}
+
+@code {
+    private readonly List<OrganizationClinicListItemResponse> _items = [];
+    private string? _search;
+    private string? _activeFilter;
+    private bool _loading;
+    private string? _error;
+    private int _page = 1;
+    private int _pageSize = 20;
+    private int _totalCount;
+    private int _totalPages = 1;
+    private bool _subscribed;
+
+    protected override void OnInitialized()
+    {
+        if (Permissions.IsPlatformAdmin)
+        {
+            PlatformTenant.Changed += OnPlatformTenantChanged;
+            _subscribed = true;
+        }
+    }
+
+    protected override async Task OnInitializedAsync() => await SearchAsync();
+
+    public void Dispose()
+    {
+        if (_subscribed)
+        {
+            PlatformTenant.Changed -= OnPlatformTenantChanged;
+        }
+    }
+
+    private void OnPlatformTenantChanged() => _ = InvokeAsync(SearchAsync);
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            await SearchAsync();
+        }
+    }
+
+    private async Task ResetAsync()
+    {
+        _search = null;
+        _activeFilter = null;
+        _page = 1;
+        await SearchAsync();
+    }
+
+    private async Task RefreshAsync() => await SearchAsync();
+
+    private async Task ChangePageAsync(int page)
+    {
+        _page = page;
+        await SearchAsync();
+    }
+
+    private async Task SearchAsync()
+    {
+        if (!Permissions.Has(WebPermissions.ClinicsCreate) && !Permissions.Has(WebPermissions.ClinicsUpdate))
+        {
+            return;
+        }
+
+        if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+        {
+            _items.Clear();
+            _totalCount = 0;
+            _totalPages = 1;
+            _error = null;
+            return;
+        }
+
+        _loading = true;
+        _error = null;
+        try
+        {
+            bool? isActive = _activeFilter switch
+            {
+                "active" => true,
+                "inactive" => false,
+                _ => null,
+            };
+
+            var result = await ClinicsApi.SearchAsync(
+                new OrganizationClinicSearchRequest
+                {
+                    Search = _search,
+                    IsActive = isActive,
+                    OrganizationId = Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null,
+                    Page = _page,
+                    PageSize = _pageSize,
+                    SortBy = "name",
+                    SortDirection = "asc",
+                },
+                platformAdminBypass: Permissions.IsPlatformAdmin && PlatformTenant.ExplicitBypassEnabled);
+
+            _items.Clear();
+            _items.AddRange(result.Items);
+            _totalCount = result.TotalCount;
+            _totalPages = Math.Max(1, result.TotalPages);
+            _page = result.Page;
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = ex.Title ?? "Unable to load clinics.";
+            Notify.Error(_error);
+        }
+        catch
+        {
+            _error = "Unable to load clinics.";
+            Notify.Error(_error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenCreateAsync()
+    {
+        if (await Modals.ShowAsync<CreateClinicDialog, object?>("Create clinic", null, width: "640px"))
+        {
+            Notify.Success("Clinic created.");
+            await SearchAsync();
+        }
+    }
+
+    private async Task OpenEditAsync(OrganizationClinicListItemResponse row)
+    {
+        if (await Modals.ShowAsync<EditClinicDialog, EditClinicDialog.Args>(
+                "Edit clinic",
+                new EditClinicDialog.Args(row.ClinicId),
+                width: "640px"))
+        {
+            Notify.Success("Clinic updated.");
+            await SearchAsync();
+        }
+    }
+
+    private async Task OpenActivationAsync(OrganizationClinicListItemResponse row, bool activate)
+    {
+        var title = activate ? "Activate clinic" : "Deactivate clinic";
+        if (await Modals.ShowAsync<ClinicActivationDialog, ClinicActivationDialog.Args>(
+                title,
+                new ClinicActivationDialog.Args(row.ClinicId, row.Name, row.Version, activate)))
+        {
+            Notify.Success(activate ? "Clinic activated." : "Clinic deactivated.");
+            await SearchAsync();
+        }
+    }
+}

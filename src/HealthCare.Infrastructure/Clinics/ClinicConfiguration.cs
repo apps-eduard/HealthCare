@@ -41,6 +41,21 @@ public sealed class ClinicConfiguration : IEntityTypeConfiguration<Clinic>
         builder.Property(x => x.Email)
             .HasMaxLength(256);
 
+        builder.Property(x => x.AddressLine1)
+            .HasMaxLength(200);
+
+        builder.Property(x => x.AddressLine2)
+            .HasMaxLength(200);
+
+        builder.Property(x => x.Region)
+            .HasMaxLength(100);
+
+        builder.Property(x => x.PostalCode)
+            .HasMaxLength(30);
+
+        builder.Property(x => x.Country)
+            .HasMaxLength(100);
+
         builder.Property(x => x.TimeZoneId)
             .IsRequired()
             .HasMaxLength(64)
@@ -49,6 +64,10 @@ public sealed class ClinicConfiguration : IEntityTypeConfiguration<Clinic>
         builder.Property(x => x.IsActive)
             .IsRequired()
             .HasDefaultValue(true);
+
+        builder.Property(x => x.Version)
+            .IsRequired()
+            .IsConcurrencyToken();
 
         builder.Property(x => x.CreatedAtUtc)
             .IsRequired();

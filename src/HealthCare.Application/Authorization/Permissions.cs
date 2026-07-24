@@ -52,6 +52,10 @@ public static class Permissions
     {
         public const string Read = "clinics.read";
         public const string Manage = "clinics.manage";
+        public const string Create = "clinics.create";
+        public const string Update = "clinics.update";
+        public const string Activate = "clinics.activate";
+        public const string Deactivate = "clinics.deactivate";
     }
 
     public static class Organizations
@@ -112,6 +116,10 @@ public static class Permissions
         Summaries.Retry,
         Clinics.Read,
         Clinics.Manage,
+        Clinics.Create,
+        Clinics.Update,
+        Clinics.Activate,
+        Clinics.Deactivate,
         Organizations.Read,
         Organizations.Select,
         Organizations.DashboardRead,

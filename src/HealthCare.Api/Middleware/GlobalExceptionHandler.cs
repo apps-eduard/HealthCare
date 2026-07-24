@@ -117,6 +117,18 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
                 cancellationToken);
         }
 
+        if (exception is ClinicManagementException clinicManagementException)
+        {
+            return await WriteAuthProblemAsync(
+                httpContext,
+                clinicManagementException.StatusCode,
+                clinicManagementException.Title,
+                clinicManagementException.ErrorCode,
+                correlationId,
+                "Clinic management denied",
+                cancellationToken);
+        }
+
         if (exception is OrganizationDirectoryException organizationDirectoryException)
         {
             return await WriteAuthProblemAsync(

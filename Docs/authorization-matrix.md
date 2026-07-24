@@ -26,7 +26,9 @@ Resolution uses server-side Identity roles (DB) + active staff membership + pati
 | `availability.manage_organization` | Org admin availability |
 | `reminders.read` / `reminders.retry` | Staff reminder inspection |
 | `summaries.read` / `summaries.retry` | Daily clinic summary |
-| `clinics.read` / `clinics.manage` | Clinic discovery / management foundation |
+| `clinics.read` | Clinic discovery / directory |
+| `clinics.manage` | Legacy coarse clinic management (org/platform) |
+| `clinics.create` / `clinics.update` / `clinics.activate` / `clinics.deactivate` | Organization clinic CRUD and soft activation |
 | `organizations.read` | PLATFORM_ADMIN organization directory search/detail |
 | `organizations.select` | PLATFORM_ADMIN UI tenant selection (Web usability aid; API remains authoritative) |
 | `organization_dashboard.read` | Organization Admin (and PLATFORM_ADMIN with explicit tenant bypass) operational dashboard aggregates |
@@ -42,8 +44,8 @@ Resolution uses server-side Identity roles (DB) + active staff membership + pati
 ## Role mappings (assumptions)
 
 - **PLATFORM_ADMIN:** broad permissions including `organization_dashboard.read` + `organizations.read` / `organizations.select`; **does not** auto-bypass tenants — requires `PlatformAdminBypass.Explicit`. Organization directory listing is a platform operation and does **not** grant clinic/resource access. No `medical_notes.*`.
-- **ORGANIZATION_ADMIN:** org-scoped ops including `organization_dashboard.read`; can assign roles except PLATFORM_ADMIN. **No** global organization directory.
-- **CLINIC_ADMIN:** clinic-scoped ops; cannot assign ORG/PLATFORM admin.
+- **ORGANIZATION_ADMIN:** org-scoped ops including `organization_dashboard.read` and clinic CRUD (`clinics.create/update/activate/deactivate`); can assign roles except PLATFORM_ADMIN. **No** global organization directory.
+- **CLINIC_ADMIN:** clinic-scoped ops; `clinics.read` only (no organization clinic create/update/activate/deactivate); cannot assign ORG/PLATFORM admin.
 - **DOCTOR:** clinic appointments + own availability; no clinic administration.
 - **NURSE:** clinical-operational appointment actions (no create/reschedule/availability manage); medical notes: `medical_notes.read/create/update_draft/sign` limited to **Nursing** note type in services.
 - **RECEPTIONIST:** scheduling + search + confirm/cancel/check-in/reschedule; **no** complete/no-show; **no** availability admin.
@@ -203,6 +205,13 @@ Staff UI uses `ClinicPicker` / `OrganizationPicker` (no free-text ClinicId or Or
 - ORGANIZATION_ADMIN: trusted membership organization; client OrganizationId overrides rejected
 - Appointment “today” uses each clinic’s local calendar date when no date is supplied and multiple clinics are in scope
 - Does not return PHI beyond aggregate counts
+
+### Organization clinic management
+
+- `GET/POST /api/v1/organization/clinics`, `GET/PATCH /api/v1/organization/clinics/{id}`, `POST .../activate|deactivate`
+- Soft deactivate preserves history; blocks new bookings and inactive-clinic membership activation; last active clinic protected
+- Optional initial Clinic Admin created in the same transaction as clinic create
+- `GET /api/v1/reference/timezones` — authenticated timezone catalog
 
 ## Securing new endpoints
 
