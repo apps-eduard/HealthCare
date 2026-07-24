@@ -53,4 +53,24 @@ public interface IAuthorizationAuditLogger
         Guid? organizationId = null,
         Guid? clinicId = null,
         Guid? doctorStaffMemberId = null);
+
+    /// <summary>
+    /// Appointment reminder operational audit. Must never include payloads, secrets, or PHI.
+    /// </summary>
+    void ReminderOperation(
+        string operation,
+        string resultCode,
+        Guid? organizationId = null,
+        Guid? clinicId = null,
+        Guid? reminderId = null);
+
+    /// <summary>
+    /// Clinic appointment summary operational audit. Must never include payloads, secrets, or PHI.
+    /// </summary>
+    void SummaryOperation(
+        string operation,
+        string resultCode,
+        Guid? organizationId = null,
+        Guid? clinicId = null,
+        Guid? runId = null);
 }

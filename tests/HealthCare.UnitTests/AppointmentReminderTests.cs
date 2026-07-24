@@ -4,6 +4,8 @@ using HealthCare.Application.Authorization;
 using HealthCare.Contracts.Appointments;
 using HealthCare.Domain.Appointments;
 using HealthCare.Domain.Identity;
+using HealthCare.Domain.Organizations;
+using HealthCare.Domain.Staff;
 using HealthCare.Infrastructure.Appointments;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -291,6 +293,7 @@ public sealed class AppointmentReminderTests
             new FakeCurrentUser { IsAuthenticated = true, UserId = Guid.NewGuid(), Roles = [AppRoles.PlatformAdmin] },
             new FakeCurrentStaff(),
             h.Jobs,
+            new NoOpAuthorizationAuditLogger(),
             h.Time,
             NullLogger<AppointmentReminderService>.Instance);
 
@@ -299,6 +302,159 @@ public sealed class AppointmentReminderTests
 
         var list = await admin.ListForAppointmentAsync(created.Id, PlatformAdminBypass.Explicit);
         list.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task Organization_Admin_Searches_Reminders_Across_Organization_Clinics()
+    {
+        await using var h = await AppointmentHarness.CreateAsync();
+        var data = await h.SeedAsync();
+        await h.EnrollPatientInClinicBAsync(data);
+
+        var patient = h.CreatePatientService(data.PatientUserId, data.PatientId);
+        var clinicA = await patient.CreateForCurrentPatientAsync(new CreatePatientAppointmentRequest
+        {
+            ClinicCode = data.ClinicASlug,
+            DoctorStaffMemberId = data.DoctorAStaffId,
+            AppointmentDateUtc = h.Now.AddDays(2),
+            DurationMinutes = 30,
+        });
+        var clinicB = await patient.CreateForCurrentPatientAsync(new CreatePatientAppointmentRequest
+        {
+            ClinicCode = data.ClinicBSlug,
+            DoctorStaffMemberId = data.DoctorBStaffId,
+            AppointmentDateUtc = h.Now.AddDays(3),
+            DurationMinutes = 30,
+        });
+
+        var orgAdminUser = Guid.NewGuid();
+        var orgAdminStaff = Guid.NewGuid();
+        h.Db.StaffMembers.Add(new StaffMember
+        {
+            Id = orgAdminStaff,
+            UserId = orgAdminUser,
+            OrganizationId = data.Org1Id,
+            ClinicId = data.ClinicAId,
+            Role = AppRoles.OrganizationAdmin,
+            IsActive = true,
+        });
+        await h.Db.SaveChangesAsync();
+
+        var sut = h.CreateReminderService(
+            orgAdminUser, data.Org1Id, data.ClinicAId, orgAdminStaff, AppRoles.OrganizationAdmin);
+
+        var all = await sut.SearchForStaffAsync(new StaffReminderSearchQuery());
+        all.Items.Should().Contain(r => r.AppointmentId == clinicA.Id && r.ClinicId == data.ClinicAId);
+        all.Items.Should().Contain(r => r.AppointmentId == clinicB.Id && r.ClinicId == data.ClinicBId);
+        all.Items.Should().OnlyContain(r =>
+            r.BackgroundJobId == null || r.BackgroundJobId.Length > 0);
+
+        var filtered = await sut.SearchForStaffAsync(new StaffReminderSearchQuery { ClinicId = data.ClinicBId });
+        filtered.Items.Should().NotBeEmpty();
+        filtered.Items.Should().OnlyContain(r => r.ClinicId == data.ClinicBId);
+
+        var failedOnly = await sut.SearchForStaffAsync(new StaffReminderSearchQuery { Status = "Failed" });
+        failedOnly.Items.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Organization_Admin_Cannot_Search_Other_Organization_Or_Foreign_Clinic()
+    {
+        await using var h = await AppointmentHarness.CreateAsync();
+        var data = await h.SeedAsync();
+        var patient = h.CreatePatientService(data.PatientUserId, data.PatientId);
+        await patient.CreateForCurrentPatientAsync(new CreatePatientAppointmentRequest
+        {
+            ClinicCode = data.ClinicASlug,
+            DoctorStaffMemberId = data.DoctorAStaffId,
+            AppointmentDateUtc = h.Now.AddDays(2),
+            DurationMinutes = 30,
+        });
+
+        var orgAdminUser = Guid.NewGuid();
+        var orgAdminStaff = Guid.NewGuid();
+        h.Db.StaffMembers.Add(new StaffMember
+        {
+            Id = orgAdminStaff,
+            UserId = orgAdminUser,
+            OrganizationId = data.Org1Id,
+            ClinicId = data.ClinicAId,
+            Role = AppRoles.OrganizationAdmin,
+            IsActive = true,
+        });
+
+        var org2 = Guid.NewGuid();
+        var clinicOther = Guid.NewGuid();
+        h.Db.Organizations.Add(new Organization
+        {
+            Id = org2,
+            Name = "Other Org",
+            Slug = "other-org-rem",
+            Status = OrganizationStatus.Active,
+        });
+        h.Db.Clinics.Add(new Domain.Clinics.Clinic
+        {
+            Id = clinicOther,
+            OrganizationId = org2,
+            Name = "Other Clinic",
+            Slug = "other-clinic-rem",
+            TimeZoneId = "Asia/Riyadh",
+            IsActive = true,
+        });
+        await h.Db.SaveChangesAsync();
+
+        var sut = h.CreateReminderService(
+            orgAdminUser, data.Org1Id, data.ClinicAId, orgAdminStaff, AppRoles.OrganizationAdmin);
+
+        var denyClinic = () => sut.SearchForStaffAsync(new StaffReminderSearchQuery { ClinicId = clinicOther });
+        await denyClinic.Should().ThrowAsync<AuthorizationException>();
+
+        var orgScoped = await sut.SearchForStaffAsync(new StaffReminderSearchQuery());
+        orgScoped.Items.Should().OnlyContain(r => r.ClinicId == data.ClinicAId || r.ClinicId == data.ClinicBId);
+    }
+
+    [Fact]
+    public async Task Organization_Admin_Can_Retry_Sibling_Clinic_Failed_Reminder()
+    {
+        await using var h = await AppointmentHarness.CreateAsync();
+        var data = await h.SeedAsync();
+        await h.EnrollPatientInClinicBAsync(data);
+        var patient = h.CreatePatientService(data.PatientUserId, data.PatientId);
+        var created = await patient.CreateForCurrentPatientAsync(new CreatePatientAppointmentRequest
+        {
+            ClinicCode = data.ClinicBSlug,
+            DoctorStaffMemberId = data.DoctorBStaffId,
+            AppointmentDateUtc = h.Now.AddDays(2),
+            DurationMinutes = 30,
+        });
+
+        var reminder = await h.Db.AppointmentReminders.FirstAsync(r => r.AppointmentId == created.Id);
+        reminder.Status = AppointmentReminderStatus.Failed;
+        reminder.LastError = "simulated_delivery_failure";
+        reminder.AttemptCount = 1;
+        await h.Db.SaveChangesAsync();
+
+        var orgAdminUser = Guid.NewGuid();
+        var orgAdminStaff = Guid.NewGuid();
+        h.Db.StaffMembers.Add(new StaffMember
+        {
+            Id = orgAdminStaff,
+            UserId = orgAdminUser,
+            OrganizationId = data.Org1Id,
+            ClinicId = data.ClinicAId,
+            Role = AppRoles.OrganizationAdmin,
+            IsActive = true,
+        });
+        await h.Db.SaveChangesAsync();
+
+        var sut = h.CreateReminderService(
+            orgAdminUser, data.Org1Id, data.ClinicAId, orgAdminStaff, AppRoles.OrganizationAdmin);
+
+        var retried = await sut.RetryAsync(created.Id, reminder.Id);
+        retried.Status.Should().Be(nameof(AppointmentReminderStatus.Pending));
+        retried.ClinicId.Should().Be(data.ClinicBId);
+        retried.BackgroundJobId.Should().NotBeNullOrWhiteSpace();
+        retried.ErrorMessage.Should().BeNull();
     }
 
     [Fact]

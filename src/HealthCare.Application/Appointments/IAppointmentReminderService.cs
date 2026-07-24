@@ -1,5 +1,6 @@
 using HealthCare.Application.Authorization;
 using HealthCare.Contracts.Appointments;
+using HealthCare.Contracts.Common;
 using HealthCare.Domain.Appointments;
 
 namespace HealthCare.Application.Appointments;
@@ -66,6 +67,11 @@ public interface IAppointmentReminderService
 {
     Task<IReadOnlyList<AppointmentReminderResponse>> ListForAppointmentAsync(
         Guid appointmentId,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default);
+
+    Task<PagedResponse<AppointmentReminderResponse>> SearchForStaffAsync(
+        StaffReminderSearchQuery query,
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default);
 

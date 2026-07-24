@@ -69,6 +69,7 @@ public static class HangfireServiceCollectionExtensions
         services.AddScoped<IClinicAppointmentSummaryRecoveryService, ClinicAppointmentSummaryRecoveryService>();
         services.AddScoped<IClinicAppointmentSummaryService, ClinicAppointmentSummaryService>();
         services.AddScoped<IClinicAppointmentSummaryJobs, HangfireClinicAppointmentSummaryJobs>();
+        services.AddScoped<IStaffOperationsHealthService, StaffOperationsHealthService>();
 
         var connectionString = configuration.GetConnectionString(InfrastructureServiceCollectionExtensions.DefaultConnectionName)
             ?? throw new InvalidOperationException(

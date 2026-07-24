@@ -1,5 +1,6 @@
 using HealthCare.Application.Authorization;
 using HealthCare.Contracts.Appointments;
+using HealthCare.Contracts.Common;
 
 namespace HealthCare.Application.Appointments;
 
@@ -48,9 +49,21 @@ public interface IClinicAppointmentSummaryService
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default);
 
+    Task<PagedResponse<ClinicAppointmentSummaryRunResponse>> ListRunsForStaffAsync(
+        ClinicAppointmentSummaryRunQuery query,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default);
+
     Task<ClinicAppointmentSummaryRunResponse> RetryAsync(
         Guid clinicId,
         DateOnly summaryDate,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IStaffOperationsHealthService
+{
+    Task<StaffOperationsHealthResponse> GetHealthAsync(
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default);
 }

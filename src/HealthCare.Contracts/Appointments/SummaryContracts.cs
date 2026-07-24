@@ -88,11 +88,33 @@ public sealed class ClinicAppointmentSummaryItem
     public string DoctorDisplayName { get; init; } = string.Empty;
 }
 
+public sealed class ClinicAppointmentSummaryRunQuery
+{
+    /// <summary>
+    /// Optional clinic filter for ORGANIZATION_ADMIN (must belong to trusted organization)
+    /// or PLATFORM_ADMIN with explicit bypass. Ignored for clinic-scoped staff.
+    /// </summary>
+    public Guid? ClinicId { get; init; }
+
+    /// <summary>Allowed: Pending, Processing, Completed, Failed.</summary>
+    public string? Status { get; init; }
+
+    public string? FromDate { get; init; }
+
+    public string? ToDate { get; init; }
+
+    public int Page { get; init; } = 1;
+
+    public int PageSize { get; init; } = 50;
+}
+
 public sealed class ClinicAppointmentSummaryRunResponse
 {
     public Guid RunId { get; init; }
 
     public Guid ClinicId { get; init; }
+
+    public Guid OrganizationId { get; init; }
 
     public string SummaryDate { get; init; } = string.Empty;
 
@@ -103,4 +125,15 @@ public sealed class ClinicAppointmentSummaryRunResponse
     public int AppointmentCount { get; init; }
 
     public string? LastErrorCode { get; init; }
+
+    public string? LastError { get; init; }
+
+    public DateTimeOffset ScheduledAtUtc { get; init; }
+
+    public DateTimeOffset? StartedAtUtc { get; init; }
+
+    public DateTimeOffset? CompletedAtUtc { get; init; }
+
+    /// <summary>Hangfire job correlation id only — never job arguments or payloads.</summary>
+    public string? BackgroundJobId { get; init; }
 }

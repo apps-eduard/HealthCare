@@ -25,6 +25,8 @@ public sealed class AppointmentReminderEndpointTests : IAsyncLifetime
     private const string StaffAPassword = "ChangeMe_DoctorA_1!";
     private const string StaffBEmail = "doctor.b@healthcare.local";
     private const string StaffBPassword = "ChangeMe_DoctorB_1!";
+    private const string OrgAdminEmail = "orgadmin@healthcare.local";
+    private const string OrgAdminPassword = "ChangeMe_OrgAdmin_1!";
 
     private PostgreSqlContainer? _postgres;
     private WebApplicationFactory<Program>? _factory;
@@ -64,6 +66,8 @@ public sealed class AppointmentReminderEndpointTests : IAsyncLifetime
                 builder.UseSetting("DevelopmentSeed:Patient:StaffPassword", StaffAPassword);
                 builder.UseSetting("DevelopmentSeed:Patient:OtherClinicStaffEmail", StaffBEmail);
                 builder.UseSetting("DevelopmentSeed:Patient:OtherClinicStaffPassword", StaffBPassword);
+                builder.UseSetting("DevelopmentSeed:Patient:OrganizationAdminEmail", OrgAdminEmail);
+                builder.UseSetting("DevelopmentSeed:Patient:OrganizationAdminPassword", OrgAdminPassword);
                 builder.UseSetting("DevelopmentSeed:Patient:ClinicSlug", "dev-clinic-a");
 
                 builder.ConfigureServices(services =>
@@ -209,6 +213,34 @@ public sealed class AppointmentReminderEndpointTests : IAsyncLifetime
                 new RetryAppointmentReminderRequest { ReminderId = reminder.Id });
             retry.StatusCode.Should().Be(HttpStatusCode.Conflict);
         }
+    }
+
+    [Fact]
+    public async Task Organization_Admin_Can_Search_Reminders_And_View_Operations_Health()
+    {
+        await AuthenticateAsync(PatientEmail, PatientPassword);
+        var doctorId = await GetClinicADoctorStaffIdAsync();
+        var create = await _client!.PostAsJsonAsync("/api/v1/patients/me/appointments", new
+        {
+            clinicCode = "dev-clinic-a",
+            doctorStaffMemberId = doctorId,
+            appointmentDateUtc = AlignedFutureSlotUtc(29),
+            durationMinutes = 30,
+        });
+        create.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        await AuthenticateAsync(OrgAdminEmail, OrgAdminPassword);
+        var search = await _client!.GetAsync("/api/v1/staff/reminders?page=1&pageSize=20");
+        search.StatusCode.Should().Be(HttpStatusCode.OK);
+        var page = await search.Content.ReadFromJsonAsync<Contracts.Common.PagedResponse<AppointmentReminderResponse>>();
+        page!.Items.Should().NotBeEmpty();
+        page.Items.Should().OnlyContain(r => r.AppointmentId != Guid.Empty && r.ClinicId != Guid.Empty);
+
+        var health = await _client.GetAsync("/api/v1/staff/operations/health");
+        health.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await health.Content.ReadFromJsonAsync<StaffOperationsHealthResponse>();
+        body!.ReminderSenderMode.Should().NotBeNullOrWhiteSpace();
+        body.HangfireQueues.Should().NotBeNull();
     }
 
     private static DateTimeOffset AlignedFutureSlotUtc(int daysAhead)

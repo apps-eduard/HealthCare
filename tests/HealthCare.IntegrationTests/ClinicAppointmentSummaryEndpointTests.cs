@@ -26,6 +26,8 @@ public sealed class ClinicAppointmentSummaryEndpointTests : IAsyncLifetime
     private const string StaffAPassword = "ChangeMe_DoctorA_1!";
     private const string StaffBEmail = "doctor.b@healthcare.local";
     private const string StaffBPassword = "ChangeMe_DoctorB_1!";
+    private const string OrgAdminEmail = "orgadmin@healthcare.local";
+    private const string OrgAdminPassword = "ChangeMe_OrgAdmin_1!";
 
     private PostgreSqlContainer? _postgres;
     private WebApplicationFactory<Program>? _factory;
@@ -65,6 +67,8 @@ public sealed class ClinicAppointmentSummaryEndpointTests : IAsyncLifetime
                 builder.UseSetting("DevelopmentSeed:Patient:StaffPassword", StaffAPassword);
                 builder.UseSetting("DevelopmentSeed:Patient:OtherClinicStaffEmail", StaffBEmail);
                 builder.UseSetting("DevelopmentSeed:Patient:OtherClinicStaffPassword", StaffBPassword);
+                builder.UseSetting("DevelopmentSeed:Patient:OrganizationAdminEmail", OrgAdminEmail);
+                builder.UseSetting("DevelopmentSeed:Patient:OrganizationAdminPassword", OrgAdminPassword);
                 builder.UseSetting("DevelopmentSeed:Patient:ClinicSlug", "dev-clinic-a");
 
                 builder.ConfigureServices(services =>
@@ -193,6 +197,45 @@ public sealed class ClinicAppointmentSummaryEndpointTests : IAsyncLifetime
         var body = await response.Content.ReadFromJsonAsync<ClinicAppointmentSummaryResponse>();
         body!.ClinicCode.Should().Be("dev-clinic-a");
         body.Appointments.Should().OnlyContain(a => a.AppointmentId != Guid.Empty);
+    }
+
+    [Fact]
+    public async Task Organization_Admin_Can_List_Summary_Runs()
+    {
+        Guid clinicAId;
+        Guid orgId;
+        using (var scope = _factory!.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+            var clinic = await db.Clinics.SingleAsync(c => c.Slug == "dev-clinic-a");
+            clinicAId = clinic.Id;
+            orgId = clinic.OrganizationId;
+            var date = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-2));
+            db.ClinicAppointmentSummaryRuns.Add(new ClinicAppointmentSummaryRun
+            {
+                Id = Guid.NewGuid(),
+                ClinicId = clinicAId,
+                OrganizationId = orgId,
+                SummaryDate = date,
+                ScheduledAtUtc = DateTimeOffset.UtcNow,
+                Status = ClinicAppointmentSummaryRunStatus.Failed,
+                AttemptCount = 1,
+                LastErrorCode = AppointmentSummaryErrorCodes.SummaryDeliveryFailed,
+                LastError = "simulated",
+                IdempotencyKey = ClinicAppointmentSummaryRun.BuildIdempotencyKey(clinicAId, date),
+                BackgroundJobId = "integration-job",
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await AuthenticateAsync(OrgAdminEmail, OrgAdminPassword);
+        var response = await _client!.GetAsync("/api/v1/staff/appointment-summary-runs?status=Failed");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var page = await response.Content.ReadFromJsonAsync<Contracts.Common.PagedResponse<ClinicAppointmentSummaryRunResponse>>();
+        page!.Items.Should().Contain(r =>
+            r.ClinicId == clinicAId
+            && r.Status == "Failed"
+            && r.BackgroundJobId == "integration-job");
     }
 
     private async Task AuthenticateAsync(string email, string password)

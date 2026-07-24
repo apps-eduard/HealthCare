@@ -1,9 +1,9 @@
 using HealthCare.Application.Appointments;
 using HealthCare.Application.Authorization;
 using HealthCare.Contracts.Appointments;
+using HealthCare.Contracts.Common;
 using HealthCare.Domain.Appointments;
 using HealthCare.Domain.Identity;
-using HealthCare.Domain.Organizations;
 using HealthCare.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -18,6 +18,7 @@ public sealed class ClinicAppointmentSummaryService : IClinicAppointmentSummaryS
     private readonly IClinicAppointmentSummaryBuilder _builder;
     private readonly IClinicAppointmentSummaryJobs _jobs;
     private readonly IClinicTimeZoneConverter _timeZones;
+    private readonly IAuthorizationAuditLogger _audit;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<ClinicAppointmentSummaryService> _logger;
 
@@ -28,6 +29,7 @@ public sealed class ClinicAppointmentSummaryService : IClinicAppointmentSummaryS
         IClinicAppointmentSummaryBuilder builder,
         IClinicAppointmentSummaryJobs jobs,
         IClinicTimeZoneConverter timeZones,
+        IAuthorizationAuditLogger audit,
         TimeProvider timeProvider,
         ILogger<ClinicAppointmentSummaryService> logger)
     {
@@ -37,6 +39,7 @@ public sealed class ClinicAppointmentSummaryService : IClinicAppointmentSummaryS
         _builder = builder;
         _jobs = jobs;
         _timeZones = timeZones;
+        _audit = audit;
         _timeProvider = timeProvider;
         _logger = logger;
     }
@@ -48,8 +51,77 @@ public sealed class ClinicAppointmentSummaryService : IClinicAppointmentSummaryS
     {
         var clinic = await ResolveClinicAsync(query.ClinicId, bypass, cancellationToken);
         var summaryDate = ResolveDate(query.Date, clinic.TimeZoneId);
+        var result = await _builder.BuildAsync(clinic.Id, summaryDate, cancellationToken);
+        _audit.SummaryOperation(
+            "summary_get",
+            "succeeded",
+            clinic.OrganizationId,
+            clinic.Id,
+            runId: null);
+        return result;
+    }
 
-        return await _builder.BuildAsync(clinic.Id, summaryDate, cancellationToken);
+    public async Task<PagedResponse<ClinicAppointmentSummaryRunResponse>> ListRunsForStaffAsync(
+        ClinicAppointmentSummaryRunQuery query,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default)
+    {
+        var scope = await ResolveListScopeAsync(query.ClinicId, bypass, cancellationToken);
+        IQueryable<ClinicAppointmentSummaryRun> runs = _dbContext.ClinicAppointmentSummaryRuns.AsNoTracking();
+
+        if (scope.Mode == ScopeMode.Clinic || scope.Mode == ScopeMode.Platform)
+        {
+            runs = runs.Where(r => r.ClinicId == scope.ClinicId);
+        }
+        else
+        {
+            runs = runs.Where(r => r.OrganizationId == scope.OrganizationId);
+            if (scope.ClinicId.HasValue)
+            {
+                runs = runs.Where(r => r.ClinicId == scope.ClinicId.Value);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Status)
+            && Enum.TryParse<ClinicAppointmentSummaryRunStatus>(query.Status, ignoreCase: true, out var status))
+        {
+            runs = runs.Where(r => r.Status == status);
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.FromDate) && DateOnly.TryParse(query.FromDate, out var fromDate))
+        {
+            runs = runs.Where(r => r.SummaryDate >= fromDate);
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.ToDate) && DateOnly.TryParse(query.ToDate, out var toDate))
+        {
+            runs = runs.Where(r => r.SummaryDate <= toDate);
+        }
+
+        var totalCount = await runs.CountAsync(cancellationToken);
+        var page = query.Page < 1 ? 1 : query.Page;
+        var pageSize = query.PageSize < 1
+            ? ClinicAppointmentSummaryRunQueryValidator.DefaultPageSize
+            : Math.Min(query.PageSize, ClinicAppointmentSummaryRunQueryValidator.MaxPageSize);
+
+        var rows = await runs
+            .OrderByDescending(r => r.SummaryDate)
+            .ThenByDescending(r => r.ScheduledAtUtc)
+            .ThenBy(r => r.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        var items = rows.Select(MapRun).ToList();
+
+        _audit.SummaryOperation(
+            "summary_runs_list",
+            "succeeded",
+            scope.OrganizationId,
+            scope.ClinicId,
+            runId: null);
+
+        return PagedResponse<ClinicAppointmentSummaryRunResponse>.Create(items, page, pageSize, totalCount);
     }
 
     public async Task<ClinicAppointmentSummaryRunResponse> RetryAsync(
@@ -58,7 +130,7 @@ public sealed class ClinicAppointmentSummaryService : IClinicAppointmentSummaryS
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default)
     {
-        await ResolveClinicAsync(clinicId, bypass, cancellationToken);
+        var clinic = await ResolveClinicAsync(clinicId, bypass, cancellationToken);
 
         var key = ClinicAppointmentSummaryRun.BuildIdempotencyKey(clinicId, summaryDate);
         var run = await _dbContext.ClinicAppointmentSummaryRuns
@@ -96,17 +168,14 @@ public sealed class ClinicAppointmentSummaryService : IClinicAppointmentSummaryS
             clinicId,
             summaryDate,
             run.Id);
+        _audit.SummaryOperation(
+            "summary_retry",
+            "succeeded",
+            clinic.OrganizationId,
+            clinic.Id,
+            run.Id);
 
-        return new ClinicAppointmentSummaryRunResponse
-        {
-            RunId = run.Id,
-            ClinicId = run.ClinicId,
-            SummaryDate = run.SummaryDate.ToString("yyyy-MM-dd"),
-            Status = run.Status.ToString(),
-            AttemptCount = run.AttemptCount,
-            AppointmentCount = run.AppointmentCount,
-            LastErrorCode = run.LastErrorCode,
-        };
+        return MapRun(run);
     }
 
     private DateOnly ResolveDate(string? date, string timeZoneId)
@@ -136,9 +205,11 @@ public sealed class ClinicAppointmentSummaryService : IClinicAppointmentSummaryS
 
         if (_currentUser.IsInRole(AppRoles.Patient) && !_currentStaff.HasActiveMembership)
         {
-            _logger.LogInformation(
-                "Cross-tenant summary access denied. UserId={UserId} Reason=patient",
-                _currentUser.UserId);
+            _audit.CrossTenantDenied(
+                "summary_patient_denied",
+                Contracts.Identity.AuthorizationErrorCodes.Forbidden,
+                null,
+                null);
             throw AuthorizationException.Forbidden();
         }
 
@@ -154,10 +225,7 @@ public sealed class ClinicAppointmentSummaryService : IClinicAppointmentSummaryS
                 .SingleOrDefaultAsync(c => c.Id == requestedClinicId.Value, cancellationToken)
                 ?? throw AppointmentSummaryException.NotFound();
 
-            _logger.LogInformation(
-                "PLATFORM_ADMIN explicit summary bypass. UserId={UserId} ClinicId={ClinicId}",
-                _currentUser.UserId,
-                clinic.Id);
+            _audit.ExplicitPlatformBypassUsed("summary_access", clinic.OrganizationId, clinic.Id);
             return clinic;
         }
 
@@ -176,9 +244,11 @@ public sealed class ClinicAppointmentSummaryService : IClinicAppointmentSummaryS
                     .SingleOrDefaultAsync(c => c.Id == requestedClinicId.Value, cancellationToken);
                 if (clinic is null || clinic.OrganizationId != _currentStaff.OrganizationId)
                 {
-                    _logger.LogInformation(
-                        "Cross-tenant summary access denied. UserId={UserId} Reason=org_clinic",
-                        _currentUser.UserId);
+                    _audit.CrossTenantDenied(
+                        "summary_clinic_filter_denied",
+                        Contracts.Identity.AuthorizationErrorCodes.ClinicAccessDenied,
+                        _currentStaff.OrganizationId,
+                        requestedClinicId);
                     throw AppointmentSummaryException.NotFound();
                 }
 
@@ -203,5 +273,117 @@ public sealed class ClinicAppointmentSummaryService : IClinicAppointmentSummaryS
         return await _dbContext.Clinics
             .AsNoTracking()
             .SingleAsync(c => c.Id == _currentStaff.ClinicId, cancellationToken);
+    }
+
+    private async Task<ListScope> ResolveListScopeAsync(
+        Guid? clinicIdFilter,
+        PlatformAdminBypass bypass,
+        CancellationToken cancellationToken)
+    {
+        if (!_currentUser.IsAuthenticated)
+        {
+            throw AuthorizationException.NotAuthenticated();
+        }
+
+        if (_currentUser.IsInRole(AppRoles.Patient) && !_currentStaff.HasActiveMembership)
+        {
+            throw AuthorizationException.Forbidden();
+        }
+
+        if (_currentStaff.HasActiveMembership)
+        {
+            if (_currentStaff.Role == AppRoles.OrganizationAdmin)
+            {
+                Guid? clinicId = null;
+                if (clinicIdFilter.HasValue)
+                {
+                    var clinic = await _dbContext.Clinics
+                        .AsNoTracking()
+                        .SingleOrDefaultAsync(c => c.Id == clinicIdFilter.Value, cancellationToken);
+                    if (clinic is null || clinic.OrganizationId != _currentStaff.OrganizationId)
+                    {
+                        _audit.CrossTenantDenied(
+                            "summary_runs_clinic_filter_denied",
+                            Contracts.Identity.AuthorizationErrorCodes.ClinicAccessDenied,
+                            _currentStaff.OrganizationId,
+                            clinicIdFilter);
+                        throw AuthorizationException.ClinicAccessDenied();
+                    }
+
+                    clinicId = clinic.Id;
+                }
+
+                return ListScope.ForOrganization(_currentStaff.OrganizationId, clinicId);
+            }
+
+            return ListScope.ForClinic(_currentStaff.OrganizationId, _currentStaff.ClinicId);
+        }
+
+        if (bypass == PlatformAdminBypass.Explicit
+            && _currentUser.IsInRole(AppRoles.PlatformAdmin)
+            && clinicIdFilter.HasValue)
+        {
+            var clinic = await _dbContext.Clinics
+                .AsNoTracking()
+                .SingleOrDefaultAsync(c => c.Id == clinicIdFilter.Value, cancellationToken);
+            if (clinic is null)
+            {
+                throw AuthorizationException.ClinicAccessDenied();
+            }
+
+            return ListScope.ForPlatform(clinic.OrganizationId, clinic.Id);
+        }
+
+        throw AuthorizationException.MissingStaffMembership();
+    }
+
+    private static ClinicAppointmentSummaryRunResponse MapRun(ClinicAppointmentSummaryRun run) =>
+        new()
+        {
+            RunId = run.Id,
+            ClinicId = run.ClinicId,
+            OrganizationId = run.OrganizationId,
+            SummaryDate = run.SummaryDate.ToString("yyyy-MM-dd"),
+            Status = run.Status.ToString(),
+            AttemptCount = run.AttemptCount,
+            AppointmentCount = run.AppointmentCount,
+            LastErrorCode = run.LastErrorCode,
+            LastError = run.LastError,
+            ScheduledAtUtc = run.ScheduledAtUtc,
+            StartedAtUtc = run.StartedAtUtc,
+            CompletedAtUtc = run.CompletedAtUtc,
+            BackgroundJobId = run.BackgroundJobId,
+        };
+
+    private enum ScopeMode
+    {
+        Clinic,
+        Organization,
+        Platform,
+    }
+
+    private sealed class ListScope
+    {
+        private ListScope(ScopeMode mode, Guid organizationId, Guid? clinicId)
+        {
+            Mode = mode;
+            OrganizationId = organizationId;
+            ClinicId = clinicId;
+        }
+
+        public ScopeMode Mode { get; }
+
+        public Guid OrganizationId { get; }
+
+        public Guid? ClinicId { get; }
+
+        public static ListScope ForClinic(Guid organizationId, Guid clinicId) =>
+            new(ScopeMode.Clinic, organizationId, clinicId);
+
+        public static ListScope ForOrganization(Guid organizationId, Guid? clinicId) =>
+            new(ScopeMode.Organization, organizationId, clinicId);
+
+        public static ListScope ForPlatform(Guid organizationId, Guid clinicId) =>
+            new(ScopeMode.Platform, organizationId, clinicId);
     }
 }

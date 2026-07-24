@@ -768,7 +768,13 @@ internal sealed class AppointmentHarness : IAsyncDisposable
                 Role = role,
             };
         return new AppointmentReminderService(
-            Db, user, staff, Jobs, Time, NullLogger<AppointmentReminderService>.Instance);
+            Db,
+            user,
+            staff,
+            Jobs,
+            new NoOpAuthorizationAuditLogger(),
+            Time,
+            NullLogger<AppointmentReminderService>.Instance);
     }
 
     public DoctorAvailabilityService CreateAvailabilityService(

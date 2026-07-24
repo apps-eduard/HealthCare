@@ -144,6 +144,38 @@ public sealed class AuthorizationAuditLogger : IAuthorizationAuditLogger
             doctorStaffMemberId,
             CorrelationId());
 
+    public void ReminderOperation(
+        string operation,
+        string resultCode,
+        Guid? organizationId = null,
+        Guid? clinicId = null,
+        Guid? reminderId = null) =>
+        _logger.LogInformation(
+            "Reminder operation. Event=reminder_operation UserId={UserId} Operation={Operation} ResultCode={ResultCode} OrganizationId={OrganizationId} ClinicId={ClinicId} ReminderId={ReminderId} CorrelationId={CorrelationId}",
+            _currentUser.UserId,
+            operation,
+            resultCode,
+            organizationId ?? _currentUser.OrganizationId,
+            clinicId ?? _currentUser.ClinicId,
+            reminderId,
+            CorrelationId());
+
+    public void SummaryOperation(
+        string operation,
+        string resultCode,
+        Guid? organizationId = null,
+        Guid? clinicId = null,
+        Guid? runId = null) =>
+        _logger.LogInformation(
+            "Summary operation. Event=summary_operation UserId={UserId} Operation={Operation} ResultCode={ResultCode} OrganizationId={OrganizationId} ClinicId={ClinicId} RunId={RunId} CorrelationId={CorrelationId}",
+            _currentUser.UserId,
+            operation,
+            resultCode,
+            organizationId ?? _currentUser.OrganizationId,
+            clinicId ?? _currentUser.ClinicId,
+            runId,
+            CorrelationId());
+
     private string CorrelationId()
     {
         var http = _httpContextAccessor.HttpContext;
