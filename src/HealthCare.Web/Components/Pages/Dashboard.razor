@@ -3,6 +3,7 @@
 @attribute [Authorize]
 @using HealthCare.Contracts.Organizations
 @using HealthCare.Web.Components.Clinics
+@using HealthCare.Web.Components.Dashboard
 @inject IPermissionState Permissions
 @inject IPlatformTenantContext PlatformTenant
 @inject IClinicWorkingContext ClinicContext
@@ -317,6 +318,10 @@ else if (Permissions.Has(WebPermissions.OrganizationDashboardRead))
         }
     }
 }
+else if (Permissions.Has(WebPermissions.ClinicDashboardRead))
+{
+    <ClinicDashboardView />
+}
 else
 {
     <HcPageHeader Title="Dashboard"
@@ -338,12 +343,6 @@ else
     </div>
 
     <Space Wrap>
-        @if (Permissions.Has(WebPermissions.ClinicsRead))
-        {
-            <Button OnClick='() => Navigation.NavigateTo("/clinics")'>
-                <Icon Type="bank" Theme="IconThemeType.Outline" /> Clinics
-            </Button>
-        }
         @if (Permissions.Has(WebPermissions.AppointmentsRead))
         {
             <Button Type="@ButtonType.Primary" OnClick='() => Navigation.NavigateTo("/appointments")'>

@@ -56,6 +56,7 @@ public static class Permissions
         public const string Update = "clinics.update";
         public const string Activate = "clinics.activate";
         public const string Deactivate = "clinics.deactivate";
+        public const string DashboardRead = "clinic_dashboard.read";
     }
 
     public static class Organizations
@@ -132,6 +133,7 @@ public static class Permissions
         Clinics.Update,
         Clinics.Activate,
         Clinics.Deactivate,
+        Clinics.DashboardRead,
         Organizations.Read,
         Organizations.Select,
         Organizations.DashboardRead,

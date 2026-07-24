@@ -27,6 +27,7 @@ Resolution uses server-side Identity roles (DB) + active staff membership + pati
 | `reminders.read` / `reminders.retry` | Staff reminder inspection + `/operations/reminders` |
 | `summaries.read` / `summaries.retry` | Daily clinic summary runs + `/operations/clinic-summaries` |
 | `clinics.read` | Clinic discovery / directory |
+| `clinic_dashboard.read` | Clinic Admin (and PLATFORM_ADMIN with explicit clinic bypass) clinic-scoped operational dashboard |
 | `clinics.manage` | Legacy coarse clinic management (org/platform) |
 | `clinics.create` / `clinics.update` / `clinics.activate` / `clinics.deactivate` | Organization clinic CRUD and soft activation |
 | `organizations.read` | PLATFORM_ADMIN organization directory search/detail |
@@ -52,7 +53,7 @@ Resolution uses server-side Identity roles (DB) + active staff membership + pati
 
 - **PLATFORM_ADMIN:** broad permissions including `organization_dashboard.read` / `organization_reports.read` / `organization_audit_logs.read` / `organization_usage.read` / `organization_profile.read` / `organization_profile.update` + `organizations.read` / `organizations.select`; **does not** auto-bypass tenants — requires `PlatformAdminBypass.Explicit`. Organization directory listing is a platform operation and does **not** grant clinic/resource access. No `medical_notes.*`.
 - **ORGANIZATION_ADMIN:** org-scoped ops including `organization_dashboard.read`, `organization_reports.read`, `organization_audit_logs.read`, `organization_usage.read`, `organization_profile.read` / `organization_profile.update`, and clinic CRUD (`clinics.create/update/activate/deactivate`); can assign roles except PLATFORM_ADMIN. **No** global organization directory. **No** `appointments.complete` (clinical completion remains clinic clinical roles). **No** `organization_limits.manage`.
-- **CLINIC_ADMIN:** clinic-scoped ops; `clinics.read` only (no organization clinic create/update/activate/deactivate); cannot assign ORG/PLATFORM admin. Authoritative Web MVP scope: `Docs/mvp-clinic-admin-scope.md` (**approved** 2026-07-24). Approved permissions to add when phases ship (not in code until then): `clinic_dashboard.read`, `clinic_profile.read`, `clinic_profile.update`, `clinic_reports.read`, `clinic_audit_logs.read`. Do not grant `organization_*` dashboard/reports/audit/usage/profile or `medical_notes.*` via CLINIC_ADMIN alone.
+- **CLINIC_ADMIN:** clinic-scoped ops; `clinics.read` + `clinic_dashboard.read`; no organization clinic create/update/activate/deactivate; cannot assign ORG/PLATFORM admin. Authoritative Web MVP scope: `Docs/mvp-clinic-admin-scope.md` (**approved** 2026-07-24). **In code:** `clinic_dashboard.read`. **Approved, not yet coded:** `clinic_profile.read` / `clinic_profile.update`, `clinic_reports.read`, `clinic_audit_logs.read`. Do not grant `organization_*` dashboard/reports/audit/usage/profile or `medical_notes.*` via CLINIC_ADMIN alone.
 - **DOCTOR:** clinic appointments + own availability; no clinic administration.
 - **NURSE:** clinical-operational appointment actions (no create/reschedule/availability manage); medical notes: `medical_notes.read/create/update_draft/sign` limited to **Nursing** note type in services.
 - **RECEPTIONIST:** scheduling + search + confirm/cancel/check-in/reschedule; **no** complete/no-show; **no** availability admin.

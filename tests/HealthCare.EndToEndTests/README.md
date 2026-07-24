@@ -76,3 +76,8 @@ This folder is gitignored. Do not commit traces, videos, cookies, or tokens.
 ## Parallelization
 
 E2E tests share one host fixture and use an xUnit collection with `DisableParallelization = true`.
+
+## Scenarios
+
+- Organization Admin smoke suite (`OrganizationAdminSmokeTests`)
+- Clinic Admin CA-1: login → Clinic Dashboard → org settings denied (`ClinicAdminDashboardSmokeTests`)

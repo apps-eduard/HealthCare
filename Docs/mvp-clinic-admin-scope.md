@@ -552,7 +552,7 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 
 | Phase | Theme | Complexity | Status |
 |-------|--------|------------|--------|
-| CA-1 | Nav + clinic dashboard API/UI | Medium | Ready to plan (not started) |
+| CA-1 | Nav + clinic dashboard API/UI | Medium | **Delivered** (2026-07-24) |
 | CA-2 | Clinic profile settings | Medium | Approved; after CA-1 |
 | CA-3 | Staff UI hardening | Small | After CA-1 |
 | CA-4 | Doctor directory + availability verify | Small | After CA-1 |
@@ -578,7 +578,7 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 
 | Capability | Intent | Permission | Backend | Web | Gap | Phase |
 |------------|--------|------------|---------|-----|-----|-------|
-| Clinic dashboard | Approved | `clinic_dashboard.read` | Missing | Generic card | New API + UI | CA-1 |
+| Clinic dashboard | Approved | `clinic_dashboard.read` | **Done** | **Done** (`/dashboard`) | — | CA-1 |
 | Clinic profile | Approved | `clinic_profile.*` | Missing | Missing | New API + UI | CA-2 |
 | Staff ops | Matrix | existing staff.* | Done | Done | Affordance harden | CA-3 |
 | Doctors / availability | Matrix | availability.* | Done | Done | Verify | CA-4 |
@@ -600,3 +600,4 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 |------|------|
 | 2026-07-24 | Initial draft scope + decisions A–D (awaiting approval) |
 | 2026-07-24 | **Approved** by product owner: profile fields, reports (JSON), clinic audit, usage counts-only, clinic dashboard endpoint, five new permissions |
+| 2026-07-24 | **CA-1 delivered:** `clinic_dashboard.read`, `GET /api/v1/clinic/dashboard`, Clinic Dashboard UI, E2E smoke |
