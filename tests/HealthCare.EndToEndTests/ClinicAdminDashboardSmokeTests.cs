@@ -22,10 +22,10 @@ public sealed class ClinicAdminDashboardSmokeTests : E2ePageTestBase
             await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Clinic Dashboard" }))
                 .ToBeVisibleAsync(new() { Timeout = 60_000 });
 
-            await Expect(Page.GetByText("Active staff")).ToBeVisibleAsync();
-            await Expect(Page.GetByText("Doctors")).ToBeVisibleAsync();
-            await Expect(Page.GetByText("Patients")).ToBeVisibleAsync();
-            await Expect(Page.GetByText("Today’s appointments")).ToBeVisibleAsync();
+            await Expect(Page.Locator(".ant-statistic-title", new() { HasText = "Active staff" })).ToBeVisibleAsync();
+            await Expect(Page.Locator(".ant-statistic-title", new() { HasText = "Doctors" })).ToBeVisibleAsync();
+            await Expect(Page.Locator(".ant-statistic-title", new() { HasText = "Patients" })).ToBeVisibleAsync();
+            await Expect(Page.Locator(".ant-statistic-title", new() { HasText = "Today’s appointments" })).ToBeVisibleAsync();
 
             await Expect(Page.GetByText("Platform context:")).ToHaveCountAsync(0);
             await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Select organization" })).ToHaveCountAsync(0);
