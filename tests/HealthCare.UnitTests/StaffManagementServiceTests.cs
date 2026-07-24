@@ -738,7 +738,7 @@ internal sealed class StaffHarness : IAsyncDisposable
         return BuildService(currentUser, currentStaff);
     }
 
-    private StaffManagementService BuildService(
+    public StaffManagementService BuildService(
         FakeCurrentUser currentUser,
         FakeCurrentStaff currentStaff,
         IAccountEmailSender? emailSender = null)

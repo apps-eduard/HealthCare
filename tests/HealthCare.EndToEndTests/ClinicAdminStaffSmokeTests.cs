@@ -1,0 +1,73 @@
+using System.Text.RegularExpressions;
+using FluentAssertions;
+using Microsoft.Playwright;
+
+namespace HealthCare.EndToEndTests;
+
+[Collection(E2eCollection.Name)]
+public sealed class ClinicAdminStaffSmokeTests : E2ePageTestBase
+{
+    public ClinicAdminStaffSmokeTests(E2eHostFixture host)
+        : base(host)
+    {
+    }
+
+    [Fact]
+    public async Task Clinic_Admin_Can_Manage_Clinic_Scoped_Staff_Without_Org_Controls()
+    {
+        try
+        {
+            await LoginAsAsync(Host.Users.ClinicAdminEmail, Host.Users.ClinicAdminPassword);
+            await Expect(Page).ToHaveURLAsync(new Regex(".*/dashboard.*"));
+
+            await Page.GotoAsync("/staff");
+            await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Staff Management" }))
+                .ToBeVisibleAsync(new() { Timeout = 60_000 });
+            await Expect(Page.GetByText("Manage staff in your clinic", new() { Exact = false }))
+                .ToBeVisibleAsync();
+
+            await Expect(Page.Locator("label", new() { HasText = "Clinic filter" })).ToHaveCountAsync(0);
+            await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Change clinic" })).ToHaveCountAsync(0);
+            await Expect(Page.GetByText("Leave empty for all clinics", new() { Exact = false })).ToHaveCountAsync(0);
+
+            // Role filter must not offer Org/Platform admin assignment options.
+            await Page.Locator("#staff-role").ClickAsync();
+            await Expect(Page.Locator(".ant-select-dropdown:visible").GetByText("ORGANIZATION_ADMIN")).ToHaveCountAsync(0);
+            await Expect(Page.Locator(".ant-select-dropdown:visible").GetByText("PLATFORM_ADMIN")).ToHaveCountAsync(0);
+            await Page.Keyboard.PressAsync("Escape");
+
+            await Page.GetByRole(AriaRole.Button, new() { Name = "Create Staff" }).ClickAsync();
+            var modal = Page.Locator(".ant-modal").Last;
+            await Expect(modal.GetByText("New staff will be created in your membership clinic."))
+                .ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+            var email = $"ca3.recv.{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}@healthcare.local";
+            await modal.Locator("input").Nth(0).FillAsync(email);
+            await modal.Locator("input").Nth(1).FillAsync("CA3");
+            await modal.Locator("input").Nth(2).FillAsync("Recv");
+
+            await modal.Locator(".ant-select").ClickAsync();
+            await Page.Locator(".ant-select-dropdown:visible").GetByText("RECEPTIONIST").ClickAsync();
+
+            await modal.Locator("input[type='password']").Nth(0).FillAsync("TempPass_Staff_99!");
+            await modal.Locator("input[type='password']").Nth(1).FillAsync("TempPass_Staff_99!");
+            await modal.GetByRole(AriaRole.Button, new() { Name = "Create" }).ClickAsync();
+
+            await Expect(Page.GetByText(email)).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+            var row = Page.Locator("tr", new() { HasText = email });
+            await row.GetByRole(AriaRole.Button, new() { Name = $"Password reset for CA3 Recv" }).ClickAsync();
+            var resetModal = Page.Locator(".ant-modal").Last;
+            await resetModal.GetByRole(AriaRole.Button, new() { Name = "Send reset" }).ClickAsync();
+            await Expect(Page.GetByText("Password reset initiated.")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+            await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Change clinic" })).ToHaveCountAsync(0);
+            await Expect(Page.Locator("label", new() { HasText = "Clinic filter" })).ToHaveCountAsync(0);
+        }
+        catch
+        {
+            await OnFailureCaptureAsync(nameof(Clinic_Admin_Can_Manage_Clinic_Scoped_Staff_Without_Org_Controls));
+            throw;
+        }
+    }
+}

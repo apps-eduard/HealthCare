@@ -23,7 +23,7 @@
 else
 {
     <HcPageHeader Title="Staff Management"
-                  Subtitle="Manage organization staff, Clinic Admins, and clinical roles">
+                  Subtitle="@StaffPageCopy.Subtitle(Permissions)">
         <Breadcrumb>
             <Breadcrumb>
                 <BreadcrumbItem Href="/dashboard">Home</BreadcrumbItem>
@@ -100,7 +100,7 @@ else
                     </SelectOptions>
                 </Select>
             </div>
-            @if (_showClinicPicker)
+            @if (StaffPermissionRules.ShowClinicPicker(Permissions))
             {
                 <ClinicPicker Value="_clinicId"
                               ValueChanged="OnClinicFilterChanged"
@@ -300,16 +300,6 @@ else
 }
 
 @code {
-    private static readonly string[] OrgAdminRoleFilterOptions =
-    [
-        "CLINIC_ADMIN", "ORGANIZATION_ADMIN", "DOCTOR", "NURSE", "RECEPTIONIST"
-    ];
-
-    private static readonly string[] PlatformRoleFilterOptions =
-    [
-        "CLINIC_ADMIN", "ORGANIZATION_ADMIN", "DOCTOR", "NURSE", "RECEPTIONIST", "PLATFORM_ADMIN"
-    ];
-
     private List<StaffSummaryResponse> _items = [];
     private bool _loading;
     private string? _error;
@@ -327,11 +317,7 @@ else
     private bool _subscribedClinic;
     private CancellationTokenSource? _cts;
 
-    private IEnumerable<string> RoleFilterOptions =>
-        Permissions.IsPlatformAdmin ? PlatformRoleFilterOptions : OrgAdminRoleFilterOptions;
-
-    private bool _showClinicPicker =>
-        Permissions.CanFilterByClinic || Permissions.Has(WebPermissions.ClinicsRead);
+    private IEnumerable<string> RoleFilterOptions => StaffRoleFilterOptions.For(Permissions);
 
     private string ClinicFilterHelper =>
         Permissions.IsPlatformAdmin
@@ -782,8 +768,7 @@ else
     }
 
     private bool CanChangeClinic(StaffSummaryResponse row) =>
-        Permissions.Has(WebPermissions.StaffManage)
-        && (Permissions.IsOrganizationAdmin || Permissions.IsPlatformAdmin)
+        StaffPermissionRules.CanChangeClinic(Permissions)
         && row.Role is not ("ORGANIZATION_ADMIN" or "PLATFORM_ADMIN");
 
     private bool CanDeactivate(StaffSummaryResponse row) =>

@@ -32,7 +32,8 @@ else
         </Select>
     </div>
 
-    @if (_roles.Any(r => !r.AssignableByCurrentUser))
+    @if (_roles.Any(r => !r.AssignableByCurrentUser)
+         && (Permissions.IsOrganizationAdmin || Permissions.IsPlatformAdmin))
     {
         <div class="hc-caption" style="margin-top:0.5rem;">
             Not assignable: @string.Join(", ", _roles.Where(r => !r.AssignableByCurrentUser).Select(r => r.DisplayLabel))

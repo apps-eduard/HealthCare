@@ -19,7 +19,7 @@
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Clinic Admin Web MVP CA-3 (staff UI hardening) — CA-1 and CA-2 delivered
+**Current focus:** Clinic Admin Web MVP CA-4 (doctor directory + availability verify) — CA-1–CA-3 delivered
 
 ### All phases at a glance
 
@@ -1030,6 +1030,7 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 | 2026-07-24 | docs | Clinic Admin MVP scope **approved** (profile, reports JSON, audit, usage counts, dashboard API, five `clinic_*` permissions); CA-1 next |
 | 2026-07-24 | 8 | Clinic Admin CA-1 — clinic dashboard API/UI + `clinic_dashboard.read` + E2E smoke |
 | 2026-07-24 | 8 | Clinic Admin CA-2 — clinic profile settings API/UI + `clinic_profile.*` + E2E smoke |
+| 2026-07-24 | 8 | Clinic Admin CA-3 — actor-aware staff management UI hardening + E2E smoke |
 
 ### Clinic Admin Web MVP (approved scope)
 
@@ -1039,7 +1040,7 @@ Authoritative scope: **`Docs/mvp-clinic-admin-scope.md`** (product-owner approve
 |-------|--------|------------|--------|
 | CA-1 | Nav + clinic dashboard (`GET /api/v1/clinic/dashboard`) | Medium | **Delivered** (2026-07-24) |
 | CA-2 | Clinic profile settings API/UI | Medium | **Delivered** (2026-07-24) |
-| CA-3 | Staff UI hardening (clinic actor) | Small | Not started |
+| CA-3 | Staff UI hardening (clinic actor) | Small | **Delivered** (2026-07-24) |
 | CA-4 | Doctor directory + availability verify | Small | Not started |
 | CA-5 | Patients verify (hide cross-clinic enroll) | Small | Not started |
 | CA-6 | Appointments verify (Complete for CA) | Small | Not started |

@@ -72,10 +72,38 @@ public sealed class StaffManagementEndpointTests : IAsyncLifetime
         var client = factory.CreateClient();
         await AuthenticateAsync(client, "clinicadmin@healthcare.local", "ChangeMe_ClinicAdmin_1!");
 
+        Guid ownClinicId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+            var me = await client.GetFromJsonAsync<CurrentUserResponse>("/api/v1/auth/me");
+            ownClinicId = me!.ClinicId ?? Guid.Empty;
+            ownClinicId.Should().NotBe(Guid.Empty);
+        }
+
         var list = await client.GetFromJsonAsync<Contracts.Common.PagedResponse<StaffSummaryResponse>>(
             "/api/v1/staff-management/staff");
         list.Should().NotBeNull();
-        list!.Items.Should().OnlyContain(i => i.ClinicId != Guid.Empty);
+        list!.Items.Should().OnlyContain(i => i.ClinicId == ownClinicId);
+
+        Guid otherClinicId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+            otherClinicId = await db.Clinics.AsNoTracking()
+                .Where(c => c.Id != ownClinicId)
+                .Select(c => c.Id)
+                .FirstAsync();
+            var foreignStaff = await db.StaffMembers.AsNoTracking()
+                .Where(s => s.ClinicId == otherClinicId)
+                .Select(s => s.Id)
+                .FirstOrDefaultAsync();
+            if (foreignStaff != Guid.Empty)
+            {
+                (await client.GetAsync($"/api/v1/staff-management/staff/{foreignStaff:D}"))
+                    .StatusCode.Should().Be(HttpStatusCode.NotFound);
+            }
+        }
 
         var create = await client.PostAsJsonAsync("/api/v1/staff-management/staff", new CreateStaffRequest
         {
@@ -86,11 +114,115 @@ public sealed class StaffManagementEndpointTests : IAsyncLifetime
             TemporaryPassword = "TempPass_Staff_99!",
         });
         create.StatusCode.Should().Be(HttpStatusCode.OK);
+        var created = await create.Content.ReadFromJsonAsync<CreateStaffResponse>();
+        created!.Staff.ClinicId.Should().Be(ownClinicId);
+        created.Staff.Role.Should().Be(AppRoles.Receptionist);
 
-        var deny = await client.PostAsync(
-            $"/api/v1/staff-management/staff/{list.Items.First().StaffMemberId}/roles/{AppRoles.OrganizationAdmin}",
+        var denyOrg = await client.PostAsync(
+            $"/api/v1/staff-management/staff/{created.Staff.StaffMemberId:D}/roles/{AppRoles.OrganizationAdmin}",
             null);
-        deny.StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.Conflict, HttpStatusCode.BadRequest);
+        denyOrg.StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.Conflict, HttpStatusCode.BadRequest);
+
+        var denyPlatform = await client.PostAsync(
+            $"/api/v1/staff-management/staff/{created.Staff.StaffMemberId:D}/roles/{AppRoles.PlatformAdmin}",
+            null);
+        denyPlatform.StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.Conflict, HttpStatusCode.BadRequest);
+
+        var changeClinic = await client.PostAsJsonAsync(
+            $"/api/v1/staff-management/staff/{created.Staff.StaffMemberId:D}/change-clinic",
+            new ChangeStaffClinicRequest
+            {
+                NewClinicId = otherClinicId,
+                ExpectedVersion = created.Staff.Version,
+                AdministrativeReason = "Should fail",
+            });
+        changeClinic.StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.Conflict, HttpStatusCode.BadRequest);
+
+        var reset = await client.PostAsJsonAsync(
+            $"/api/v1/staff-management/staff/{created.Staff.StaffMemberId:D}/password-reset",
+            new StaffPasswordResetRequest { Reason = "ca3" });
+        reset.StatusCode.Should().Be(HttpStatusCode.OK);
+        var resetBody = await reset.Content.ReadAsStringAsync();
+        resetBody.Should().NotContain("Token");
+        resetBody.Should().NotContain("resetToken");
+        resetBody.Should().NotContain("TempPass_");
+
+        var revoke = await client.PostAsJsonAsync(
+            $"/api/v1/staff-management/staff/{created.Staff.StaffMemberId:D}/revoke-sessions",
+            new RevokeStaffSessionsRequest { Reason = "ca3" });
+        revoke.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+            var audit = await db.OrganizationAuditEvents
+                .Where(e => e.ClinicId == ownClinicId
+                            && (e.Action == "staff_created"
+                                || e.Action == "staff_password_reset"
+                                || e.Action == "staff_sessions_revoked"))
+                .OrderByDescending(e => e.OccurredAtUtc)
+                .Take(5)
+                .ToListAsync();
+            audit.Should().NotBeEmpty();
+            var auditJson = System.Text.Json.JsonSerializer.Serialize(audit);
+            auditJson.ToLowerInvariant().Should().NotContain("temppass");
+            auditJson.ToLowerInvariant().Should().NotContain("resettoken");
+            auditJson.ToLowerInvariant().Should().NotContain("refreshtoken");
+        }
+
+        var stale = await client.PatchAsJsonAsync(
+            $"/api/v1/staff-management/staff/{created.Staff.StaffMemberId:D}",
+            new UpdateStaffRequest
+            {
+                ExpectedVersion = created.Staff.Version + 50,
+                FirstName = "Stale",
+            });
+        stale.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task Clinic_Admin_Self_Deactivation_And_Last_Admin_Are_Protected()
+    {
+        await using var factory = CreateFactory();
+        var client = factory.CreateClient();
+        await AuthenticateAsync(client, "clinicadmin@healthcare.local", "ChangeMe_ClinicAdmin_1!");
+
+        var me = await client.GetFromJsonAsync<CurrentUserResponse>("/api/v1/auth/me");
+        me!.StaffMemberId.Should().NotBeNull();
+        var detail = await client.GetFromJsonAsync<StaffDetailResponse>(
+            $"/api/v1/staff-management/staff/{me.StaffMemberId:D}");
+        detail.Should().NotBeNull();
+
+        var self = await client.PostAsJsonAsync(
+            $"/api/v1/staff-management/staff/{me.StaffMemberId:D}/deactivate",
+            new StaffActivationRequest { ExpectedVersion = detail!.Version, Reason = "self" });
+        self.StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.Conflict);
+        var problem = await self.Content.ReadAsStringAsync();
+        (problem.Contains("self_deactivation", StringComparison.Ordinal)
+         || problem.Contains("last_admin", StringComparison.Ordinal)).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Clinic_Admin_Inactive_Membership_Is_Denied()
+    {
+        await using var factory = CreateFactory();
+        var client = factory.CreateClient();
+        await AuthenticateAsync(client, "clinicadmin@healthcare.local", "ChangeMe_ClinicAdmin_1!");
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+            var staff = await db.StaffMembers
+                .Where(s => s.Role == AppRoles.ClinicAdmin && s.IsActive)
+                .OrderBy(s => s.CreatedAtUtc)
+                .FirstAsync();
+            staff.IsActive = false;
+            await db.SaveChangesAsync();
+        }
+
+        await AuthenticateAsync(client, "clinicadmin@healthcare.local", "ChangeMe_ClinicAdmin_1!");
+        (await client.GetAsync("/api/v1/staff-management/staff")).StatusCode
+            .Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.Unauthorized);
     }
 
     [Fact]
@@ -187,6 +319,7 @@ public sealed class StaffManagementEndpointTests : IAsyncLifetime
 
     private static async Task AuthenticateAsync(HttpClient client, string email, string password)
     {
+        client.DefaultRequestHeaders.Authorization = null;
         var login = await client.PostAsJsonAsync("/api/v1/auth/login", new LoginRequest
         {
             Email = email,

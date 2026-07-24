@@ -5,8 +5,14 @@ namespace HealthCare.Web.Staff;
 
 public static class StaffProblemMessages
 {
-    public static string From(ApiProblemException ex) =>
-        ex.ErrorCode switch
+    public static string From(ApiProblemException ex)
+    {
+        if (ex.ValidationErrors is { Count: > 0 })
+        {
+            return string.Join(" ", ex.ValidationErrors.SelectMany(kv => kv.Value));
+        }
+
+        return ex.ErrorCode switch
         {
             StaffErrorCodes.ConcurrencyConflict =>
                 "Another change was saved first. Reload and try again.",
@@ -54,6 +60,14 @@ public static class StaffProblemMessages
                 string.IsNullOrWhiteSpace(ex.Detail) ? "Session revocation failed." : ex.Detail!,
             StaffErrorCodes.CrossOrganizationDenied or StaffErrorCodes.CrossTenantDenied =>
                 "Cross-organization staff access is denied.",
-            _ => ex.ToUserMessage(),
+            _ => ex.StatusCode switch
+            {
+                401 => "Sign in to view staff.",
+                403 => "You do not have permission to manage staff.",
+                404 => "Staff member was not found or is unavailable.",
+                409 => "Another change was saved first. Reload and try again.",
+                _ => ex.ToUserMessage(),
+            },
         };
+    }
 }

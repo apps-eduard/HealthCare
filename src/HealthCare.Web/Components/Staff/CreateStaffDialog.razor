@@ -46,9 +46,11 @@
                       PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
                       HelperText="Choose an authorized clinic." />
     }
-    else if (Permissions.Has(WebPermissions.ClinicsRead))
+    else if (Permissions.IsClinicAdmin)
     {
-        <ClinicPicker Label="Clinic" AllowClear="false" Disabled="true" />
+        <Alert Type="@AlertType.Info"
+               Message="New staff will be created in your membership clinic."
+               ShowIcon="true" />
     }
     <div>
         <label>Initial role</label>

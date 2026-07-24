@@ -20,6 +20,8 @@ public interface IPermissionState
 
     bool IsOrganizationAdmin { get; }
 
+    bool IsClinicAdmin { get; }
+
     bool IsPlatformAdmin { get; }
 
     Task SetFromUserAsync(CurrentUserResponse? user, CancellationToken cancellationToken = default);
@@ -60,6 +62,11 @@ public sealed class PermissionState : IPermissionState
 
     public bool IsOrganizationAdmin =>
         CurrentUser?.Roles.Contains(WebRoles.OrganizationAdmin, StringComparer.Ordinal) == true;
+
+    public bool IsClinicAdmin =>
+        CurrentUser?.Roles.Contains(WebRoles.ClinicAdmin, StringComparer.Ordinal) == true
+        && !IsOrganizationAdmin
+        && !IsPlatformAdmin;
 
     public bool IsPlatformAdmin =>
         CurrentUser?.Roles.Contains(WebRoles.PlatformAdmin, StringComparer.Ordinal) == true;
