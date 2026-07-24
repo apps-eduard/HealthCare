@@ -19,17 +19,20 @@ public sealed class StaffPatientService : IStaffPatientService
     private readonly HealthCareDbContext _dbContext;
     private readonly ICurrentUser _currentUser;
     private readonly ICurrentStaff _currentStaff;
+    private readonly IAuthorizationAuditLogger _audit;
     private readonly ILogger<StaffPatientService> _logger;
 
     public StaffPatientService(
         HealthCareDbContext dbContext,
         ICurrentUser currentUser,
         ICurrentStaff currentStaff,
+        IAuthorizationAuditLogger audit,
         ILogger<StaffPatientService> logger)
     {
         _dbContext = dbContext;
         _currentUser = currentUser;
         _currentStaff = currentStaff;
+        _audit = audit;
         _logger = logger;
     }
 
@@ -38,7 +41,7 @@ public sealed class StaffPatientService : IStaffPatientService
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default)
     {
-        var scope = await ResolveScopeAsync(request.ClinicId, bypass, cancellationToken);
+        var scope = await ResolveScopeAsync(request.ClinicId, bypass, requireClinicFilterForOrgAdmin: false, cancellationToken);
 
         var clinicPatients = ApplyClinicPatientScope(_dbContext.ClinicPatients.AsNoTracking(), scope);
 
@@ -130,24 +133,95 @@ public sealed class StaffPatientService : IStaffPatientService
             })
             .ToListAsync(cancellationToken);
 
-        _logger.LogInformation(
-            "Staff patient search. UserId={UserId} StaffMemberId={StaffMemberId} ClinicId={ClinicId} OrganizationId={OrganizationId} ResultCount={ResultCount} Operation={Operation}",
-            _currentUser.UserId,
-            scope.StaffMemberId,
-            scope.ClinicId,
+        _audit.PatientOperation(
+            "staff_patient_search",
+            "succeeded",
             scope.OrganizationId,
-            totalCount,
-            "staff_patient_search");
+            scope.ClinicId,
+            patientId: null);
 
         return PagedResponse<StaffPatientSummaryResponse>.Create(items, page, pageSize, totalCount);
     }
 
-    public async Task<StaffPatientDetailResponse> GetByPatientIdAsync(
-        Guid patientId,
+    public async Task<PagedResponse<StaffPatientLookupItemResponse>> LookupForAppointmentAsync(
+        StaffPatientLookupRequest request,
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default)
     {
-        var scope = await ResolveScopeAsync(clinicIdFilter: null, bypass, cancellationToken);
+        var scope = await ResolveScopeAsync(
+            request.ClinicId,
+            bypass,
+            requireClinicFilterForOrgAdmin: true,
+            cancellationToken);
+
+        var clinicPatients = ApplyClinicPatientScope(_dbContext.ClinicPatients.AsNoTracking(), scope);
+
+        var query =
+            from cp in clinicPatients
+            join p in _dbContext.Patients.AsNoTracking() on cp.PatientId equals p.Id
+            where p.IsActive && cp.Status == ClinicPatientStatus.Active
+            select new { ClinicPatient = cp, Patient = p };
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var term = request.Search.Trim().ToLowerInvariant();
+            query = query.Where(x =>
+                x.Patient.FirstName.ToLower().Contains(term)
+                || x.Patient.LastName.ToLower().Contains(term)
+                || (x.Patient.MiddleName != null && x.Patient.MiddleName.ToLower().Contains(term))
+                || x.ClinicPatient.LocalPatientNumber.ToLower().Contains(term)
+                || (x.Patient.MobileNumber != null && x.Patient.MobileNumber.ToLower().Contains(term)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.LocalPatientNumber))
+        {
+            var local = request.LocalPatientNumber.Trim();
+            query = query.Where(x => x.ClinicPatient.LocalPatientNumber == local);
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var page = request.Page < 1 ? 1 : request.Page;
+        var pageSize = request.PageSize < 1
+            ? StaffPatientLookupRequestValidator.DefaultPageSize
+            : Math.Min(request.PageSize, StaffPatientLookupRequestValidator.MaxPageSize);
+
+        var items = await query
+            .OrderBy(x => x.Patient.LastName)
+            .ThenBy(x => x.Patient.FirstName)
+            .ThenBy(x => x.ClinicPatient.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new StaffPatientLookupItemResponse
+            {
+                PatientId = x.Patient.Id,
+                ClinicPatientId = x.ClinicPatient.Id,
+                ClinicId = x.ClinicPatient.ClinicId,
+                LocalPatientNumber = x.ClinicPatient.LocalPatientNumber,
+                FirstName = x.Patient.FirstName,
+                MiddleName = x.Patient.MiddleName,
+                LastName = x.Patient.LastName,
+                DateOfBirth = x.Patient.DateOfBirth,
+            })
+            .ToListAsync(cancellationToken);
+
+        _audit.PatientOperation(
+            "staff_patient_appointment_lookup",
+            "succeeded",
+            scope.OrganizationId,
+            scope.ClinicId,
+            patientId: null);
+
+        return PagedResponse<StaffPatientLookupItemResponse>.Create(items, page, pageSize, totalCount);
+    }
+
+    public async Task<StaffPatientDetailResponse> GetByPatientIdAsync(
+        Guid patientId,
+        Guid? clinicId = null,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default)
+    {
+        var scope = await ResolveScopeAsync(clinicId, bypass, requireClinicFilterForOrgAdmin: false, cancellationToken);
         var enrollment = await FindEnrollmentInScopeAsync(patientId, scope, asNoTracking: true, cancellationToken);
 
         if (enrollment is null)
@@ -156,15 +230,16 @@ public sealed class StaffPatientService : IStaffPatientService
             throw AuthorizationException.PatientSelfScopeDenied();
         }
 
-        _logger.LogInformation(
-            "Staff patient detail accessed. UserId={UserId} StaffMemberId={StaffMemberId} ClinicId={ClinicId} PatientId={PatientId} Operation={Operation}",
-            _currentUser.UserId,
-            scope.StaffMemberId,
-            enrollment.ClinicPatient.ClinicId,
-            patientId,
-            "staff_patient_detail");
+        var enrollments = await ListEnrollmentsInScopeAsync(patientId, scope, cancellationToken);
 
-        return MapDetail(enrollment.ClinicPatient, enrollment.Patient);
+        _audit.PatientOperation(
+            "staff_patient_detail",
+            "succeeded",
+            scope.OrganizationId,
+            enrollment.ClinicPatient.ClinicId,
+            patientId);
+
+        return MapDetail(enrollment.ClinicPatient, enrollment.Patient, enrollments);
     }
 
     public async Task<StaffPatientDetailResponse> UpdateClinicProfileAsync(
@@ -173,7 +248,11 @@ public sealed class StaffPatientService : IStaffPatientService
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default)
     {
-        var scope = await ResolveScopeAsync(clinicIdFilter: null, bypass, cancellationToken);
+        var scope = await ResolveScopeAsync(
+            request.ClinicId,
+            bypass,
+            requireClinicFilterForOrgAdmin: false,
+            cancellationToken);
         var enrollment = await FindEnrollmentInScopeAsync(patientId, scope, asNoTracking: false, cancellationToken);
 
         if (enrollment is null)
@@ -218,21 +297,22 @@ public sealed class StaffPatientService : IStaffPatientService
             throw new ClinicPatientConcurrencyException();
         }
 
-        _logger.LogInformation(
-            "Clinic patient status updated. UserId={UserId} StaffMemberId={StaffMemberId} ClinicId={ClinicId} PatientId={PatientId} Status={Status} Operation={Operation}",
-            _currentUser.UserId,
-            scope.StaffMemberId,
-            clinicPatient.ClinicId,
-            patientId,
-            clinicPatient.Status,
-            "staff_clinic_patient_update");
+        var enrollments = await ListEnrollmentsInScopeAsync(patientId, scope, cancellationToken);
 
-        return MapDetail(clinicPatient, enrollment.Patient);
+        _audit.PatientOperation(
+            "patient_clinic_status_changed",
+            "succeeded",
+            scope.OrganizationId,
+            clinicPatient.ClinicId,
+            patientId);
+
+        return MapDetail(clinicPatient, enrollment.Patient, enrollments);
     }
 
     private async Task<StaffScope> ResolveScopeAsync(
         Guid? clinicIdFilter,
         PlatformAdminBypass bypass,
+        bool requireClinicFilterForOrgAdmin,
         CancellationToken cancellationToken)
     {
         if (!_currentUser.IsAuthenticated)
@@ -258,17 +338,24 @@ public sealed class StaffPatientService : IStaffPatientService
 
                     if (clinic is null || clinic.OrganizationId != _currentStaff.OrganizationId)
                     {
-                        _logger.LogInformation(
-                            "Cross-tenant access denied. UserId={UserId} StaffMemberId={StaffMemberId} OrganizationId={OrganizationId} RequestedClinicId={ClinicId} Operation={Operation}",
-                            _currentUser.UserId,
-                            _currentStaff.StaffMemberId,
+                        _audit.CrossTenantDenied(
+                            "staff_patient_clinic_filter_denied",
+                            Contracts.Identity.AuthorizationErrorCodes.ClinicAccessDenied,
                             _currentStaff.OrganizationId,
-                            clinicIdFilter,
-                            "staff_patient_clinic_filter_denied");
+                            clinicIdFilter);
                         throw AuthorizationException.ClinicAccessDenied();
                     }
 
                     clinicId = clinic.Id;
+                }
+                else if (requireClinicFilterForOrgAdmin)
+                {
+                    _audit.CrossTenantDenied(
+                        "staff_patient_clinic_filter_required",
+                        Contracts.Identity.AuthorizationErrorCodes.ClinicAccessDenied,
+                        _currentStaff.OrganizationId,
+                        null);
+                    throw AuthorizationException.ClinicAccessDenied();
                 }
 
                 return StaffScope.ForOrganization(
@@ -310,10 +397,7 @@ public sealed class StaffPatientService : IStaffPatientService
                 throw AuthorizationException.ClinicAccessDenied();
             }
 
-            _logger.LogInformation(
-                "PLATFORM_ADMIN explicit staff patient bypass. UserId={UserId} ClinicId={ClinicId}",
-                _currentUser.UserId,
-                clinic.Id);
+            _audit.ExplicitPlatformBypassUsed("staff_patient_platform_bypass", clinic.OrganizationId, clinic.Id);
 
             return StaffScope.ForPlatformBypass(clinic.OrganizationId, clinic.Id);
         }
@@ -380,8 +464,36 @@ public sealed class StaffPatientService : IStaffPatientService
         return row is null ? null : new TrackedEnrollment(row.cp, row.p);
     }
 
+    private async Task<IReadOnlyList<StaffPatientClinicEnrollmentResponse>> ListEnrollmentsInScopeAsync(
+        Guid patientId,
+        StaffScope scope,
+        CancellationToken cancellationToken)
+    {
+        var query = ApplyClinicPatientScope(_dbContext.ClinicPatients.AsNoTracking(), scope)
+            .Where(cp => cp.PatientId == patientId)
+            .OrderBy(cp => cp.RegisteredAtUtc)
+            .ThenBy(cp => cp.Id);
+
+        return await query
+            .Select(cp => new StaffPatientClinicEnrollmentResponse
+            {
+                ClinicPatientId = cp.Id,
+                ClinicId = cp.ClinicId,
+                LocalPatientNumber = cp.LocalPatientNumber,
+                ClinicPatientStatus = cp.Status.ToString(),
+                RegisteredAtUtc = cp.RegisteredAtUtc,
+                Version = cp.Version,
+            })
+            .ToListAsync(cancellationToken);
+    }
+
     private void LogCrossTenantDenied(Guid patientId, StaffScope scope, string operation)
     {
+        _audit.CrossTenantDenied(
+            operation,
+            Contracts.Identity.AuthorizationErrorCodes.PatientSelfScopeDenied,
+            scope.OrganizationId,
+            scope.ClinicId);
         _logger.LogInformation(
             "Cross-tenant access denied. UserId={UserId} StaffMemberId={StaffMemberId} ClinicId={ClinicId} OrganizationId={OrganizationId} PatientId={PatientId} Operation={Operation}",
             _currentUser.UserId,
@@ -392,7 +504,10 @@ public sealed class StaffPatientService : IStaffPatientService
             operation);
     }
 
-    private static StaffPatientDetailResponse MapDetail(ClinicPatient cp, Patient p) =>
+    private static StaffPatientDetailResponse MapDetail(
+        ClinicPatient cp,
+        Patient p,
+        IReadOnlyList<StaffPatientClinicEnrollmentResponse> enrollments) =>
         new()
         {
             PatientId = p.Id,
@@ -412,6 +527,7 @@ public sealed class StaffPatientService : IStaffPatientService
             Version = cp.Version,
             Address = p.Address,
             EmergencyContact = p.EmergencyContact,
+            Enrollments = enrollments,
         };
 
     private sealed record TrackedEnrollment(ClinicPatient ClinicPatient, Patient Patient);

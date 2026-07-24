@@ -11,8 +11,17 @@ public interface IStaffPatientService
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Appointment-safe lookup: active patient + active clinic enrollment only.
+    /// </summary>
+    Task<PagedResponse<StaffPatientLookupItemResponse>> LookupForAppointmentAsync(
+        StaffPatientLookupRequest request,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default);
+
     Task<StaffPatientDetailResponse> GetByPatientIdAsync(
         Guid patientId,
+        Guid? clinicId = null,
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default);
 

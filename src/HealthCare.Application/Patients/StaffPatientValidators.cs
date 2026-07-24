@@ -59,6 +59,34 @@ public sealed class StaffPatientSearchRequestValidator : AbstractValidator<Staff
     }
 }
 
+public sealed class StaffPatientLookupRequestValidator : AbstractValidator<StaffPatientLookupRequest>
+{
+    public const int DefaultPageSize = 20;
+    public const int MaxPageSize = 50;
+    public const int MaxSearchLength = 100;
+
+    public StaffPatientLookupRequestValidator()
+    {
+        RuleFor(x => x.Page)
+            .GreaterThanOrEqualTo(1)
+            .WithErrorCode(PatientErrorCodes.InvalidSearch);
+
+        RuleFor(x => x.PageSize)
+            .InclusiveBetween(1, MaxPageSize)
+            .WithErrorCode(PatientErrorCodes.InvalidSearch);
+
+        RuleFor(x => x.Search)
+            .MaximumLength(MaxSearchLength)
+            .When(x => x.Search is not null)
+            .WithErrorCode(PatientErrorCodes.InvalidSearch);
+
+        RuleFor(x => x.LocalPatientNumber)
+            .MaximumLength(64)
+            .When(x => x.LocalPatientNumber is not null)
+            .WithErrorCode(PatientErrorCodes.InvalidSearch);
+    }
+}
+
 public sealed class UpdateClinicPatientRequestValidator : AbstractValidator<UpdateClinicPatientRequest>
 {
     public UpdateClinicPatientRequestValidator()

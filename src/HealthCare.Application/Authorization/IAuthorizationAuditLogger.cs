@@ -23,4 +23,14 @@ public interface IAuthorizationAuditLogger
         Guid? organizationId = null,
         Guid? clinicId = null,
         Guid? staffMemberId = null);
+
+    /// <summary>
+    /// Patient directory / enrollment operation audit. Must never include passwords, tokens, or clinical PHI.
+    /// </summary>
+    void PatientOperation(
+        string operation,
+        string resultCode,
+        Guid? organizationId = null,
+        Guid? clinicId = null,
+        Guid? patientId = null);
 }

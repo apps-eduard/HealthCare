@@ -316,16 +316,19 @@ Authoritative design docs:
 
 **Staff patient search and clinic administration**
 - `GET /api/v1/staff/patients` — paginated search (StaffUser policy)
-- `GET /api/v1/staff/patients/{patientId}` — scoped detail
-- `PATCH /api/v1/staff/patients/{patientId}/clinic-profile` — ClinicPatient status only
+- `GET /api/v1/staff/patients/lookup` — appointment-safe lookup (active patient + active enrollment; Org Admin / Platform bypass require ClinicId)
+- `GET /api/v1/staff/patients/{patientId}` — scoped detail with in-scope enrollment list (`Enrollments`); optional `clinicId` targeting for Org Admin
+- `PATCH /api/v1/staff/patients/{patientId}/clinic-profile` — ClinicPatient status only; optional `ClinicId` targeting for multi-clinic patients
+- `POST /api/v1/clinics/{clinicId}/patients/{patientId}/enroll` — Org Admin may enroll into any clinic in trusted organization
 - Authorized roles via active staff membership: CLINIC_ADMIN, DOCTOR, NURSE, RECEPTIONIST (clinic-scoped); ORGANIZATION_ADMIN (org clinics); PLATFORM_ADMIN only with `platformAdminBypass=true` + ClinicId
 - Tenant rules: clinic staff locked to `ICurrentStaff.ClinicId` (client ClinicId ignored); org admin uses trusted OrganizationId (optional ClinicId validated in-org); PATIENT denied; no client OrganizationId on contract
 - Searchable: first/middle/last name, local patient number, mobile; filters: patient active, ClinicPatient status; sort whitelist
 - Pagination: default page size 20, max 100, total count/pages, stable secondary sort by ClinicPatient.Id; EF AsNoTracking + DB-side filter/sort/page
 - Editable clinic field: `ClinicPatient.Status` (Active/Inactive) with `expectedVersion` concurrency
 - Protected: credentials, email, UserId/PatientId, local number, org/clinic ownership, demographics via this endpoint, medical notes
+- Audited via `IAuthorizationAuditLogger.PatientOperation` / `CrossTenantDenied`
 - Scope enforcement remains explicit in `StaffPatientService` (EF global tenant filters still deferred)
-- Migration `AddClinicPatientConcurrencyAndStaffSearchIndex` applied (`ClinicPatient.Version` + `(ClinicId, Status)` index)
+- Migration `AddClinicPatientConcurrencyAndStaffSearchIndex` applied (`ClinicPatient.Version` + `(ClinicId, Status)` index); Org Admin Phase 4 patient slice requires **no new migration**
 
 ### Verification
 
@@ -1005,6 +1008,7 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 | 2026-07-24 | 4 | Organization clinic CRUD + `/clinics` UI + soft activate/deactivate |
 | 2026-07-24 | 4 | Org Admin staff + Clinic Admin management (change-clinic, password-reset, revoke-sessions, `/staff` tabs) |
 | 2026-07-24 | 4 | Org Admin staff management backend hardening (`clinic-admins`, audits, tests, docs) |
+| 2026-07-24 | 4 | Org Admin patient directory + enrollment backend (`lookup`, enrollment list, org enroll, audits) |
 
 ---
 

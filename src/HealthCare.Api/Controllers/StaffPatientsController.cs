@@ -39,6 +39,25 @@ public sealed class StaffPatientsController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// Appointment-safe lookup: active patients with active enrollment at the resolved clinic.
+    /// </summary>
+    [AuthorizePermission(Permissions.Patients.Search)]
+    [HttpGet("lookup")]
+    [ProducesResponseType(typeof(PagedResponse<StaffPatientLookupItemResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<PagedResponse<StaffPatientLookupItemResponse>>> LookupForAppointment(
+        [FromQuery] StaffPatientLookupRequest request,
+        [FromQuery] bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default)
+    {
+        var bypass = platformAdminBypass ? PlatformAdminBypass.Explicit : PlatformAdminBypass.None;
+        var result = await _staffPatientService.LookupForAppointmentAsync(request, bypass, cancellationToken);
+        return Ok(result);
+    }
+
     [AuthorizePermission(Permissions.Patients.Read)]
     [HttpGet("{patientId:guid}")]
     [ProducesResponseType(typeof(StaffPatientDetailResponse), StatusCodes.Status200OK)]
@@ -46,11 +65,12 @@ public sealed class StaffPatientsController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<StaffPatientDetailResponse>> GetByPatientId(
         Guid patientId,
+        [FromQuery] Guid? clinicId = null,
         [FromQuery] bool platformAdminBypass = false,
         CancellationToken cancellationToken = default)
     {
         var bypass = platformAdminBypass ? PlatformAdminBypass.Explicit : PlatformAdminBypass.None;
-        var result = await _staffPatientService.GetByPatientIdAsync(patientId, bypass, cancellationToken);
+        var result = await _staffPatientService.GetByPatientIdAsync(patientId, clinicId, bypass, cancellationToken);
         return Ok(result);
     }
 

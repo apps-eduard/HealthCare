@@ -16,7 +16,7 @@ Resolution uses server-side Identity roles (DB) + active staff membership + pati
 | Permission | Purpose |
 |------------|---------|
 | `patients.read` | Read patient profile (self or staff tenant scope) |
-| `patients.search` | Staff patient search |
+| `patients.search` | Staff patient search + appointment-safe lookup |
 | `patients.update_clinic_status` | Clinic patient profile / enroll |
 | `patients.update_own_profile` | Patient self profile |
 | `appointments.*` | Create/read/confirm/cancel/check_in/complete/no_show/reschedule |

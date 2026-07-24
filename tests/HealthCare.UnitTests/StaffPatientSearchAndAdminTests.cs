@@ -99,6 +99,7 @@ public sealed class StaffPatientSearchAndAdminTests
             harness.Db,
             user,
             new FakeCurrentStaff { HasActiveMembership = false },
+            new NoOpAuthorizationAuditLogger(),
             NullLogger<StaffPatientService>.Instance);
 
         var act = () => sut.SearchAsync(new StaffPatientSearchRequest());
@@ -121,6 +122,7 @@ public sealed class StaffPatientSearchAndAdminTests
             harness.Db,
             user,
             new FakeCurrentStaff { HasActiveMembership = false },
+            new NoOpAuthorizationAuditLogger(),
             NullLogger<StaffPatientService>.Instance);
 
         var act = () => sut.SearchAsync(new StaffPatientSearchRequest());
@@ -346,7 +348,140 @@ public sealed class StaffPatientSearchAndAdminTests
         typeof(UpdateClinicPatientRequest).GetProperty("Email").Should().BeNull();
         typeof(UpdateClinicPatientRequest).GetProperty("FirstName").Should().BeNull();
         typeof(UpdateClinicPatientRequest).GetProperty("OrganizationId").Should().BeNull();
-        typeof(UpdateClinicPatientRequest).GetProperty("ClinicId").Should().BeNull();
+        // ClinicId is allowed only as enrollment targeting for ORGANIZATION_ADMIN.
+        typeof(UpdateClinicPatientRequest).GetProperty("ClinicId").Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Organization_Admin_ClinicId_Filter_Is_Validated_In_Org()
+    {
+        await using var harness = await StaffPatientHarness.CreateAsync();
+        var data = await harness.SeedTwoClinicsAsync();
+        var sut = harness.CreateService(
+            data.OrgAdminUserId,
+            AppRoles.OrganizationAdmin,
+            data.Org1Id,
+            data.ClinicAId,
+            data.OrgAdminStaffMemberId);
+
+        var filtered = await sut.SearchAsync(new StaffPatientSearchRequest { ClinicId = data.ClinicBId });
+        filtered.Items.Should().ContainSingle(i => i.PatientId == data.PatientInBId);
+
+        var deny = () => sut.SearchAsync(new StaffPatientSearchRequest { ClinicId = data.OtherOrgClinicId });
+        await deny.Should().ThrowAsync<AuthorizationException>();
+    }
+
+    [Fact]
+    public async Task Organization_Admin_Detail_Lists_Org_Enrollments()
+    {
+        await using var harness = await StaffPatientHarness.CreateAsync();
+        var data = await harness.SeedTwoClinicsAsync();
+        await harness.EnrollPatientInSecondClinicAsync(data.PatientInAId, data.ClinicBId, "B-A001");
+
+        var sut = harness.CreateService(
+            data.OrgAdminUserId,
+            AppRoles.OrganizationAdmin,
+            data.Org1Id,
+            data.ClinicAId,
+            data.OrgAdminStaffMemberId);
+
+        var detail = await sut.GetByPatientIdAsync(data.PatientInAId);
+        detail.Enrollments.Should().HaveCount(2);
+        detail.Enrollments.Select(e => e.ClinicId).Should().BeEquivalentTo([data.ClinicAId, data.ClinicBId]);
+    }
+
+    [Fact]
+    public async Task Organization_Admin_Can_Update_Enrollment_By_ClinicId()
+    {
+        await using var harness = await StaffPatientHarness.CreateAsync();
+        var data = await harness.SeedTwoClinicsAsync();
+        await harness.EnrollPatientInSecondClinicAsync(data.PatientInAId, data.ClinicBId, "B-A001");
+
+        var sut = harness.CreateService(
+            data.OrgAdminUserId,
+            AppRoles.OrganizationAdmin,
+            data.Org1Id,
+            data.ClinicAId,
+            data.OrgAdminStaffMemberId);
+
+        var updated = await sut.UpdateClinicProfileAsync(
+            data.PatientInAId,
+            new UpdateClinicPatientRequest
+            {
+                ClinicId = data.ClinicBId,
+                ExpectedVersion = 0,
+                Status = "Inactive",
+            });
+
+        updated.ClinicId.Should().Be(data.ClinicBId);
+        updated.ClinicPatientStatus.Should().Be("Inactive");
+
+        var clinicA = await harness.Db.ClinicPatients.SingleAsync(cp =>
+            cp.ClinicId == data.ClinicAId && cp.PatientId == data.PatientInAId);
+        clinicA.Status.Should().Be(ClinicPatientStatus.Active);
+    }
+
+    [Fact]
+    public async Task Appointment_Lookup_Returns_Only_Active_Enrollment()
+    {
+        await using var harness = await StaffPatientHarness.CreateAsync();
+        var data = await harness.SeedTwoClinicsAsync();
+        var inactive = await harness.Db.ClinicPatients.SingleAsync(cp =>
+            cp.ClinicId == data.ClinicAId && cp.PatientId == data.PatientInAId);
+        inactive.Status = ClinicPatientStatus.Inactive;
+        await harness.Db.SaveChangesAsync();
+
+        var sut = harness.CreateService(
+            data.OrgAdminUserId,
+            AppRoles.OrganizationAdmin,
+            data.Org1Id,
+            data.ClinicAId,
+            data.OrgAdminStaffMemberId);
+
+        var lookup = await sut.LookupForAppointmentAsync(new StaffPatientLookupRequest
+        {
+            ClinicId = data.ClinicAId,
+        });
+        lookup.Items.Should().BeEmpty();
+
+        var withoutClinic = () => sut.LookupForAppointmentAsync(new StaffPatientLookupRequest());
+        await withoutClinic.Should().ThrowAsync<AuthorizationException>();
+    }
+
+    [Fact]
+    public async Task Organization_Admin_Can_Enroll_Into_Sibling_Clinic()
+    {
+        await using var harness = await StaffPatientHarness.CreateAsync();
+        var data = await harness.SeedTwoClinicsAsync();
+        var user = new FakeCurrentUser
+        {
+            IsAuthenticated = true,
+            UserId = data.OrgAdminUserId,
+            Roles = [AppRoles.OrganizationAdmin],
+        };
+        var staff = new FakeCurrentStaff
+        {
+            HasActiveMembership = true,
+            StaffMemberId = data.OrgAdminStaffMemberId,
+            OrganizationId = data.Org1Id,
+            ClinicId = data.ClinicAId,
+            Role = AppRoles.OrganizationAdmin,
+        };
+        var numbers = new LocalPatientNumberGenerator(harness.Db, NullLogger<LocalPatientNumberGenerator>.Instance);
+        var enrollment = new ClinicEnrollmentService(
+            harness.Db,
+            user,
+            staff,
+            new NoOpAuthorizationAuditLogger(),
+            numbers,
+            NullLogger<ClinicEnrollmentService>.Instance);
+
+        var result = await enrollment.EnrollAsync(data.ClinicBId, data.PatientInAId);
+        result.AlreadyEnrolled.Should().BeFalse();
+        result.ClinicId.Should().Be(data.ClinicBId);
+
+        var deny = () => enrollment.EnrollAsync(data.OtherOrgClinicId, data.PatientInAId);
+        await deny.Should().ThrowAsync<AuthorizationException>();
     }
 
     [Fact]
@@ -382,6 +517,7 @@ public sealed class StaffPatientSearchAndAdminTests
             harness.Db,
             user,
             new FakeCurrentStaff { HasActiveMembership = false },
+            new NoOpAuthorizationAuditLogger(),
             NullLogger<StaffPatientService>.Instance);
 
         var withoutBypass = () => sut.SearchAsync(new StaffPatientSearchRequest { ClinicId = data.ClinicAId });
@@ -560,7 +696,28 @@ internal sealed class StaffPatientHarness : IAsyncDisposable
             ClinicId = clinicId,
             Role = role,
         };
-        return new StaffPatientService(Db, user, staff, NullLogger<StaffPatientService>.Instance);
+        return new StaffPatientService(
+            Db,
+            user,
+            staff,
+            new NoOpAuthorizationAuditLogger(),
+            NullLogger<StaffPatientService>.Instance);
+    }
+
+    public async Task EnrollPatientInSecondClinicAsync(Guid patientId, Guid clinicId, string localNumber)
+    {
+        var now = DateTimeOffset.UtcNow;
+        Db.ClinicPatients.Add(new ClinicPatient
+        {
+            Id = Guid.NewGuid(),
+            ClinicId = clinicId,
+            PatientId = patientId,
+            LocalPatientNumber = localNumber,
+            Status = ClinicPatientStatus.Active,
+            RegisteredAtUtc = now,
+            UpdatedAtUtc = now,
+        });
+        await Db.SaveChangesAsync();
     }
 
     public ValueTask DisposeAsync()

@@ -308,6 +308,34 @@ public sealed class StaffPatientSearchEndpointTests : IAsyncLifetime
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);
     }
 
+    [Fact]
+    public async Task Organization_Admin_Lookup_Requires_ClinicId_And_Excludes_Inactive()
+    {
+        await AuthenticateAsync(OrgAdminEmail, OrgAdminPassword);
+        using var scope = _factory!.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+        var clinicAId = await db.Clinics.Where(c => c.Slug == "dev-clinic-a").Select(c => c.Id).SingleAsync();
+
+        var missingClinic = await _client!.GetAsync("/api/v1/staff/patients/lookup");
+        missingClinic.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var ok = await _client!.GetAsync($"/api/v1/staff/patients/lookup?clinicId={clinicAId}");
+        ok.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await ok.Content.ReadFromJsonAsync<PagedResponse<StaffPatientLookupItemResponse>>();
+        body!.Items.Should().Contain(i => i.LocalPatientNumber == "DEV-P-0001");
+        body.Items.Should().NotContain(i => i.LocalPatientNumber == "DEV-P-B-0001");
+    }
+
+    [Fact]
+    public async Task Patient_Self_Is_Denied_Staff_Patient_Apis()
+    {
+        await AuthenticateAsync(PatientEmail, PatientPassword);
+        var search = await _client!.GetAsync("/api/v1/staff/patients");
+        search.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        var lookup = await _client!.GetAsync("/api/v1/staff/patients/lookup");
+        lookup.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
     private async Task AuthenticateAsync(string email, string password)
     {
         var login = await _client!.PostAsJsonAsync("/api/v1/auth/login", new LoginRequest

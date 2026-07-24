@@ -1,6 +1,7 @@
 using HealthCare.Application.Authorization;
 using HealthCare.Application.Patients;
 using HealthCare.Contracts.Patients;
+using HealthCare.Domain.Identity;
 using HealthCare.Domain.Organizations;
 using HealthCare.Domain.Patients;
 using HealthCare.Infrastructure.Persistence;
@@ -12,18 +13,24 @@ namespace HealthCare.Infrastructure.Patients;
 public sealed class ClinicEnrollmentService : IClinicEnrollmentService
 {
     private readonly HealthCareDbContext _dbContext;
-    private readonly ITenantAccessService _tenantAccess;
+    private readonly ICurrentUser _currentUser;
+    private readonly ICurrentStaff _currentStaff;
+    private readonly IAuthorizationAuditLogger _audit;
     private readonly ILocalPatientNumberGenerator _numberGenerator;
     private readonly ILogger<ClinicEnrollmentService> _logger;
 
     public ClinicEnrollmentService(
         HealthCareDbContext dbContext,
-        ITenantAccessService tenantAccess,
+        ICurrentUser currentUser,
+        ICurrentStaff currentStaff,
+        IAuthorizationAuditLogger audit,
         ILocalPatientNumberGenerator numberGenerator,
         ILogger<ClinicEnrollmentService> logger)
     {
         _dbContext = dbContext;
-        _tenantAccess = tenantAccess;
+        _currentUser = currentUser;
+        _currentStaff = currentStaff;
+        _audit = audit;
         _numberGenerator = numberGenerator;
         _logger = logger;
     }
@@ -34,7 +41,7 @@ public sealed class ClinicEnrollmentService : IClinicEnrollmentService
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default)
     {
-        _tenantAccess.EnsureCanAccessClinic(clinicId, bypass);
+        await EnsureEnrollmentClinicAccessAsync(clinicId, bypass, cancellationToken);
 
         var clinic = await _dbContext.Clinics
             .AsNoTracking()
@@ -69,6 +76,12 @@ public sealed class ClinicEnrollmentService : IClinicEnrollmentService
                 "Duplicate enrollment detected. ClinicId={ClinicId} PatientId={PatientId}",
                 clinicId,
                 patientId);
+            _audit.PatientOperation(
+                "clinic_patient_enroll",
+                "already_enrolled",
+                clinic.OrganizationId,
+                clinicId,
+                patientId);
             return Map(existing, alreadyEnrolled: true);
         }
 
@@ -95,6 +108,12 @@ public sealed class ClinicEnrollmentService : IClinicEnrollmentService
 
                 _logger.LogInformation(
                     "Duplicate enrollment detected. ClinicId={ClinicId} PatientId={PatientId}",
+                    clinicId,
+                    patientId);
+                _audit.PatientOperation(
+                    "clinic_patient_enroll",
+                    "already_enrolled",
+                    clinic.OrganizationId,
                     clinicId,
                     patientId);
                 return Map(existing, alreadyEnrolled: true);
@@ -127,6 +146,12 @@ public sealed class ClinicEnrollmentService : IClinicEnrollmentService
                 enrollment.Id,
                 clinicId,
                 patientId);
+            _audit.PatientOperation(
+                "clinic_patient_enroll",
+                "created",
+                clinic.OrganizationId,
+                clinicId,
+                patientId);
 
             return Map(enrollment, alreadyEnrolled: false);
         }
@@ -149,6 +174,12 @@ public sealed class ClinicEnrollmentService : IClinicEnrollmentService
                     "Duplicate enrollment detected. ClinicId={ClinicId} PatientId={PatientId}",
                     clinicId,
                     patientId);
+                _audit.PatientOperation(
+                    "clinic_patient_enroll",
+                    "already_enrolled",
+                    clinic.OrganizationId,
+                    clinicId,
+                    patientId);
                 return Map(existing, alreadyEnrolled: true);
             }
 
@@ -160,6 +191,67 @@ public sealed class ClinicEnrollmentService : IClinicEnrollmentService
             {
                 await transaction.DisposeAsync();
             }
+        }
+    }
+
+    private async Task EnsureEnrollmentClinicAccessAsync(
+        Guid clinicId,
+        PlatformAdminBypass bypass,
+        CancellationToken cancellationToken)
+    {
+        if (!_currentUser.IsAuthenticated)
+        {
+            throw AuthorizationException.NotAuthenticated();
+        }
+
+        if (bypass == PlatformAdminBypass.Explicit && _currentUser.IsInRole(AppRoles.PlatformAdmin))
+        {
+            _audit.ExplicitPlatformBypassUsed("clinic_patient_enroll", null, clinicId);
+            return;
+        }
+
+        if (!_currentStaff.HasActiveMembership)
+        {
+            throw AuthorizationException.MissingStaffMembership();
+        }
+
+        var clinic = await _dbContext.Clinics
+            .AsNoTracking()
+            .SingleOrDefaultAsync(c => c.Id == clinicId, cancellationToken);
+
+        if (clinic is null)
+        {
+            _audit.CrossTenantDenied(
+                "clinic_patient_enroll_denied",
+                Contracts.Identity.AuthorizationErrorCodes.ClinicAccessDenied,
+                _currentStaff.OrganizationId,
+                clinicId);
+            throw AuthorizationException.ClinicAccessDenied();
+        }
+
+        if (_currentStaff.Role == AppRoles.OrganizationAdmin)
+        {
+            if (clinic.OrganizationId != _currentStaff.OrganizationId)
+            {
+                _audit.CrossTenantDenied(
+                    "clinic_patient_enroll_denied",
+                    Contracts.Identity.AuthorizationErrorCodes.ClinicAccessDenied,
+                    _currentStaff.OrganizationId,
+                    clinicId);
+                throw AuthorizationException.ClinicAccessDenied();
+            }
+
+            return;
+        }
+
+        if (_currentStaff.ClinicId != clinicId || clinic.OrganizationId != _currentStaff.OrganizationId)
+        {
+            _audit.CrossTenantDenied(
+                "clinic_patient_enroll_denied",
+                Contracts.Identity.AuthorizationErrorCodes.ClinicAccessDenied,
+                _currentStaff.OrganizationId,
+                clinicId);
+            throw AuthorizationException.ClinicAccessDenied();
         }
     }
 
