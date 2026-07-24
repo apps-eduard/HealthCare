@@ -49,7 +49,8 @@ public sealed class ClinicAdminSettingsSmokeTests : E2ePageTestBase
             await Expect(Page.Locator("#clinic-settings-name")).ToHaveValueAsync(unique);
 
             await Expect(Page.GetByText("Status is read-only")).ToBeVisibleAsync();
-            await Expect(Page.GetByText("(read-only)", new() { Exact = false })).ToBeVisibleAsync();
+            await Expect(Page.GetByText("Slug:", new() { Exact = false })).ToBeVisibleAsync();
+            await Expect(Page.GetByText("Organization:", new() { Exact = false })).ToBeVisibleAsync();
         }
         catch
         {
