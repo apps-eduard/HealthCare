@@ -294,6 +294,18 @@ else if (Permissions.Has(WebPermissions.OrganizationDashboardRead))
                             <Icon Type="safety" Theme="IconThemeType.Outline" /> Security
                         </Button>
                     }
+                    @if (GovernancePermissionRules.CanViewAuditLogs(Permissions))
+                    {
+                        <Button Type="@ButtonType.Primary" OnClick='() => Navigation.NavigateTo("/audit-logs")'>
+                            <Icon Type="file-search" Theme="IconThemeType.Outline" /> Audit Logs
+                        </Button>
+                    }
+                    @if (GovernancePermissionRules.CanViewUsage(Permissions))
+                    {
+                        <Button Type="@ButtonType.Primary" OnClick='() => Navigation.NavigateTo("/usage")'>
+                            <Icon Type="dashboard" Theme="IconThemeType.Outline" /> Usage &amp; Limits
+                        </Button>
+                    }
                 </Space>
             </Card>
         }

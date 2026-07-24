@@ -123,6 +123,8 @@ builder.Services.AddScoped<IStaffOperationsApiClient, StaffOperationsApiClient>(
 builder.Services.AddScoped<IOrganizationReportApiClient, OrganizationReportApiClient>();
 builder.Services.AddScoped<IBrowserFileDownload, BrowserFileDownload>();
 builder.Services.AddScoped<IOrganizationSecurityApiClient, OrganizationSecurityApiClient>();
+builder.Services.AddScoped<IOrganizationAuditLogApiClient, OrganizationAuditLogApiClient>();
+builder.Services.AddScoped<IOrganizationUsageApiClient, OrganizationUsageApiClient>();
 
 builder.Services.AddHttpClient();
 builder.Services.AddAntDesign();

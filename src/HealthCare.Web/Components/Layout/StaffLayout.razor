@@ -99,6 +99,29 @@
                     <span>Security</span>
                 </MenuItem>
             }
+            @if (GovernancePermissionRules.CanViewAny(Permissions))
+            {
+                <SubMenu Key="governance">
+                    <TitleTemplate>
+                        <Icon Type="audit" Theme="IconThemeType.Outline" />
+                        <span>Governance</span>
+                    </TitleTemplate>
+                    <ChildContent>
+                        @if (GovernancePermissionRules.CanViewAuditLogs(Permissions))
+                        {
+                            <MenuItem Key="audit-logs" RouterLink="/audit-logs" RouterMatch="NavLinkMatch.Prefix">
+                                <span>Audit Logs</span>
+                            </MenuItem>
+                        }
+                        @if (GovernancePermissionRules.CanViewUsage(Permissions))
+                        {
+                            <MenuItem Key="usage" RouterLink="/usage" RouterMatch="NavLinkMatch.Prefix">
+                                <span>Usage &amp; Limits</span>
+                            </MenuItem>
+                        }
+                    </ChildContent>
+                </SubMenu>
+            }
             @if (Permissions.Has(WebPermissions.ClinicsRead))
             {
                 <MenuItem Key="clinics" RouterLink="/clinics" RouterMatch="NavLinkMatch.Prefix">
@@ -239,6 +262,8 @@
                 var p when p.StartsWith("/operations/health", StringComparison.Ordinal) => "ops-health",
                 var p when p.StartsWith("/reports", StringComparison.Ordinal) => "reports",
                 var p when p.StartsWith("/security", StringComparison.Ordinal) => "security",
+                var p when p.StartsWith("/audit-logs", StringComparison.Ordinal) => "audit-logs",
+                var p when p.StartsWith("/usage", StringComparison.Ordinal) => "usage",
                 var p when p.StartsWith("/clinics", StringComparison.Ordinal) => "clinics",
                 var p when p.StartsWith("/staff", StringComparison.Ordinal) => "staff",
                 _ => "dashboard",

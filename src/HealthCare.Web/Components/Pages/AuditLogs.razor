@@ -1,0 +1,642 @@
+@page "/audit-logs"
+@attribute [Authorize]
+@using HealthCare.Contracts.Organizations
+@implements IDisposable
+@inject IOrganizationAuditLogApiClient AuditApi
+@inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
+@inject IClinicWorkingContext ClinicContext
+@inject IUserNotificationService Notify
+@inject IJSRuntime Js
+
+<PageTitle>Audit Logs</PageTitle>
+
+@if (Permissions.IsPatientOnly)
+{
+    <Alert Type="@AlertType.Error" Message="Patient accounts cannot use organization audit logs." ShowIcon="true" />
+}
+else if (!GovernancePermissionRules.CanViewAuditLogs(Permissions))
+{
+    <PermissionDeniedState Message="You do not have permission to view organization audit logs." />
+}
+else
+{
+    <HcPageHeader Title="Audit Logs"
+                  Subtitle="@(_subtitle ?? "Organization-scoped operational audit events")">
+        <Breadcrumb>
+            <Breadcrumb>
+                <BreadcrumbItem Href="/dashboard">Home</BreadcrumbItem>
+                <BreadcrumbItem>Governance</BreadcrumbItem>
+                <BreadcrumbItem>Audit Logs</BreadcrumbItem>
+            </Breadcrumb>
+        </Breadcrumb>
+        <ChildContent>
+            <Button OnClick="SearchAsync" Disabled="_loading" AriaLabel="Refresh audit logs">
+                <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
+            </Button>
+        </ChildContent>
+    </HcPageHeader>
+
+    @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+    {
+        <Alert Type="@AlertType.Info"
+               Message="Select an organization in the platform banner before loading audit logs."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
+    }
+
+    <Collapse Style="margin-bottom:1rem;">
+        <Panel Header="Audit retention and immutability" Key="retention">
+            <ul style="margin:0;padding-left:1.25rem;">
+                <li>Audit events are immutable — there is no edit or delete in this console.</li>
+                <li>
+                    Retention:
+                    @if (_list?.RetentionDays is int days and > 0)
+                    {
+                        <text>@_list.RetentionDays days (from the current response).</text>
+                    }
+                    else
+                    {
+                        <text>shown after the first successful query.</text>
+                    }
+                </li>
+                <li>Only safe fields are shown (category, action, result, resource ids, correlation id). Passwords, tokens, PHI, request bodies, and stack traces are never returned.</li>
+                <li>Use correlation id to group related events from the same request chain.</li>
+            </ul>
+        </Panel>
+    </Collapse>
+
+    <div class="hc-card">
+        <div class="hc-filter-grid">
+            @if (Permissions.CanFilterByClinic)
+            {
+                <ClinicPicker Value="_clinicId"
+                              ValueChanged="OnClinicFilterChanged"
+                              Label="Clinic"
+                              HelperText="Leave empty for all clinics"
+                              AllowClear="true"
+                              Required="false"
+                              ActiveOnly="null"
+                              PlatformAdminBypass="@PlatformBypass"
+                              PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
+                              Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)" />
+            }
+            <div>
+                <label class="hc-filter-label" for="audit-from">From (UTC)</label>
+                <DatePicker Id="audit-from" TValue="DateTime?" @bind-Value="_fromDate" Style="width:100%;" AriaLabel="Audit from date UTC" />
+            </div>
+            <div>
+                <label class="hc-filter-label" for="audit-to">To (UTC)</label>
+                <DatePicker Id="audit-to" TValue="DateTime?" @bind-Value="_toDate" Style="width:100%;" AriaLabel="Audit to date UTC" />
+            </div>
+            <div>
+                <label class="hc-filter-label" for="audit-category">Category</label>
+                <Select Id="audit-category"
+                        TItemValue="string"
+                        TItem="string"
+                        AllowClear
+                        Value="@(_category ?? string.Empty)"
+                        ValueChanged="OnCategoryChanged"
+                        Placeholder="Any"
+                        Style="width:100%;"
+                        AriaLabel="Audit category filter">
+                    <SelectOptions>
+                        @foreach (var category in OrganizationAuditPresentation.CommonCategories)
+                        {
+                            <SelectOption TItemValue="string" TItem="string" Value="@category" Label="@category" />
+                        }
+                    </SelectOptions>
+                </Select>
+            </div>
+            <div>
+                <label class="hc-filter-label" for="audit-action">Action</label>
+                <Input Id="audit-action" @bind-Value="_action" Placeholder="Exact action" AriaLabel="Audit action filter" />
+            </div>
+            <div>
+                <label class="hc-filter-label" for="audit-result">Result</label>
+                <Input Id="audit-result" @bind-Value="_resultCode" Placeholder="e.g. succeeded" AriaLabel="Audit result code filter" />
+            </div>
+            <div>
+                <label class="hc-filter-label" for="audit-actor">Actor user id</label>
+                <Input Id="audit-actor" @bind-Value="_actorUserIdText" Placeholder="Optional GUID" AriaLabel="Actor user id filter" />
+            </div>
+            <div>
+                <label class="hc-filter-label" for="audit-correlation">Correlation id</label>
+                <Input Id="audit-correlation" @bind-Value="_correlationId" Placeholder="Filter or lookup" AriaLabel="Correlation id filter" />
+            </div>
+            <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+                <Button Type="@ButtonType.Primary" OnClick="SearchAsync"
+                        Disabled="_loading || (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)"
+                        AriaLabel="Apply audit filters">
+                    Apply
+                </Button>
+                <Button OnClick="LookupCorrelationAsync"
+                        Disabled="_loading || string.IsNullOrWhiteSpace(_correlationId) || (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)"
+                        AriaLabel="Lookup by correlation id">
+                    Correlation lookup
+                </Button>
+                <Button OnClick="ResetFiltersAsync" Disabled="_loading" AriaLabel="Reset audit filters">Reset</Button>
+            </div>
+        </div>
+        <div class="hc-caption" style="margin-top:0.75rem;">
+            Event times are UTC (max @OrganizationAuditPresentation.MaxInclusiveDays inclusive days). Browser timezone is not the source of truth.
+            · Permission: @WebPermissions.OrganizationAuditLogsRead
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error)) { <ErrorState Message="@_error" /> }
+
+    @if (_loading && _list is null)
+    {
+        <PageLoading />
+    }
+    else if (_list is null)
+    {
+        <EmptyState Message="Apply filters to load organization audit events." />
+    }
+    else if (_list.Items.Count == 0)
+    {
+        <EmptyState Title="No audit events" Message="No events match the current filters." />
+    }
+    else
+    {
+        <div class="hc-caption" style="margin-bottom:0.5rem;">
+            @_list.TotalCount event(s) · Retention @_list.RetentionDays day(s)
+            @if (_correlationLookupActive)
+            {
+                <text> · Correlation lookup</text>
+            }
+        </div>
+        <div class="hc-table-wrap">
+            <table class="hc-table" aria-label="Organization audit logs">
+                <thead>
+                    <tr>
+                        <th>Occurred (UTC)</th>
+                        <th>Category</th>
+                        <th>Action</th>
+                        <th>Result</th>
+                        <th>Clinic</th>
+                        <th>Actor</th>
+                        <th>Resource</th>
+                        <th>Correlation</th>
+                        <th class="hc-actions">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var row in _list.Items)
+                {
+                    <tr>
+                        <td><span class="hc-caption">@row.OccurredAtUtc.UtcDateTime.ToString("u")</span></td>
+                        <td>@row.Category</td>
+                        <td>@row.Action</td>
+                        <td>
+                            <StatusBadge Text="@row.ResultCode"
+                                         Tone="@OrganizationAuditPresentation.ResultTone(row.ResultCode)" />
+                        </td>
+                        <td>@(row.ClinicName ?? "—")</td>
+                        <td><span class="hc-caption">@OrganizationAuditPresentation.TruncateId(row.ActorUserId)</span></td>
+                        <td>
+                            @(row.ResourceType ?? "—")
+                            @if (row.ResourceId is Guid)
+                            {
+                                <div class="hc-caption">@OrganizationAuditPresentation.TruncateId(row.ResourceId)</div>
+                            }
+                        </td>
+                        <td>
+                            <span class="hc-caption" title="@(row.CorrelationId ?? "")">
+                                @OrganizationAuditPresentation.TruncateCorrelation(row.CorrelationId)
+                            </span>
+                        </td>
+                        <td class="hc-actions">
+                            <Space Wrap>
+                                <Button Type="@ButtonType.Link" OnClick="@(() => OpenDetailAsync(row))" AriaLabel="View audit event detail">
+                                    Details
+                                </Button>
+                                @if (!string.IsNullOrWhiteSpace(row.CorrelationId))
+                                {
+                                    <Button Type="@ButtonType.Link"
+                                            OnClick="@(() => CopyCorrelationAsync(row.CorrelationId!))"
+                                            AriaLabel="Copy correlation id">
+                                        Copy correlation
+                                    </Button>
+                                }
+                            </Space>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:0.75rem;flex-wrap:wrap;">
+            <Button Disabled="@(_page <= 1 || _loading)" OnClick="@(() => OnPageChanged(_page - 1))" AriaLabel="Previous page">Previous</Button>
+            <span class="hc-caption">Page @_page / @_totalPages</span>
+            <Button Disabled="@(_page >= _totalPages || _loading)" OnClick="@(() => OnPageChanged(_page + 1))" AriaLabel="Next page">Next</Button>
+        </div>
+    }
+
+    <Drawer Title="@("Audit event")"
+            Visible="_detailVisible"
+            OnClose="CloseDetail"
+            Width="440">
+        @if (_detailLoading)
+        {
+            <PageLoading />
+        }
+        else if (_detail?.Event is null)
+        {
+            <Empty Description="@("No event selected")" />
+        }
+        else
+        {
+            var ev = _detail.Event;
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                <div><strong>Occurred (UTC):</strong> @ev.OccurredAtUtc.UtcDateTime.ToString("u")</div>
+                <div><strong>Category:</strong> @ev.Category</div>
+                <div><strong>Action:</strong> @ev.Action</div>
+                <div>
+                    <strong>Result:</strong>
+                    <StatusBadge Text="@ev.ResultCode" Tone="@OrganizationAuditPresentation.ResultTone(ev.ResultCode)" />
+                </div>
+                <div><strong>Clinic:</strong> @(ev.ClinicName ?? "—")</div>
+                <div><strong>Actor user id:</strong> @(ev.ActorUserId?.ToString("D") ?? "—")</div>
+                <div><strong>Resource type:</strong> @(ev.ResourceType ?? "—")</div>
+                <div><strong>Resource id:</strong> @(ev.ResourceId?.ToString("D") ?? "—")</div>
+                <div>
+                    <strong>Correlation id:</strong>
+                    @(ev.CorrelationId ?? "—")
+                    @if (!string.IsNullOrWhiteSpace(ev.CorrelationId))
+                    {
+                        <Button Type="@ButtonType.Link"
+                                Size="@ButtonSize.Small"
+                                OnClick="@(() => CopyCorrelationAsync(ev.CorrelationId!))"
+                                AriaLabel="Copy detail correlation id">
+                            Copy
+                        </Button>
+                    }
+                </div>
+                <div class="hc-caption">Event id: @ev.Id.ToString("D")</div>
+                <div class="hc-caption">Retention: @_detail.RetentionDays day(s)</div>
+                <Alert Type="@AlertType.Info"
+                       Message="This record is immutable. Metadata beyond these safe fields is not available in the Organization Admin console."
+                       ShowIcon="true"
+                       Style="margin-top:0.5rem;" />
+            </div>
+        }
+    </Drawer>
+}
+
+@code {
+    private Guid? _clinicId;
+    private DateTime? _fromDate = DateTime.UtcNow.Date.AddDays(-7);
+    private DateTime? _toDate = DateTime.UtcNow.Date.AddDays(1);
+    private string? _category;
+    private string? _action;
+    private string? _resultCode;
+    private string? _actorUserIdText;
+    private string? _correlationId;
+    private bool _loading;
+    private bool _detailLoading;
+    private bool _detailVisible;
+    private bool _correlationLookupActive;
+    private string? _error;
+    private string? _subtitle;
+    private bool _subscribedPlatform;
+    private bool _subscribedClinic;
+    private CancellationTokenSource? _cts;
+    private int _page = 1;
+    private const int PageSize = 50;
+    private int _totalPages = 1;
+
+    private OrganizationAuditLogListResponse? _list;
+    private OrganizationAuditLogDetailResponse? _detail;
+
+    private bool PlatformBypass =>
+        Permissions.IsPlatformAdmin && PlatformTenant.ExplicitBypassEnabled;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Permissions.IsPatientOnly || !GovernancePermissionRules.CanViewAuditLogs(Permissions))
+        {
+            return;
+        }
+
+        if (Permissions.IsPlatformAdmin)
+        {
+            PlatformTenant.Changed += OnPlatformTenantChanged;
+            _subscribedPlatform = true;
+            if (PlatformTenant.HasClinic)
+            {
+                _clinicId = PlatformTenant.SelectedClinicId;
+            }
+        }
+        else if (Permissions.IsOrganizationAdmin)
+        {
+            ClinicContext.Changed += OnClinicContextChanged;
+            _subscribedClinic = true;
+            if (ClinicContext.HasClinic)
+            {
+                _clinicId = ClinicContext.SelectedClinicId;
+            }
+        }
+        else if (!Permissions.CanFilterByClinic && Permissions.CurrentUser?.ClinicId is Guid clinicId)
+        {
+            _clinicId = clinicId;
+        }
+
+        await SearchAsync();
+    }
+
+    public void Dispose()
+    {
+        if (_subscribedPlatform)
+        {
+            PlatformTenant.Changed -= OnPlatformTenantChanged;
+        }
+
+        if (_subscribedClinic)
+        {
+            ClinicContext.Changed -= OnClinicContextChanged;
+        }
+
+        _cts?.Cancel();
+        _cts?.Dispose();
+    }
+
+    private void OnPlatformTenantChanged() => InvokeAsync(async () =>
+    {
+        if (PlatformTenant.HasClinic)
+        {
+            _clinicId = PlatformTenant.SelectedClinicId;
+        }
+
+        _page = 1;
+        await SearchAsync();
+        StateHasChanged();
+    });
+
+    private void OnClinicContextChanged() => InvokeAsync(async () =>
+    {
+        _clinicId = ClinicContext.SelectedClinicId;
+        _page = 1;
+        await SearchAsync();
+        StateHasChanged();
+    });
+
+    private async Task OnClinicFilterChanged(Guid? clinicId)
+    {
+        _clinicId = clinicId;
+        _page = 1;
+        if (Permissions.IsPlatformAdmin)
+        {
+            if (clinicId is Guid id && id != Guid.Empty)
+            {
+                if (PlatformTenant.SelectedClinicId != id)
+                {
+                    PlatformTenant.SelectClinic(id);
+                }
+            }
+            else if (PlatformTenant.HasClinic)
+            {
+                PlatformTenant.ClearClinic();
+            }
+
+            await SearchAsync();
+            return;
+        }
+
+        if (Permissions.IsOrganizationAdmin)
+        {
+            if (clinicId is Guid id && id != Guid.Empty)
+            {
+                ClinicContext.SelectClinic(id);
+            }
+            else
+            {
+                ClinicContext.ClearClinic();
+            }
+
+            return;
+        }
+
+        await SearchAsync();
+    }
+
+    private Task OnCategoryChanged(string value)
+    {
+        _category = string.IsNullOrWhiteSpace(value) ? null : value;
+        return Task.CompletedTask;
+    }
+
+    private async Task ResetFiltersAsync()
+    {
+        _fromDate = DateTime.UtcNow.Date.AddDays(-7);
+        _toDate = DateTime.UtcNow.Date.AddDays(1);
+        _category = null;
+        _action = null;
+        _resultCode = null;
+        _actorUserIdText = null;
+        _correlationId = null;
+        _correlationLookupActive = false;
+        _page = 1;
+        if (Permissions.IsPlatformAdmin)
+        {
+            _clinicId = PlatformTenant.SelectedClinicId;
+        }
+        else if (_subscribedClinic && ClinicContext.HasClinic)
+        {
+            ClinicContext.ClearClinic();
+            return;
+        }
+        else if (Permissions.CanFilterByClinic)
+        {
+            _clinicId = null;
+        }
+
+        await SearchAsync();
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        _page = page;
+        await SearchAsync();
+    }
+
+    private async Task SearchAsync()
+    {
+        _correlationLookupActive = false;
+        await LoadListAsync(correlationLookup: false);
+    }
+
+    private async Task LookupCorrelationAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_correlationId))
+        {
+            Notify.Error("Enter a correlation id to look up.");
+            return;
+        }
+
+        _page = 1;
+        _correlationLookupActive = true;
+        await LoadListAsync(correlationLookup: true);
+    }
+
+    private bool CanQuery()
+    {
+        if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private OrganizationAuditLogQuery BuildQuery()
+    {
+        Guid? actorId = null;
+        if (!string.IsNullOrWhiteSpace(_actorUserIdText)
+            && Guid.TryParse(_actorUserIdText.Trim(), out var parsed)
+            && parsed != Guid.Empty)
+        {
+            actorId = parsed;
+        }
+
+        return new OrganizationAuditLogQuery
+        {
+            OrganizationId = Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null,
+            ClinicId = _clinicId,
+            ActorUserId = actorId,
+            Category = string.IsNullOrWhiteSpace(_category) ? null : _category.Trim(),
+            Action = string.IsNullOrWhiteSpace(_action) ? null : _action.Trim(),
+            ResultCode = string.IsNullOrWhiteSpace(_resultCode) ? null : _resultCode.Trim(),
+            CorrelationId = _correlationLookupActive
+                ? null
+                : (string.IsNullOrWhiteSpace(_correlationId) ? null : _correlationId.Trim()),
+            FromUtc = _fromDate is DateTime from
+                ? new DateTimeOffset(DateTime.SpecifyKind(from.Date, DateTimeKind.Utc)).ToString("O")
+                : null,
+            ToUtc = _toDate is DateTime to
+                ? new DateTimeOffset(DateTime.SpecifyKind(to.Date, DateTimeKind.Utc)).ToString("O")
+                : null,
+            Page = _page,
+            PageSize = PageSize,
+        };
+    }
+
+    private async Task LoadListAsync(bool correlationLookup)
+    {
+        if (!CanQuery())
+        {
+            _list = null;
+            _error = null;
+            return;
+        }
+
+        BeginLoad();
+        try
+        {
+            var query = BuildQuery();
+            _list = correlationLookup
+                ? await AuditApi.GetByCorrelationIdAsync(_correlationId!.Trim(), query, PlatformBypass, _cts!.Token)
+                : await AuditApi.SearchAsync(query, PlatformBypass, _cts!.Token);
+
+            _subtitle = _list.OrganizationName;
+            _page = Math.Max(1, _list.Page);
+            _totalPages = Math.Max(1, (int)Math.Ceiling(_list.TotalCount / (double)Math.Max(1, _list.PageSize)));
+            _error = null;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ApiProblemException ex)
+        {
+            _list = null;
+            _error = OrganizationAuditProblemMessages.ToUserMessage(ex);
+            Notify.Error(_error);
+        }
+        catch (Exception)
+        {
+            _list = null;
+            _error = "Unable to load audit logs.";
+            Notify.Error(_error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenDetailAsync(OrganizationAuditLogItem row)
+    {
+        if (!CanQuery())
+        {
+            return;
+        }
+
+        _detailVisible = true;
+        _detail = null;
+        _detailLoading = true;
+        BeginLoad(keepList: true);
+        try
+        {
+            _detail = await AuditApi.GetByIdAsync(row.Id, BuildQuery(), PlatformBypass, _cts!.Token);
+            _error = null;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = OrganizationAuditProblemMessages.ToUserMessage(ex);
+            Notify.Error(_error);
+            _detailVisible = false;
+        }
+        catch (Exception)
+        {
+            Notify.Error("Unable to load audit event detail.");
+            _detailVisible = false;
+        }
+        finally
+        {
+            _detailLoading = false;
+            _loading = false;
+        }
+    }
+
+    private void CloseDetail()
+    {
+        _detailVisible = false;
+        _detail = null;
+    }
+
+    private async Task CopyCorrelationAsync(string correlationId)
+    {
+        try
+        {
+            var ok = await Js.InvokeAsync<bool>("healthcareShell.copyText", correlationId);
+            if (ok)
+            {
+                Notify.Success("Correlation id copied.");
+            }
+            else
+            {
+                Notify.Error("Unable to copy correlation id.");
+            }
+        }
+        catch
+        {
+            Notify.Error("Unable to copy correlation id.");
+        }
+    }
+
+    private void BeginLoad(bool keepList = false)
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        _loading = true;
+        if (!keepList)
+        {
+            _error = null;
+        }
+    }
+}

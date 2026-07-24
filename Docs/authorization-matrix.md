@@ -33,8 +33,8 @@ Resolution uses server-side Identity roles (DB) + active staff membership + pati
 | `organizations.select` | PLATFORM_ADMIN UI tenant selection (Web usability aid; API remains authoritative) |
 | `organization_dashboard.read` | Organization Admin (and PLATFORM_ADMIN with explicit tenant bypass) operational dashboard aggregates |
 | `organization_reports.read` | Organization Admin (and PLATFORM_ADMIN with explicit tenant bypass) operational reports + safe CSV export (`/reports`) |
-| `organization_audit_logs.read` | Organization Admin (and PLATFORM_ADMIN with explicit tenant bypass) organization-scoped audit log query |
-| `organization_usage.read` | Organization Admin (and PLATFORM_ADMIN with explicit tenant bypass) usage + platform limit visibility |
+| `organization_audit_logs.read` | Organization Admin (and PLATFORM_ADMIN with explicit tenant bypass) organization-scoped audit log query (`/audit-logs`) |
+| `organization_usage.read` | Organization Admin (and PLATFORM_ADMIN with explicit tenant bypass) usage + platform limit visibility (`/usage`) |
 | `security_sessions.read` | Organization Admin (and PLATFORM_ADMIN with explicit tenant bypass) session visibility + security event summaries (`/security`) |
 | `security_sessions.revoke` | Staff managers / Org Admin: revoke sessions; Org Admin security compromise-response |
 | `staff.read` / `staff.manage` / `staff.password_reset` | Staff list/detail/create/update/activate + admin password-reset initiation |

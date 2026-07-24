@@ -1,0 +1,338 @@
+@page "/usage"
+@attribute [Authorize]
+@using HealthCare.Contracts.Organizations
+@implements IDisposable
+@inject IOrganizationUsageApiClient UsageApi
+@inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
+@inject IClinicWorkingContext ClinicContext
+@inject IUserNotificationService Notify
+
+<PageTitle>Usage &amp; Limits</PageTitle>
+
+@if (Permissions.IsPatientOnly)
+{
+    <Alert Type="@AlertType.Error" Message="Patient accounts cannot use organization usage." ShowIcon="true" />
+}
+else if (!GovernancePermissionRules.CanViewUsage(Permissions))
+{
+    <PermissionDeniedState Message="You do not have permission to view organization usage and limits." />
+}
+else
+{
+    <HcPageHeader Title="Usage & Limits"
+                  Subtitle="@(_subtitle ?? "Organization operational usage and platform limits")">
+        <Breadcrumb>
+            <Breadcrumb>
+                <BreadcrumbItem Href="/dashboard">Home</BreadcrumbItem>
+                <BreadcrumbItem>Governance</BreadcrumbItem>
+                <BreadcrumbItem>Usage & Limits</BreadcrumbItem>
+            </Breadcrumb>
+        </Breadcrumb>
+        <ChildContent>
+            <Button OnClick="LoadAsync" Disabled="_loading" AriaLabel="Refresh usage">
+                <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
+            </Button>
+        </ChildContent>
+    </HcPageHeader>
+
+    @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+    {
+        <Alert Type="@AlertType.Info"
+               Message="Select an organization in the platform banner before loading usage."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
+    }
+
+    <Collapse Style="margin-bottom:1rem;">
+        <Panel Header="Snapshot and limits" Key="help">
+            <ul style="margin:0;padding-left:1.25rem;">
+                <li>Counts are a current operational snapshot from the API — not a live subscription meter.</li>
+                <li>Clinic and staff limits are platform-configured. Organization Admins cannot raise limits here.</li>
+                <li>Remaining capacity and warning flags use the platform warning threshold returned by the API.</li>
+                <li>Audit retention days are informational for governance; audit events are immutable.</li>
+            </ul>
+        </Panel>
+    </Collapse>
+
+    <div class="hc-card">
+        <div class="hc-filter-grid">
+            @if (Permissions.CanFilterByClinic)
+            {
+                <ClinicPicker Value="_clinicId"
+                              ValueChanged="OnClinicFilterChanged"
+                              Label="Clinic"
+                              HelperText="Optional clinic scope for counts where supported"
+                              AllowClear="true"
+                              Required="false"
+                              ActiveOnly="null"
+                              PlatformAdminBypass="@PlatformBypass"
+                              PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
+                              Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)" />
+            }
+            <div style="display:flex;gap:8px;align-items:flex-end;">
+                <Button Type="@ButtonType.Primary" OnClick="LoadAsync"
+                        Disabled="_loading || (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)"
+                        AriaLabel="Load usage">
+                    Load
+                </Button>
+                <Button OnClick="ResetFiltersAsync" Disabled="_loading" AriaLabel="Reset usage filters">Reset</Button>
+            </div>
+        </div>
+        <div class="hc-caption" style="margin-top:0.75rem;">
+            Permission: @WebPermissions.OrganizationUsageRead · Limits are read-only
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error)) { <ErrorState Message="@_error" /> }
+
+    @if (_loading && _usage is null)
+    {
+        <PageLoading />
+    }
+    else if (_usage is null)
+    {
+        <EmptyState Message="Load usage to see organization counts and limits." />
+    }
+    else
+    {
+        <Alert Type="@AlertType.Info"
+               Message="@($"Snapshot generated at {_usage.GeneratedAtUtc.UtcDateTime:u} (UTC). Metrics reflect the API response at that time.")"
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
+
+        <AntDesign.Row Gutter="(16, 16)" Style="margin-bottom:1rem;">
+            <AntDesign.Col Xs="12" Md="8" Lg="6"><Statistic Title="Clinics (total)" Value="@_usage.ClinicCount" /></AntDesign.Col>
+            <AntDesign.Col Xs="12" Md="8" Lg="6"><Statistic Title="Clinics (active)" Value="@_usage.ActiveClinicCount" /></AntDesign.Col>
+            <AntDesign.Col Xs="12" Md="8" Lg="6"><Statistic Title="Staff (total)" Value="@_usage.StaffCount" /></AntDesign.Col>
+            <AntDesign.Col Xs="12" Md="8" Lg="6"><Statistic Title="Staff (active)" Value="@_usage.ActiveStaffCount" /></AntDesign.Col>
+            <AntDesign.Col Xs="12" Md="8" Lg="6"><Statistic Title="Active doctors" Value="@_usage.ActiveDoctorCount" /></AntDesign.Col>
+            <AntDesign.Col Xs="12" Md="8" Lg="6"><Statistic Title="Patients" Value="@_usage.PatientCount" /></AntDesign.Col>
+            <AntDesign.Col Xs="12" Md="8" Lg="6"><Statistic Title="Appointments (month)" Value="@_usage.MonthlyAppointmentCount" /></AntDesign.Col>
+            <AntDesign.Col Xs="12" Md="8" Lg="6"><Statistic Title="Audit retention (days)" Value="@_usage.AuditRetentionDays" /></AntDesign.Col>
+        </AntDesign.Row>
+
+        <div class="hc-card" style="margin-bottom:1rem;">
+            <h3 style="margin:0 0 0.75rem;font-size:1rem;">Clinic capacity</h3>
+            <StatusBadge Text="@OrganizationUsagePresentation.LimitLabel(_usage.ClinicLimitReached, _usage.ClinicLimitWarning)"
+                         Tone="@OrganizationUsagePresentation.LimitTone(_usage.ClinicLimitReached, _usage.ClinicLimitWarning)" />
+            <div style="margin-top:0.75rem;">
+                <Progress Percent="@OrganizationUsagePresentation.CapacityPercent(_usage.ClinicCount, _usage.MaxClinics)"
+                          Status="@LimitProgressStatus(_usage.ClinicLimitReached, _usage.ClinicLimitWarning)" />
+            </div>
+            <AntDesign.Row Gutter="(16, 16)" Style="margin-top:0.75rem;">
+                <AntDesign.Col Xs="12" Md="8"><Statistic Title="Used" Value="@_usage.ClinicCount" /></AntDesign.Col>
+                <AntDesign.Col Xs="12" Md="8"><Statistic Title="Max clinics" Value="@_usage.MaxClinics" /></AntDesign.Col>
+                <AntDesign.Col Xs="12" Md="8"><Statistic Title="Remaining" Value="@_usage.RemainingClinicCapacity" /></AntDesign.Col>
+            </AntDesign.Row>
+            <div class="hc-caption" style="margin-top:0.5rem;">
+                Warning threshold: @_usage.WarningThresholdPercent%
+            </div>
+        </div>
+
+        <div class="hc-card">
+            <h3 style="margin:0 0 0.75rem;font-size:1rem;">Staff capacity</h3>
+            <StatusBadge Text="@OrganizationUsagePresentation.LimitLabel(_usage.StaffLimitReached, _usage.StaffLimitWarning)"
+                         Tone="@OrganizationUsagePresentation.LimitTone(_usage.StaffLimitReached, _usage.StaffLimitWarning)" />
+            <div style="margin-top:0.75rem;">
+                <Progress Percent="@OrganizationUsagePresentation.CapacityPercent(_usage.StaffCount, _usage.MaxStaff)"
+                          Status="@LimitProgressStatus(_usage.StaffLimitReached, _usage.StaffLimitWarning)" />
+            </div>
+            <AntDesign.Row Gutter="(16, 16)" Style="margin-top:0.75rem;">
+                <AntDesign.Col Xs="12" Md="8"><Statistic Title="Used" Value="@_usage.StaffCount" /></AntDesign.Col>
+                <AntDesign.Col Xs="12" Md="8"><Statistic Title="Max staff" Value="@_usage.MaxStaff" /></AntDesign.Col>
+                <AntDesign.Col Xs="12" Md="8"><Statistic Title="Remaining" Value="@_usage.RemainingStaffCapacity" /></AntDesign.Col>
+            </AntDesign.Row>
+            <div class="hc-caption" style="margin-top:0.5rem;">
+                Warning threshold: @_usage.WarningThresholdPercent% · Limits cannot be changed from this page
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private Guid? _clinicId;
+    private bool _loading;
+    private string? _error;
+    private string? _subtitle;
+    private bool _subscribedPlatform;
+    private bool _subscribedClinic;
+    private CancellationTokenSource? _cts;
+    private OrganizationUsageResponse? _usage;
+
+    private bool PlatformBypass =>
+        Permissions.IsPlatformAdmin && PlatformTenant.ExplicitBypassEnabled;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Permissions.IsPatientOnly || !GovernancePermissionRules.CanViewUsage(Permissions))
+        {
+            return;
+        }
+
+        if (Permissions.IsPlatformAdmin)
+        {
+            PlatformTenant.Changed += OnPlatformTenantChanged;
+            _subscribedPlatform = true;
+            if (PlatformTenant.HasClinic)
+            {
+                _clinicId = PlatformTenant.SelectedClinicId;
+            }
+        }
+        else if (Permissions.IsOrganizationAdmin)
+        {
+            ClinicContext.Changed += OnClinicContextChanged;
+            _subscribedClinic = true;
+            if (ClinicContext.HasClinic)
+            {
+                _clinicId = ClinicContext.SelectedClinicId;
+            }
+        }
+        else if (!Permissions.CanFilterByClinic && Permissions.CurrentUser?.ClinicId is Guid clinicId)
+        {
+            _clinicId = clinicId;
+        }
+
+        await LoadAsync();
+    }
+
+    public void Dispose()
+    {
+        if (_subscribedPlatform)
+        {
+            PlatformTenant.Changed -= OnPlatformTenantChanged;
+        }
+
+        if (_subscribedClinic)
+        {
+            ClinicContext.Changed -= OnClinicContextChanged;
+        }
+
+        _cts?.Cancel();
+        _cts?.Dispose();
+    }
+
+    private void OnPlatformTenantChanged() => InvokeAsync(async () =>
+    {
+        if (PlatformTenant.HasClinic)
+        {
+            _clinicId = PlatformTenant.SelectedClinicId;
+        }
+
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    private void OnClinicContextChanged() => InvokeAsync(async () =>
+    {
+        _clinicId = ClinicContext.SelectedClinicId;
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    private async Task OnClinicFilterChanged(Guid? clinicId)
+    {
+        _clinicId = clinicId;
+        if (Permissions.IsPlatformAdmin)
+        {
+            if (clinicId is Guid id && id != Guid.Empty)
+            {
+                if (PlatformTenant.SelectedClinicId != id)
+                {
+                    PlatformTenant.SelectClinic(id);
+                }
+            }
+            else if (PlatformTenant.HasClinic)
+            {
+                PlatformTenant.ClearClinic();
+            }
+
+            await LoadAsync();
+            return;
+        }
+
+        if (Permissions.IsOrganizationAdmin)
+        {
+            if (clinicId is Guid id && id != Guid.Empty)
+            {
+                ClinicContext.SelectClinic(id);
+            }
+            else
+            {
+                ClinicContext.ClearClinic();
+            }
+
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task ResetFiltersAsync()
+    {
+        if (Permissions.IsPlatformAdmin)
+        {
+            _clinicId = PlatformTenant.SelectedClinicId;
+        }
+        else if (_subscribedClinic && ClinicContext.HasClinic)
+        {
+            ClinicContext.ClearClinic();
+            return;
+        }
+        else if (Permissions.CanFilterByClinic)
+        {
+            _clinicId = null;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+        {
+            _usage = null;
+            _error = null;
+            return;
+        }
+
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            var query = new OrganizationUsageQuery
+            {
+                OrganizationId = Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null,
+                ClinicId = _clinicId,
+            };
+            _usage = await UsageApi.GetUsageAsync(query, PlatformBypass, _cts.Token);
+            _subtitle = _usage.OrganizationName;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ApiProblemException ex)
+        {
+            _usage = null;
+            _error = OrganizationUsageProblemMessages.ToUserMessage(ex);
+            Notify.Error(_error);
+        }
+        catch (Exception)
+        {
+            _usage = null;
+            _error = "Unable to load organization usage.";
+            Notify.Error(_error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static ProgressStatus LimitProgressStatus(bool reached, bool warning) =>
+        reached ? ProgressStatus.Exception : warning ? ProgressStatus.Active : ProgressStatus.Success;
+}

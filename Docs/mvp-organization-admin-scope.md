@@ -699,7 +699,7 @@ The Organization Admin must not:
 - Organization usage and limit visibility on `GET /api/v1/organization/usage` (`organization_usage.read`) with remaining capacity and warning flags. Clinic/staff create enforce platform limits (`clinic.limit_reached` / `staff.limit_reached`). Org Admin cannot increase limits.
 
 **Frontend status (2026-07-24) — Phase 1 (Dashboard + Clinic management):**
-- `/dashboard` — organization metrics from `GET /api/v1/organization/dashboard` via `IOrganizationDashboardApiClient`; clinic filter (“All clinics” supported); manual refresh + last-refreshed; backend date/timezone strategy displayed; permission-aware quick links to existing pages only (`/clinics`, `/staff`, `/patients`, `/appointments`, calendar, availability, operations, reports, security). Audit/usage UI routes are deferred.
+- `/dashboard` — organization metrics from `GET /api/v1/organization/dashboard` via `IOrganizationDashboardApiClient`; clinic filter (“All clinics” supported); manual refresh + last-refreshed; backend date/timezone strategy displayed; permission-aware quick links to existing pages only (`/clinics`, `/staff`, `/patients`, `/appointments`, calendar, availability, operations, reports, security, audit logs, usage).
 - `/clinics` — organization clinic directory via `IClinicManagementApiClient` (`clinics.read` for list; create/update/activate/deactivate gated per permission). Server-side search, status filter, sort, pagination; detail `Drawer`; create/edit modals; activate/deactivate confirmations with safe Problem Details mapping; optional initial Clinic Admin on create; concurrency reload on edit; clinic picker cache refresh after mutations.
 - Org Admin clinic working context: circuit-scoped `IClinicWorkingContext` (All clinics = null), header `ClinicContextBanner`, cleared on logout. No free-text tenant GUIDs; no browser API token storage (BFF unchanged).
 
@@ -732,6 +732,11 @@ The Organization Admin must not:
 **Frontend status (2026-07-24) — Phase 8 (Security operations):**
 - `/security` — sessions + failed-login / authorization-denial / cross-clinic summaries via `IOrganizationSecurityApiClient` (`security_sessions.read`). Staff-wide session revoke and compromised-account response (`security_sessions.revoke`). Overview cards composed from safe endpoints.
 - Clinic filter synced with `IClinicWorkingContext`; IP/UA masked in UI; no tokens/cookies/stamps; session-invalidation help panel documents access-token limitation and BFF validation behavior.
+
+**Frontend status (2026-07-24) — Phase 9 (Audit logs + usage limits):**
+- `/audit-logs` — organization audit list/detail/correlation lookup via `IOrganizationAuditLogApiClient` (`organization_audit_logs.read`). Filters: clinic, date range (max 93 days), category, action, result, actor, correlation id. Safe fields only; retention + immutability callouts; no metadata dump/export/edit/delete.
+- `/usage` — operational usage + clinic/staff limits/remaining capacity via `IOrganizationUsageApiClient` (`organization_usage.read`). Snapshot timestamp; read-only limits; warning/reached badges. No billing or limit modification.
+- Nav: Governance → Audit Logs / Usage & Limits. Clinic filter synced with `IClinicWorkingContext`.
 
 ### Phase 2 — Scheduling and operations
 

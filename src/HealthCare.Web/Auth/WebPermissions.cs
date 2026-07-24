@@ -22,6 +22,8 @@ public static class WebPermissions
     public const string OrganizationsSelect = "organizations.select";
     public const string OrganizationDashboardRead = "organization_dashboard.read";
     public const string OrganizationReportsRead = "organization_reports.read";
+    public const string OrganizationAuditLogsRead = "organization_audit_logs.read";
+    public const string OrganizationUsageRead = "organization_usage.read";
 
     public const string AppointmentsRead = "appointments.read";
     public const string AppointmentsCreate = "appointments.create";
