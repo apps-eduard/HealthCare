@@ -19,7 +19,7 @@
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Medical notes staff UI, Google auth, or remaining BFF multi-instance hardening
+**Current focus:** Clinic Admin Web MVP CA-1 (clinic dashboard + navigation) — scope **approved**; implementation not started
 
 ### All phases at a glance
 
@@ -1026,6 +1026,27 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 | 2026-07-24 | 8 | Org Admin Frontend Phase 9 — audit logs + usage limits UI (list/detail/correlation, capacity snapshot, clinic context, tests) |
 | 2026-07-24 | 8 | Org Admin Frontend Phase 10 — organization profile settings UI + backend slice (read/update, concurrency, audits, tests) |
 | 2026-07-24 | 8 | Web MVP Phase 11 — Playwright E2E (Org Admin smoke) + HTTPS test-host hardening |
+| 2026-07-24 | docs | Clinic Admin MVP scope drafted (`Docs/mvp-clinic-admin-scope.md`) — decisions A–D + phases; **no application code**; awaiting PO approval |
+| 2026-07-24 | docs | Clinic Admin MVP scope **approved** (profile, reports JSON, audit, usage counts, dashboard API, five `clinic_*` permissions); CA-1 next |
+
+### Clinic Admin Web MVP (approved scope)
+
+Authoritative scope: **`Docs/mvp-clinic-admin-scope.md`** (product-owner approved 2026-07-24).
+
+| Phase | Theme | Complexity | Status |
+|-------|--------|------------|--------|
+| CA-1 | Nav + clinic dashboard (`GET /api/v1/clinic/dashboard`) | Medium | Next (not started) |
+| CA-2 | Clinic profile settings API/UI | Medium | Approved; blocked on CA-1 |
+| CA-3 | Staff UI hardening (clinic actor) | Small | Not started |
+| CA-4 | Doctor directory + availability verify | Small | Not started |
+| CA-5 | Patients verify (hide cross-clinic enroll) | Small | Not started |
+| CA-6 | Appointments verify (Complete for CA) | Small | Not started |
+| CA-7 | Operations verify | Small | Not started |
+| CA-8 | Clinic reports (JSON; no CSV) | Large | Approved |
+| CA-9 | Clinic-filtered audit | Medium | Approved |
+| CA-10 | Hardening + Playwright E2E | Medium | Not started |
+
+Existing backend covers clinic-scoped staff/patients/appointments/availability/operations for `CLINIC_ADMIN`. Gaps: clinic dashboard, clinic profile, clinic reports, clinic-filtered audit.
 
 ---
 

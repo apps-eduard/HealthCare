@@ -120,6 +120,11 @@ Not automatically allowed:
 - Access another clinic.
 - Read medical notes unless granted a clinical permission.
 
+Authoritative Clinic Admin Web MVP scope:  
+`Docs/mvp-clinic-admin-scope.md` (**approved** 2026-07-24).
+
+**Implementation note (2026-07-24):** staff, patients, appointments, availability, and operations for the membership clinic are implemented under existing permissions. Approved but **not yet coded:** clinic dashboard (`clinic_dashboard.read`), clinic profile (`clinic_profile.read` / `clinic_profile.update`), clinic reports (`clinic_reports.read`, JSON only), clinic-filtered audit (`clinic_audit_logs.read`). Clinic Admin must not receive organization-wide dashboard, reports, unfiltered audit, usage/limits, security-console, or medical-note permissions by admin role alone.
+
 ### 4.4 DOCTOR
 
 Allowed:

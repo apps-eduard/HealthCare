@@ -8,6 +8,8 @@ Authoritative design documents:
 - [Development plan](Docs/development-plan.md)
 - [Security](Docs/security.md)
 - [Phase progress](Docs/phase-progress.md)
+- [Organization Admin MVP scope](Docs/mvp-organization-admin-scope.md)
+- [Clinic Admin MVP scope](Docs/mvp-clinic-admin-scope.md) *(approved — implementation phased)*
 
 ## Prerequisites
 
