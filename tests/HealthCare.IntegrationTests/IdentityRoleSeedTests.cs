@@ -39,6 +39,7 @@ public sealed class IdentityRoleSeedTests : IAsyncLifetime
         _factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
+                IntegrationTestHost.ApplyDefaultSettings(builder);
                 builder.ConfigureServices(services =>
                 {
                     services.RemoveAll(typeof(DbContextOptions<HealthCareDbContext>));

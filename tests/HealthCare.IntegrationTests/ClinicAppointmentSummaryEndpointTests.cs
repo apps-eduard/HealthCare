@@ -54,6 +54,7 @@ public sealed class ClinicAppointmentSummaryEndpointTests : IAsyncLifetime
         _factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
+                IntegrationTestHost.ApplyDefaultSettings(builder);
                 builder.UseEnvironment(Environments.Development);
                 builder.UseSetting("ConnectionStrings:DefaultConnection", connectionString);
                 builder.UseSetting("Jwt:Issuer", "HealthCare");
@@ -190,13 +191,31 @@ public sealed class ClinicAppointmentSummaryEndpointTests : IAsyncLifetime
     [Fact]
     public async Task Clinic_Summary_Contains_Only_That_Clinic()
     {
-        await AuthenticateAsync(StaffAEmail, StaffAPassword);
         var date = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(90));
+        var slot = new DateTimeOffset(
+            date.ToDateTime(new TimeOnly(9, 0), DateTimeKind.Unspecified),
+            TimeSpan.FromHours(3)).ToUniversalTime();
+
+        await AuthenticateAsync(PatientEmail, PatientPassword);
+        var doctorId = await GetClinicADoctorStaffIdAsync();
+        var create = await _client!.PostAsJsonAsync("/api/v1/patients/me/appointments", new
+        {
+            clinicCode = "dev-clinic-a",
+            doctorStaffMemberId = doctorId,
+            appointmentDateUtc = slot,
+            durationMinutes = 30,
+        });
+        create.StatusCode.Should().Be(HttpStatusCode.OK);
+        var created = await create.Content.ReadFromJsonAsync<AppointmentResponse>();
+
+        await AuthenticateAsync(StaffAEmail, StaffAPassword);
         var response = await _client!.GetAsync($"/api/v1/staff/clinics/current/appointment-summary?date={date:yyyy-MM-dd}");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<ClinicAppointmentSummaryResponse>();
         body!.ClinicCode.Should().Be("dev-clinic-a");
+        body.Appointments.Should().NotBeEmpty();
         body.Appointments.Should().OnlyContain(a => a.AppointmentId != Guid.Empty);
+        body.Appointments.Should().Contain(a => a.AppointmentId == created!.Id);
     }
 
     [Fact]
@@ -236,6 +255,16 @@ public sealed class ClinicAppointmentSummaryEndpointTests : IAsyncLifetime
             r.ClinicId == clinicAId
             && r.Status == "Failed"
             && r.BackgroundJobId == "integration-job");
+    }
+
+    private async Task<Guid> GetClinicADoctorStaffIdAsync()
+    {
+        using var scope = _factory!.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+        return await db.StaffMembers
+            .Where(s => s.Role == AppRoles.Doctor)
+            .Join(db.Clinics.Where(c => c.Slug == "dev-clinic-a"), s => s.ClinicId, c => c.Id, (s, _) => s.Id)
+            .SingleAsync();
     }
 
     private async Task AuthenticateAsync(string email, string password)

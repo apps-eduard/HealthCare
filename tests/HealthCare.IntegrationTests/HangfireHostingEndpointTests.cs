@@ -154,6 +154,8 @@ public sealed class HangfireHostingEndpointTests : IAsyncLifetime
         return new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
+                // HangfireHostingEndpointTests intentionally toggles workers/dashboard/scheduling.
+                IntegrationTestHost.ApplyDefaultSettings(builder, disableHangfireWorkers: false);
                 builder.UseEnvironment(Environments.Development);
                 builder.UseSetting("ConnectionStrings:DefaultConnection", _connectionString);
                 builder.UseSetting("Jwt:Issuer", "HealthCare");

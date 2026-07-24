@@ -51,6 +51,7 @@ public sealed class MedicalNotesEndpointTests : IAsyncLifetime
 
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
+            IntegrationTestHost.ApplyDefaultSettings(builder);
             builder.UseEnvironment(Environments.Development);
             builder.UseSetting("ConnectionStrings:DefaultConnection", connectionString);
             builder.UseSetting("Jwt:Issuer", "HealthCare");

@@ -51,6 +51,7 @@ public sealed class AppointmentFoundationEndpointTests : IAsyncLifetime
         _factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
+                IntegrationTestHost.ApplyDefaultSettings(builder);
                 builder.UseEnvironment(Environments.Development);
                 builder.UseSetting("ConnectionStrings:DefaultConnection", connectionString);
                 builder.UseSetting("Jwt:Issuer", "HealthCare");
@@ -183,6 +184,17 @@ public sealed class AppointmentFoundationEndpointTests : IAsyncLifetime
     [Fact]
     public async Task Staff_List_Returns_Only_Clinic_Appointments()
     {
+        await AuthenticateAsync(PatientEmail, PatientPassword);
+        var doctorId = await GetClinicADoctorStaffIdAsync();
+        var create = await _client!.PostAsJsonAsync("/api/v1/patients/me/appointments", new
+        {
+            clinicCode = "dev-clinic-a",
+            doctorStaffMemberId = doctorId,
+            appointmentDateUtc = AlignedFutureSlotUtc(daysAhead: 18),
+            durationMinutes = 30,
+        });
+        create.StatusCode.Should().Be(HttpStatusCode.OK);
+
         await AuthenticateAsync(StaffAEmail, StaffAPassword);
         var response = await _client!.GetAsync("/api/v1/staff/appointments");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -190,7 +202,8 @@ public sealed class AppointmentFoundationEndpointTests : IAsyncLifetime
         using var scope = _factory!.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
         var clinicAId = await db.Clinics.Where(c => c.Slug == "dev-clinic-a").Select(c => c.Id).SingleAsync();
-        body!.Items.Should().OnlyContain(i => i.ClinicId == clinicAId);
+        body!.Items.Should().NotBeEmpty();
+        body.Items.Should().OnlyContain(i => i.ClinicId == clinicAId);
     }
 
     [Fact]

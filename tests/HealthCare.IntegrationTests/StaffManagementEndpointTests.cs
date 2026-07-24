@@ -158,6 +158,7 @@ public sealed class StaffManagementEndpointTests : IAsyncLifetime
         new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
+                IntegrationTestHost.ApplyDefaultSettings(builder);
                 builder.UseEnvironment(Environments.Development);
                 builder.UseSetting("ConnectionStrings:DefaultConnection", _connectionString);
                 builder.UseSetting("Jwt:Issuer", "HealthCare");

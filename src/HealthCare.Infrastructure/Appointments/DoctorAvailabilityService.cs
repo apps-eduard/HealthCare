@@ -518,9 +518,19 @@ public sealed class DoctorAvailabilityService : IDoctorAvailabilityService
             return doctor;
         }
 
-        if (role == AppRoles.Doctor && _currentStaff.StaffMemberId == doctor.Id)
+        if (role == AppRoles.Doctor)
         {
-            return doctor;
+            if (_currentStaff.StaffMemberId == doctor.Id)
+            {
+                return doctor;
+            }
+
+            _audit.CrossTenantDenied(
+                "availability_cross_clinic_denied",
+                Contracts.Identity.AuthorizationErrorCodes.ClinicAccessDenied,
+                _currentStaff.OrganizationId,
+                doctor.ClinicId);
+            throw AvailabilityException.DoctorNotFound();
         }
 
         throw AuthorizationException.Forbidden();

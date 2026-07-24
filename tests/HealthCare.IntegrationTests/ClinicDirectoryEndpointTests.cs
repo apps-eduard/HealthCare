@@ -99,6 +99,7 @@ public sealed class ClinicDirectoryEndpointTests : IAsyncLifetime
         return new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
+                IntegrationTestHost.ApplyDefaultSettings(builder);
                 builder.UseEnvironment("Development");
                 builder.ConfigureServices(services =>
                 {

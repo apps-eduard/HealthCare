@@ -39,6 +39,26 @@ public sealed class PatientConcurrencyException : Exception
     public int StatusCode { get; }
 }
 
+public sealed class PatientProfileUpdateException : Exception
+{
+    public PatientProfileUpdateException(string errorCode, string title, int statusCode = 400)
+        : base(title)
+    {
+        ErrorCode = errorCode;
+        Title = title;
+        StatusCode = statusCode;
+    }
+
+    public string ErrorCode { get; }
+
+    public string Title { get; }
+
+    public int StatusCode { get; }
+
+    public static PatientProfileUpdateException EmptyUpdate() =>
+        new(PatientErrorCodes.EmptyProfileUpdate, "At least one profile field must be provided.", 400);
+}
+
 public sealed class PatientClinicRegistrationException : Exception
 {
     public PatientClinicRegistrationException(string errorCode, string title, int statusCode = 404)

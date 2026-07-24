@@ -24,6 +24,8 @@ public sealed class PatientRegistrationEndpointTests : IAsyncLifetime
     private const string AdminPassword = "ChangeMe_Admin_1!";
     private const string StaffEmail = "doctor.reg@healthcare.local";
     private const string StaffPassword = "ChangeMe_DoctorA_1!";
+    private const string ClinicAdminEmail = "clinicadmin.reg@healthcare.local";
+    private const string ClinicAdminPassword = "ChangeMe_ClinicAdmin_1!";
 
     private PostgreSqlContainer? _postgres;
     private WebApplicationFactory<Program>? _factory;
@@ -50,6 +52,7 @@ public sealed class PatientRegistrationEndpointTests : IAsyncLifetime
         _factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
+                IntegrationTestHost.ApplyDefaultSettings(builder);
                 builder.UseEnvironment(Environments.Development);
                 builder.UseSetting("ConnectionStrings:DefaultConnection", connectionString);
                 builder.UseSetting("Jwt:Issuer", "HealthCare");
@@ -207,20 +210,20 @@ public sealed class PatientRegistrationEndpointTests : IAsyncLifetime
                 var staffUser = new ApplicationUser
                 {
                     Id = Guid.NewGuid(),
-                    Email = StaffEmail,
-                    UserName = StaffEmail,
+                    Email = ClinicAdminEmail,
+                    UserName = ClinicAdminEmail,
                     EmailConfirmed = true,
                     IsActive = true,
                 };
-                await users.CreateAsync(staffUser, StaffPassword);
-                await users.AddToRoleAsync(staffUser, AppRoles.Doctor);
+                await users.CreateAsync(staffUser, ClinicAdminPassword);
+                await users.AddToRoleAsync(staffUser, AppRoles.ClinicAdmin);
                 db.StaffMembers.Add(new Domain.Staff.StaffMember
                 {
                     Id = Guid.NewGuid(),
                     UserId = staffUser.Id,
                     OrganizationId = org.Id,
                     ClinicId = clinic.Id,
-                    Role = AppRoles.Doctor,
+                    Role = AppRoles.ClinicAdmin,
                     IsActive = true,
                 });
                 await db.SaveChangesAsync();
@@ -257,8 +260,8 @@ public sealed class PatientRegistrationEndpointTests : IAsyncLifetime
 
         var login = await _client.PostAsJsonAsync("/api/v1/auth/login", new LoginRequest
         {
-            Email = StaffEmail,
-            Password = StaffPassword,
+            Email = ClinicAdminEmail,
+            Password = ClinicAdminPassword,
         });
         login.EnsureSuccessStatusCode();
         var tokens = await login.Content.ReadFromJsonAsync<AuthTokenResponse>();

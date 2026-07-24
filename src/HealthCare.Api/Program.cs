@@ -10,20 +10,28 @@ using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Mvc;
 using Serilog;
 
+// Bootstrap logger for early startup failures. Use CreateLogger (not CreateBootstrapLogger) so
+// WebApplicationFactory can create hosts repeatedly without Freeze() races on ReloadableLogger.
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
-    .CreateBootstrapLogger();
+    .CreateLogger();
+
+var skipStaticLoggerFlush = IsIntegrationTestHost();
 
 try
 {
     var builder = WebApplication.CreateBuilder(args);
+    skipStaticLoggerFlush = skipStaticLoggerFlush || IsIntegrationTestHost(builder.Configuration);
 
+    // preserveStaticLogger: true keeps host logging in DI and avoids mutating/freezing Log.Logger
+    // when multiple integration-test hosts start in parallel.
     builder.Host.UseSerilog((context, services, configuration) => configuration
         .ReadFrom.Configuration(context.Configuration)
         .ReadFrom.Services(services)
         .Enrich.FromLogContext()
         .Enrich.WithProperty("Application", "HealthCare.Api")
-        .WriteTo.Console());
+        .WriteTo.Console(),
+        preserveStaticLogger: true);
 
     builder.Services.AddApplication();
     builder.Services.AddInfrastructure(builder.Configuration);
@@ -116,7 +124,29 @@ catch (Exception ex) when (ex is not HostAbortedException)
 }
 finally
 {
-    Log.CloseAndFlush();
+    // WebApplicationFactory disposes hosts while other parallel test hosts still need Log.Logger.
+    if (!skipStaticLoggerFlush)
+    {
+        await Log.CloseAndFlushAsync();
+    }
+}
+
+static bool IsIntegrationTestHost(IConfiguration? configuration = null)
+{
+    if (string.Equals(
+            Environment.GetEnvironmentVariable("HEALTHCARE_INTEGRATION_TEST_HOST"),
+            "true",
+            StringComparison.OrdinalIgnoreCase)
+        || string.Equals(
+            Environment.GetEnvironmentVariable("HEALTHCARE_SKIP_STATIC_LOGGER_FLUSH"),
+            "true",
+            StringComparison.OrdinalIgnoreCase))
+    {
+        return true;
+    }
+
+    return configuration is not null
+           && configuration.GetValue("HealthCare:IntegrationTestHost", false);
 }
 
 // Expose Program for WebApplicationFactory integration tests.

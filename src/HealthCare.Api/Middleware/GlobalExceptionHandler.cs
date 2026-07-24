@@ -82,6 +82,18 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
                 cancellationToken);
         }
 
+        if (exception is PatientProfileUpdateException profileUpdateException)
+        {
+            return await WriteAuthProblemAsync(
+                httpContext,
+                profileUpdateException.StatusCode,
+                profileUpdateException.Title,
+                profileUpdateException.ErrorCode,
+                correlationId,
+                "Patient profile update rejected",
+                cancellationToken);
+        }
+
         if (exception is ClinicPatientConcurrencyException clinicPatientConcurrencyException)
         {
             return await WriteAuthProblemAsync(

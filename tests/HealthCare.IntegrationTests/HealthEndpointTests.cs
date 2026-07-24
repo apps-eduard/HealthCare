@@ -38,6 +38,7 @@ public sealed class HealthEndpointTests : IAsyncLifetime
         _factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
+                IntegrationTestHost.ApplyDefaultSettings(builder);
                 builder.ConfigureServices(services =>
                 {
                     services.RemoveAll(typeof(DbContextOptions<HealthCareDbContext>));

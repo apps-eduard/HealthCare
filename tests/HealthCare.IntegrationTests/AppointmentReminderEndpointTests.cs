@@ -53,6 +53,7 @@ public sealed class AppointmentReminderEndpointTests : IAsyncLifetime
         _factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
+                IntegrationTestHost.ApplyDefaultSettings(builder);
                 builder.UseEnvironment(Environments.Development);
                 builder.UseSetting("ConnectionStrings:DefaultConnection", connectionString);
                 builder.UseSetting("Jwt:Issuer", "HealthCare");
@@ -175,8 +176,14 @@ public sealed class AppointmentReminderEndpointTests : IAsyncLifetime
     {
         _client!.DefaultRequestHeaders.Authorization = null;
         var response = await _client.GetAsync("/hangfire");
-        response.StatusCode.Should().BeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden, HttpStatusCode.Redirect, HttpStatusCode.OK);
-        // Hangfire filter returns empty/forbidden for unauthenticated; ensure not a usable dashboard for anonymous.
+        response.StatusCode.Should().BeOneOf(
+            HttpStatusCode.Unauthorized,
+            HttpStatusCode.Forbidden,
+            HttpStatusCode.Redirect,
+            HttpStatusCode.NotFound,
+            HttpStatusCode.OK);
+        // Hangfire filter returns empty/forbidden for unauthenticated; disabled dashboard yields 404.
+        // Ensure not a usable dashboard for anonymous when the route exists.
         if (response.StatusCode == HttpStatusCode.OK)
         {
             var body = await response.Content.ReadAsStringAsync();

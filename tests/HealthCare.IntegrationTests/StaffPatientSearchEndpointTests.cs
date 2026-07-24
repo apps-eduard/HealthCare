@@ -24,6 +24,8 @@ public sealed class StaffPatientSearchEndpointTests : IAsyncLifetime
     private const string StaffAPassword = "ChangeMe_DoctorA_1!";
     private const string StaffBEmail = "doctor.b@healthcare.local";
     private const string StaffBPassword = "ChangeMe_DoctorB_1!";
+    private const string ClinicAdminEmail = "clinicadmin@healthcare.local";
+    private const string ClinicAdminPassword = "ChangeMe_ClinicAdmin_1!";
     private const string OrgAdminEmail = "orgadmin@healthcare.local";
     private const string OrgAdminPassword = "ChangeMe_OrgAdmin_1!";
 
@@ -52,6 +54,7 @@ public sealed class StaffPatientSearchEndpointTests : IAsyncLifetime
         _factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
+                IntegrationTestHost.ApplyDefaultSettings(builder);
                 builder.UseEnvironment(Environments.Development);
                 builder.UseSetting("ConnectionStrings:DefaultConnection", connectionString);
                 builder.UseSetting("Jwt:Issuer", "HealthCare");
@@ -67,6 +70,8 @@ public sealed class StaffPatientSearchEndpointTests : IAsyncLifetime
                 builder.UseSetting("DevelopmentSeed:Patient:OtherClinicStaffPassword", StaffBPassword);
                 builder.UseSetting("DevelopmentSeed:Patient:OrganizationAdminEmail", OrgAdminEmail);
                 builder.UseSetting("DevelopmentSeed:Patient:OrganizationAdminPassword", OrgAdminPassword);
+                builder.UseSetting("DevelopmentSeed:Patient:ClinicAdminEmail", ClinicAdminEmail);
+                builder.UseSetting("DevelopmentSeed:Patient:ClinicAdminPassword", ClinicAdminPassword);
 
                 builder.ConfigureServices(services =>
                 {
@@ -236,7 +241,7 @@ public sealed class StaffPatientSearchEndpointTests : IAsyncLifetime
     [Fact]
     public async Task ClinicPatient_Status_Update_Succeeds_Within_Scope()
     {
-        await AuthenticateAsync(StaffAEmail, StaffAPassword);
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
         using var scope = _factory!.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
         var patientId = await db.ClinicPatients
@@ -294,7 +299,7 @@ public sealed class StaffPatientSearchEndpointTests : IAsyncLifetime
     [Fact]
     public async Task Stale_Version_Returns_409()
     {
-        await AuthenticateAsync(StaffAEmail, StaffAPassword);
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
         using var scope = _factory!.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
         var patientId = await db.ClinicPatients

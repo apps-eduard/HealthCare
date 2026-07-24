@@ -52,6 +52,7 @@ public sealed class AppointmentRescheduleEndpointTests : IAsyncLifetime
         _factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
+                IntegrationTestHost.ApplyDefaultSettings(builder);
                 builder.UseEnvironment(Environments.Development);
                 builder.UseSetting("ConnectionStrings:DefaultConnection", connectionString);
                 builder.UseSetting("Jwt:Issuer", "HealthCare");
@@ -275,7 +276,8 @@ public sealed class AppointmentRescheduleEndpointTests : IAsyncLifetime
         });
         reschedule.StatusCode.Should().Be(HttpStatusCode.Conflict);
         var problem = await reschedule.Content.ReadFromJsonAsync<JsonElement>();
-        problem.GetProperty("extensions").GetProperty("errorCode").GetString()
+        // ASP.NET Core serializes ProblemDetails extensions as top-level JSON properties.
+        problem.GetProperty("errorCode").GetString()
             .Should().Be(AppointmentErrorCodes.RescheduleNotAllowed);
     }
 

@@ -44,6 +44,11 @@ public sealed class PatientService : IPatientService
         UpdatePatientProfileRequest request,
         CancellationToken cancellationToken = default)
     {
+        if (!request.HasAnyEditableField)
+        {
+            throw PatientProfileUpdateException.EmptyUpdate();
+        }
+
         var patient = await LoadLinkedActivePatientForUpdateAsync(asNoTracking: false, cancellationToken);
 
         if (patient.Version != request.ExpectedVersion)
