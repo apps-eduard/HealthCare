@@ -132,7 +132,7 @@
         }
         catch (ApiProblemException ex)
         {
-            _error = ex.ToUserMessage();
+            _error = StaffProblemMessages.From(ex);
         }
         finally
         {
@@ -206,7 +206,7 @@
         }
         catch (ApiProblemException ex)
         {
-            _error = ex.ToUserMessage();
+            _error = StaffProblemMessages.From(ex);
             _temporaryPassword = string.Empty;
             _confirmPassword = string.Empty;
         }

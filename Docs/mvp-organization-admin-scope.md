@@ -703,6 +703,10 @@ The Organization Admin must not:
 - `/clinics` — organization clinic directory via `IClinicManagementApiClient` (`clinics.read` for list; create/update/activate/deactivate gated per permission). Server-side search, status filter, sort, pagination; detail `Drawer`; create/edit modals; activate/deactivate confirmations with safe Problem Details mapping; optional initial Clinic Admin on create; concurrency reload on edit; clinic picker cache refresh after mutations.
 - Org Admin clinic working context: circuit-scoped `IClinicWorkingContext` (All clinics = null), header `ClinicContextBanner`, cleared on logout. No free-text tenant GUIDs; no browser API token storage (BFF unchanged).
 
+**Frontend status (2026-07-24) — Phase 2 (Staff + Clinic Admin management):**
+- `/staff` (+ `/staff/clinic-admins`, `/staff/doctors`, `/staff/nurses`, `/staff/receptionists`) — organization staff directory via `IStaffManagementApiClient` (`staff.read` gate). Tabs for All / Clinic Admins / Doctors / Nurses / Receptionists; Clinic Admins use `GET .../clinic-admins`. Search, clinic, role (All tab), and active-status filters with paging.
+- Actions: detail, create, edit (profile fields + concurrency reload), activate/deactivate (self-deactivate hidden), change clinic, role reassignment (`roles.assign`; sole-role removal is backend-denied — UI guides reassignment), password-reset initiation, session revoke. Safe `StaffProblemMessages` mapping. Org Admin clinic filter syncs with `IClinicWorkingContext`.
+
 ### Phase 2 — Scheduling and operations
 
 11. Doctor availability

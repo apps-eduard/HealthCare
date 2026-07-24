@@ -88,7 +88,7 @@
         }
         catch (ApiProblemException ex)
         {
-            _error = ex.ToUserMessage();
+            _error = StaffProblemMessages.From(ex);
         }
         finally
         {

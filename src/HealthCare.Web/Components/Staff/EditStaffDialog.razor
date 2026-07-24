@@ -77,7 +77,7 @@ else
         }
         catch (ApiProblemException ex)
         {
-            _error = ex.ToUserMessage();
+            _error = StaffProblemMessages.From(ex);
         }
         finally
         {
@@ -113,7 +113,26 @@ else
         }
         catch (ApiProblemException ex)
         {
-            _error = ex.ToUserMessage();
+            _error = StaffProblemMessages.From(ex);
+            if (ex.ErrorCode == StaffErrorCodes.ConcurrencyConflict)
+            {
+                try
+                {
+                    var detail = await StaffApi.GetByIdAsync(
+                        Options.StaffMemberId,
+                        platformAdminBypass: Permissions.IsPlatformAdmin);
+                    _firstName = detail.FirstName;
+                    _lastName = detail.LastName;
+                    _displayName = detail.DisplayName;
+                    _jobTitle = detail.JobTitle;
+                    _phone = detail.PhoneNumber;
+                    _version = detail.Version;
+                }
+                catch
+                {
+                    // Keep the concurrency message; list reload will refresh on close.
+                }
+            }
         }
         finally
         {

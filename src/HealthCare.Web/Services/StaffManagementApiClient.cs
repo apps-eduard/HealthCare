@@ -11,6 +11,11 @@ public interface IStaffManagementApiClient
         bool platformAdminBypass = false,
         CancellationToken cancellationToken = default);
 
+    Task<PagedResponse<StaffSummaryResponse>> SearchClinicAdminsAsync(
+        StaffSearchRequest request,
+        bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default);
+
     Task<StaffDetailResponse> GetByIdAsync(
         Guid staffMemberId,
         bool platformAdminBypass = false,
@@ -88,6 +93,19 @@ public sealed class StaffManagementApiClient : IStaffManagementApiClient
     {
         var client = _httpClientFactory.CreateClient("HealthCareApi");
         var url = BuildQuery("api/v1/staff-management/staff", request, platformAdminBypass);
+        using var response = await client.GetAsync(url, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return (await response.Content.ReadFromJsonAsync<PagedResponse<StaffSummaryResponse>>(cancellationToken))
+               ?? PagedResponse<StaffSummaryResponse>.Create([], request.Page, request.PageSize, 0);
+    }
+
+    public async Task<PagedResponse<StaffSummaryResponse>> SearchClinicAdminsAsync(
+        StaffSearchRequest request,
+        bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default)
+    {
+        var client = _httpClientFactory.CreateClient("HealthCareApi");
+        var url = BuildQuery("api/v1/staff-management/clinic-admins", request, platformAdminBypass);
         using var response = await client.GetAsync(url, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
         return (await response.Content.ReadFromJsonAsync<PagedResponse<StaffSummaryResponse>>(cancellationToken))

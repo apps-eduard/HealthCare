@@ -185,7 +185,7 @@ Pages:
 - `/login` — staff sign-in
 - `/dashboard` — authenticated shell home; Organization Admin operational dashboard (`organization_dashboard.read`)
 - `/clinics` — organization clinic directory + management (`clinics.read` for list; create/update/activate/deactivate gated separately)
-- `/staff` — staff list/management (`staff.read` required)
+- `/staff` — staff list/management (`staff.read` required); tabs `/staff/clinic-admins`, `/staff/doctors`, `/staff/nurses`, `/staff/receptionists`
 - `/appointments`, `/appointments/calendar`, `/patients`, `/availability` — scoped operational pages
 
 Organization Admin working clinic context uses circuit-scoped `IClinicWorkingContext` (cleared on logout). PLATFORM_ADMIN continues to use `IPlatformTenantContext`.

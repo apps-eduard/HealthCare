@@ -71,6 +71,16 @@ Shape: **4px** radius, minimal shadow, compact controls, **8px** spacing scale.
 | `/dashboard` | Organization dashboard aggregates + clinic filter + refresh |
 | `/clinics` | Clinic directory + drawer + create/edit/activate/deactivate |
 
+## Org Admin Phase 2 pages
+
+| Route | Notes |
+|-------|-------|
+| `/staff` | Staff directory + tabs + filters/paging + create/edit/activate |
+| `/staff/clinic-admins` | Clinic Admins tab (`GET .../clinic-admins`) |
+| `/staff/doctors` | Doctors tab |
+| `/staff/nurses` | Nurses tab |
+| `/staff/receptionists` | Receptionists tab |
+
 ## NU1900
 
 `Directory.Build.props` keeps `NuGetAudit=true` and adds `NU1900` to `WarningsNotAsErrors` so transient nuget.org vulnerability-feed timeouts do not fail restore under `TreatWarningsAsErrors`. Advisory codes NU1901–NU1904 remain non-fatal as before; audit is not disabled.

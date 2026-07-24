@@ -63,12 +63,7 @@
         }
         catch (ApiProblemException ex)
         {
-            _error = ex.ErrorCode switch
-            {
-                StaffErrorCodes.ConcurrencyConflict => "This record changed. Reload the list and try again.",
-                StaffErrorCodes.LastAdminProtected => "The last administrator in scope cannot be deactivated.",
-                _ => ex.ToUserMessage(),
-            };
+            _error = StaffProblemMessages.From(ex);
         }
         finally
         {

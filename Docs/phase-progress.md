@@ -1016,6 +1016,7 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 | 2026-07-24 | 4 / 12 | Org Admin security ops + sessions (visibility, revoke, compromise, summaries, SecurityEvents) |
 | 2026-07-24 | 4 | Org Admin audit-log query + usage/limits visibility (`OrganizationAuditEvents`, limit enforcement) |
 | 2026-07-24 | 8 | Org Admin Frontend Phase 1 — dashboard + clinic management UI (detail drawer, working clinic context, tests) |
+| 2026-07-24 | 8 | Org Admin Frontend Phase 2 — staff + Clinic Admin management UI (tabs, clinic-admins client, concurrency, tests) |
 
 ---
 
