@@ -4,6 +4,7 @@ using HealthCare.Application.Authorization;
 using HealthCare.Contracts.Appointments;
 using HealthCare.Domain.Appointments;
 using HealthCare.Domain.Identity;
+using HealthCare.Domain.Organizations;
 using HealthCare.Domain.Staff;
 using HealthCare.Infrastructure.Appointments;
 using Microsoft.EntityFrameworkCore;
@@ -403,8 +404,151 @@ public sealed class AppointmentAvailabilityTests
         var sut = h.CreateAvailabilityService(
             orgAdminUser, data.Org1Id, data.ClinicAId, orgAdminStaff, AppRoles.OrganizationAdmin);
 
-        var list = await sut.ListAvailabilityAsync(data.DoctorBStaffId);
+        var list = await sut.ListAvailabilityAsync(data.DoctorBStaffId, clinicId: data.ClinicBId);
         list.Should().NotBeEmpty();
+        list[0].ClinicTimeZoneId.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public async Task Organization_Admin_Cannot_Manage_Other_Organization_Doctor()
+    {
+        await using var h = await AppointmentHarness.CreateAsync();
+        var data = await h.SeedAsync();
+        var orgAdminUser = Guid.NewGuid();
+        var orgAdminStaff = Guid.NewGuid();
+        h.Db.StaffMembers.Add(new StaffMember
+        {
+            Id = orgAdminStaff,
+            UserId = orgAdminUser,
+            OrganizationId = data.Org1Id,
+            ClinicId = data.ClinicAId,
+            Role = AppRoles.OrganizationAdmin,
+            IsActive = true,
+        });
+
+        var org2 = Guid.NewGuid();
+        var clinicOther = Guid.NewGuid();
+        var foreignDoctor = Guid.NewGuid();
+        h.Db.Organizations.Add(new Organization
+        {
+            Id = org2,
+            Name = "Other Org",
+            Slug = "other-org-avail",
+            Status = OrganizationStatus.Active,
+        });
+        h.Db.Clinics.Add(new Domain.Clinics.Clinic
+        {
+            Id = clinicOther,
+            OrganizationId = org2,
+            Name = "Other Clinic",
+            Slug = "other-clinic-avail",
+            TimeZoneId = "Asia/Riyadh",
+            IsActive = true,
+        });
+        h.Db.StaffMembers.Add(new StaffMember
+        {
+            Id = foreignDoctor,
+            UserId = Guid.NewGuid(),
+            OrganizationId = org2,
+            ClinicId = clinicOther,
+            Role = AppRoles.Doctor,
+            IsActive = true,
+        });
+        await h.Db.SaveChangesAsync();
+
+        var sut = h.CreateAvailabilityService(
+            orgAdminUser, data.Org1Id, data.ClinicAId, orgAdminStaff, AppRoles.OrganizationAdmin);
+
+        var act = () => sut.ListAvailabilityAsync(foreignDoctor);
+        await act.Should().ThrowAsync<AvailabilityException>()
+            .Where(e => e.ErrorCode == AvailabilityErrorCodes.DoctorNotFound);
+    }
+
+    [Fact]
+    public async Task Organization_Admin_ClinicId_Must_Match_Doctor_Clinic()
+    {
+        await using var h = await AppointmentHarness.CreateAsync();
+        var data = await h.SeedAsync();
+        var orgAdminUser = Guid.NewGuid();
+        var orgAdminStaff = Guid.NewGuid();
+        h.Db.StaffMembers.Add(new StaffMember
+        {
+            Id = orgAdminStaff,
+            UserId = orgAdminUser,
+            OrganizationId = data.Org1Id,
+            ClinicId = data.ClinicAId,
+            Role = AppRoles.OrganizationAdmin,
+            IsActive = true,
+        });
+        await h.Db.SaveChangesAsync();
+
+        var sut = h.CreateAvailabilityService(
+            orgAdminUser, data.Org1Id, data.ClinicAId, orgAdminStaff, AppRoles.OrganizationAdmin);
+
+        var mismatch = () => sut.ListAvailabilityAsync(data.DoctorAStaffId, clinicId: data.ClinicBId);
+        await mismatch.Should().ThrowAsync<AvailabilityException>()
+            .Where(e => e.ErrorCode == AvailabilityErrorCodes.DoctorNotFound);
+
+        var doctors = await h.CreateDirectory(
+                orgAdminUser, data.Org1Id, data.ClinicAId, orgAdminStaff, AppRoles.OrganizationAdmin)
+            .ListDoctorsByClinicIdAsync(data.ClinicBId);
+        doctors.Should().Contain(d => d.StaffMemberId == data.DoctorBStaffId);
+        doctors.Should().OnlyContain(d => d.ClinicId == data.ClinicBId);
+
+        var denyClinic = () => h.CreateDirectory(
+                orgAdminUser, data.Org1Id, data.ClinicAId, orgAdminStaff, AppRoles.OrganizationAdmin)
+            .ListDoctorsByClinicIdAsync(Guid.NewGuid());
+        await denyClinic.Should().ThrowAsync<AuthorizationException>();
+    }
+
+    [Fact]
+    public async Task Organization_Admin_Can_Update_Window_And_Create_Exception_For_Sibling_Clinic_Doctor()
+    {
+        await using var h = await AppointmentHarness.CreateAsync();
+        var data = await h.SeedAsync();
+        var orgAdminUser = Guid.NewGuid();
+        var orgAdminStaff = Guid.NewGuid();
+        h.Db.StaffMembers.Add(new StaffMember
+        {
+            Id = orgAdminStaff,
+            UserId = orgAdminUser,
+            OrganizationId = data.Org1Id,
+            ClinicId = data.ClinicAId,
+            Role = AppRoles.OrganizationAdmin,
+            IsActive = true,
+        });
+        await h.Db.SaveChangesAsync();
+
+        var sut = h.CreateAvailabilityService(
+            orgAdminUser, data.Org1Id, data.ClinicAId, orgAdminStaff, AppRoles.OrganizationAdmin);
+
+        var existing = (await sut.ListAvailabilityAsync(data.DoctorBStaffId, clinicId: data.ClinicBId))
+            .First(w => w.DayOfWeek == "Wednesday");
+
+        var updated = await sut.UpdateAvailabilityAsync(
+            data.DoctorBStaffId,
+            existing.Id,
+            new UpdateDoctorAvailabilityRequest
+            {
+                ExpectedVersion = existing.Version,
+                EndLocalTime = "18:00",
+            },
+            clinicId: data.ClinicBId);
+
+        updated.ClinicId.Should().Be(data.ClinicBId);
+        updated.EndLocalTime.Should().Be("18:00");
+        updated.ClinicTimeZoneId.Should().NotBeNullOrWhiteSpace();
+
+        var exception = await sut.CreateExceptionAsync(
+            data.DoctorBStaffId,
+            new CreateDoctorAvailabilityExceptionRequest
+            {
+                Date = new DateOnly(2026, 9, 2),
+                ExceptionType = "UnavailableFullDay",
+                Reason = "Training",
+            },
+            clinicId: data.ClinicBId);
+        exception.ExceptionType.Should().Be("UnavailableFullDay");
     }
 
     [Fact]

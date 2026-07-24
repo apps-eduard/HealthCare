@@ -54,4 +54,13 @@ internal sealed class NoOpAuthorizationAuditLogger : IAuthorizationAuditLogger
         Guid? appointmentId = null)
     {
     }
+
+    public void AvailabilityOperation(
+        string operation,
+        string resultCode,
+        Guid? organizationId = null,
+        Guid? clinicId = null,
+        Guid? doctorStaffMemberId = null)
+    {
+    }
 }

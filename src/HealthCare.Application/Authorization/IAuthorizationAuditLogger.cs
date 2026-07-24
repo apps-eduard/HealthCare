@@ -43,4 +43,14 @@ public interface IAuthorizationAuditLogger
         Guid? organizationId = null,
         Guid? clinicId = null,
         Guid? appointmentId = null);
+
+    /// <summary>
+    /// Doctor availability operational audit. Must never include passwords, tokens, or clinical note content.
+    /// </summary>
+    void AvailabilityOperation(
+        string operation,
+        string resultCode,
+        Guid? organizationId = null,
+        Guid? clinicId = null,
+        Guid? doctorStaffMemberId = null);
 }

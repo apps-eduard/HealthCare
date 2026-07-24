@@ -128,6 +128,22 @@ public sealed class AuthorizationAuditLogger : IAuthorizationAuditLogger
             appointmentId,
             CorrelationId());
 
+    public void AvailabilityOperation(
+        string operation,
+        string resultCode,
+        Guid? organizationId = null,
+        Guid? clinicId = null,
+        Guid? doctorStaffMemberId = null) =>
+        _logger.LogInformation(
+            "Availability operation. Event=availability_operation UserId={UserId} Operation={Operation} ResultCode={ResultCode} OrganizationId={OrganizationId} ClinicId={ClinicId} DoctorStaffMemberId={DoctorStaffMemberId} CorrelationId={CorrelationId}",
+            _currentUser.UserId,
+            operation,
+            resultCode,
+            organizationId ?? _currentUser.OrganizationId,
+            clinicId ?? _currentUser.ClinicId,
+            doctorStaffMemberId,
+            CorrelationId());
+
     private string CorrelationId()
     {
         var http = _httpContextAccessor.HttpContext;

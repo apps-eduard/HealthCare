@@ -23,7 +23,11 @@ public sealed class ClinicDoctorResponse
 
     public string ClinicCode { get; init; } = string.Empty;
 
+    public Guid ClinicId { get; init; }
+
     public bool AcceptsBookings { get; init; }
+
+    public string? ClinicTimeZoneId { get; init; }
 }
 
 public sealed class DoctorAvailabilityResponse
@@ -49,6 +53,9 @@ public sealed class DoctorAvailabilityResponse
     public bool IsActive { get; init; }
 
     public int Version { get; init; }
+
+    /// <summary>Clinic IANA timezone used for local window interpretation.</summary>
+    public string? ClinicTimeZoneId { get; init; }
 }
 
 public sealed class CreateDoctorAvailabilityRequest

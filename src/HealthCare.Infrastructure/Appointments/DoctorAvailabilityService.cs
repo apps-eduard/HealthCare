@@ -15,26 +15,31 @@ public sealed class DoctorAvailabilityService : IDoctorAvailabilityService
     private readonly HealthCareDbContext _dbContext;
     private readonly ICurrentUser _currentUser;
     private readonly ICurrentStaff _currentStaff;
+    private readonly IAuthorizationAuditLogger _audit;
     private readonly ILogger<DoctorAvailabilityService> _logger;
 
     public DoctorAvailabilityService(
         HealthCareDbContext dbContext,
         ICurrentUser currentUser,
         ICurrentStaff currentStaff,
+        IAuthorizationAuditLogger audit,
         ILogger<DoctorAvailabilityService> logger)
     {
         _dbContext = dbContext;
         _currentUser = currentUser;
         _currentStaff = currentStaff;
+        _audit = audit;
         _logger = logger;
     }
 
     public async Task<IReadOnlyList<DoctorAvailabilityResponse>> ListAvailabilityAsync(
         Guid staffMemberId,
+        Guid? clinicId = null,
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default)
     {
-        var doctor = await LoadManagedDoctorAsync(staffMemberId, bypass, cancellationToken);
+        var doctor = await LoadManagedDoctorAsync(staffMemberId, clinicId, bypass, cancellationToken);
+        var timeZoneId = await ResolveClinicTimeZoneAsync(doctor.ClinicId, cancellationToken);
         var rows = await _dbContext.DoctorAvailabilities
             .AsNoTracking()
             .Where(a => a.DoctorStaffMemberId == doctor.Id)
@@ -42,15 +47,23 @@ public sealed class DoctorAvailabilityService : IDoctorAvailabilityService
             .ThenBy(a => a.StartLocalTime)
             .ToListAsync(cancellationToken);
 
-        return rows.Select(MapAvailability).ToList();
+        _audit.AvailabilityOperation(
+            "availability_list",
+            "succeeded",
+            doctor.OrganizationId,
+            doctor.ClinicId,
+            doctor.Id);
+
+        return rows.Select(a => MapAvailability(a, timeZoneId)).ToList();
     }
 
     public async Task<IReadOnlyList<DoctorAvailabilityExceptionResponse>> ListExceptionsAsync(
         Guid staffMemberId,
+        Guid? clinicId = null,
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default)
     {
-        var doctor = await LoadManagedDoctorAsync(staffMemberId, bypass, cancellationToken);
+        var doctor = await LoadManagedDoctorAsync(staffMemberId, clinicId, bypass, cancellationToken);
         var rows = await _dbContext.DoctorAvailabilityExceptions
             .AsNoTracking()
             .Where(e => e.DoctorStaffMemberId == doctor.Id)
@@ -58,16 +71,24 @@ public sealed class DoctorAvailabilityService : IDoctorAvailabilityService
             .ThenBy(e => e.StartLocalTime)
             .ToListAsync(cancellationToken);
 
+        _audit.AvailabilityOperation(
+            "availability_exceptions_list",
+            "succeeded",
+            doctor.OrganizationId,
+            doctor.ClinicId,
+            doctor.Id);
+
         return rows.Select(MapException).ToList();
     }
 
     public async Task<DoctorAvailabilityResponse> CreateAvailabilityAsync(
         Guid staffMemberId,
         CreateDoctorAvailabilityRequest request,
+        Guid? clinicId = null,
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default)
     {
-        var doctor = await LoadManagedDoctorAsync(staffMemberId, bypass, cancellationToken);
+        var doctor = await LoadManagedDoctorAsync(staffMemberId, clinicId, bypass, cancellationToken);
         var day = Enum.Parse<DayOfWeek>(request.DayOfWeek, ignoreCase: true);
         var start = TimeOnly.Parse(request.StartLocalTime);
         var end = TimeOnly.Parse(request.EndLocalTime);
@@ -116,18 +137,26 @@ public sealed class DoctorAvailabilityService : IDoctorAvailabilityService
             _currentUser.UserId,
             doctor.Id,
             entity.Id);
+        _audit.AvailabilityOperation(
+            "availability_created",
+            "succeeded",
+            doctor.OrganizationId,
+            doctor.ClinicId,
+            doctor.Id);
 
-        return MapAvailability(entity);
+        var timeZoneId = await ResolveClinicTimeZoneAsync(doctor.ClinicId, cancellationToken);
+        return MapAvailability(entity, timeZoneId);
     }
 
     public async Task<DoctorAvailabilityResponse> UpdateAvailabilityAsync(
         Guid staffMemberId,
         Guid availabilityId,
         UpdateDoctorAvailabilityRequest request,
+        Guid? clinicId = null,
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default)
     {
-        var doctor = await LoadManagedDoctorAsync(staffMemberId, bypass, cancellationToken);
+        var doctor = await LoadManagedDoctorAsync(staffMemberId, clinicId, bypass, cancellationToken);
         var entity = await _dbContext.DoctorAvailabilities
             .SingleOrDefaultAsync(a => a.Id == availabilityId && a.DoctorStaffMemberId == doctor.Id, cancellationToken)
             ?? throw AvailabilityException.DoctorNotFound();
@@ -204,18 +233,26 @@ public sealed class DoctorAvailabilityService : IDoctorAvailabilityService
             _currentUser.UserId,
             entity.Id,
             entity.Version);
+        _audit.AvailabilityOperation(
+            "availability_updated",
+            "succeeded",
+            doctor.OrganizationId,
+            doctor.ClinicId,
+            doctor.Id);
 
-        return MapAvailability(entity);
+        var timeZoneId = await ResolveClinicTimeZoneAsync(doctor.ClinicId, cancellationToken);
+        return MapAvailability(entity, timeZoneId);
     }
 
     public async Task DeleteAvailabilityAsync(
         Guid staffMemberId,
         Guid availabilityId,
         int expectedVersion,
+        Guid? clinicId = null,
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default)
     {
-        var doctor = await LoadManagedDoctorAsync(staffMemberId, bypass, cancellationToken);
+        var doctor = await LoadManagedDoctorAsync(staffMemberId, clinicId, bypass, cancellationToken);
         var entity = await _dbContext.DoctorAvailabilities
             .SingleOrDefaultAsync(a => a.Id == availabilityId && a.DoctorStaffMemberId == doctor.Id, cancellationToken)
             ?? throw AvailabilityException.DoctorNotFound();
@@ -239,15 +276,22 @@ public sealed class DoctorAvailabilityService : IDoctorAvailabilityService
             "Availability removed. UserId={UserId} AvailabilityId={AvailabilityId}",
             _currentUser.UserId,
             availabilityId);
+        _audit.AvailabilityOperation(
+            "availability_deleted",
+            "succeeded",
+            doctor.OrganizationId,
+            doctor.ClinicId,
+            doctor.Id);
     }
 
     public async Task<DoctorAvailabilityExceptionResponse> CreateExceptionAsync(
         Guid staffMemberId,
         CreateDoctorAvailabilityExceptionRequest request,
+        Guid? clinicId = null,
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default)
     {
-        var doctor = await LoadManagedDoctorAsync(staffMemberId, bypass, cancellationToken);
+        var doctor = await LoadManagedDoctorAsync(staffMemberId, clinicId, bypass, cancellationToken);
         var type = Enum.Parse<AvailabilityExceptionType>(request.ExceptionType, ignoreCase: true);
 
         TimeOnly? start = null;
@@ -284,6 +328,12 @@ public sealed class DoctorAvailabilityService : IDoctorAvailabilityService
             _currentUser.UserId,
             doctor.Id,
             entity.Id);
+        _audit.AvailabilityOperation(
+            "availability_exception_created",
+            "succeeded",
+            doctor.OrganizationId,
+            doctor.ClinicId,
+            doctor.Id);
 
         return MapException(entity);
     }
@@ -292,10 +342,11 @@ public sealed class DoctorAvailabilityService : IDoctorAvailabilityService
         Guid staffMemberId,
         Guid exceptionId,
         int expectedVersion,
+        Guid? clinicId = null,
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default)
     {
-        var doctor = await LoadManagedDoctorAsync(staffMemberId, bypass, cancellationToken);
+        var doctor = await LoadManagedDoctorAsync(staffMemberId, clinicId, bypass, cancellationToken);
         var entity = await _dbContext.DoctorAvailabilityExceptions
             .SingleOrDefaultAsync(e => e.Id == exceptionId && e.DoctorStaffMemberId == doctor.Id, cancellationToken)
             ?? throw AvailabilityException.DoctorNotFound();
@@ -319,6 +370,12 @@ public sealed class DoctorAvailabilityService : IDoctorAvailabilityService
             "Availability exception removed. UserId={UserId} ExceptionId={ExceptionId}",
             _currentUser.UserId,
             exceptionId);
+        _audit.AvailabilityOperation(
+            "availability_exception_deleted",
+            "succeeded",
+            doctor.OrganizationId,
+            doctor.ClinicId,
+            doctor.Id);
     }
 
     private async Task EnsureNoOverlappingWindowAsync(
@@ -356,6 +413,7 @@ public sealed class DoctorAvailabilityService : IDoctorAvailabilityService
 
     private async Task<StaffMember> LoadManagedDoctorAsync(
         Guid staffMemberId,
+        Guid? clinicId,
         PlatformAdminBypass bypass,
         CancellationToken cancellationToken)
     {
@@ -380,6 +438,17 @@ public sealed class DoctorAvailabilityService : IDoctorAvailabilityService
 
         if (bypass == PlatformAdminBypass.Explicit && _currentUser.IsInRole(AppRoles.PlatformAdmin))
         {
+            if (clinicId.HasValue && doctor.ClinicId != clinicId.Value)
+            {
+                _audit.CrossTenantDenied(
+                    "availability_clinic_mismatch",
+                    Contracts.Identity.AuthorizationErrorCodes.ClinicAccessDenied,
+                    doctor.OrganizationId,
+                    clinicId);
+                throw AvailabilityException.DoctorNotFound();
+            }
+
+            _audit.ExplicitPlatformBypassUsed("availability_manage", doctor.OrganizationId, doctor.ClinicId);
             return doctor;
         }
 
@@ -388,16 +457,47 @@ public sealed class DoctorAvailabilityService : IDoctorAvailabilityService
             throw AuthorizationException.MissingStaffMembership();
         }
 
+        if (clinicId.HasValue && doctor.ClinicId != clinicId.Value)
+        {
+            _audit.CrossTenantDenied(
+                "availability_clinic_mismatch",
+                Contracts.Identity.AuthorizationErrorCodes.ClinicAccessDenied,
+                _currentStaff.OrganizationId,
+                clinicId);
+            throw AvailabilityException.DoctorNotFound();
+        }
+
         var role = _currentStaff.Role;
         if (role == AppRoles.OrganizationAdmin)
         {
             if (doctor.OrganizationId != _currentStaff.OrganizationId)
             {
+                _audit.CrossTenantDenied(
+                    "availability_cross_org_denied",
+                    Contracts.Identity.AuthorizationErrorCodes.ClinicAccessDenied,
+                    _currentStaff.OrganizationId,
+                    doctor.ClinicId);
                 _logger.LogInformation(
                     "Cross-tenant availability access denied. UserId={UserId} DoctorStaffMemberId={DoctorStaffMemberId}",
                     _currentUser.UserId,
                     staffMemberId);
                 throw AvailabilityException.DoctorNotFound();
+            }
+
+            if (clinicId.HasValue)
+            {
+                var clinic = await _dbContext.Clinics
+                    .AsNoTracking()
+                    .SingleOrDefaultAsync(c => c.Id == clinicId.Value, cancellationToken);
+                if (clinic is null || clinic.OrganizationId != _currentStaff.OrganizationId)
+                {
+                    _audit.CrossTenantDenied(
+                        "availability_clinic_filter_denied",
+                        Contracts.Identity.AuthorizationErrorCodes.ClinicAccessDenied,
+                        _currentStaff.OrganizationId,
+                        clinicId);
+                    throw AuthorizationException.ClinicAccessDenied();
+                }
             }
 
             return doctor;
@@ -407,6 +507,11 @@ public sealed class DoctorAvailabilityService : IDoctorAvailabilityService
         {
             if (doctor.ClinicId != _currentStaff.ClinicId)
             {
+                _audit.CrossTenantDenied(
+                    "availability_cross_clinic_denied",
+                    Contracts.Identity.AuthorizationErrorCodes.ClinicAccessDenied,
+                    _currentStaff.OrganizationId,
+                    doctor.ClinicId);
                 throw AvailabilityException.DoctorNotFound();
             }
 
@@ -421,7 +526,13 @@ public sealed class DoctorAvailabilityService : IDoctorAvailabilityService
         throw AuthorizationException.Forbidden();
     }
 
-    private static DoctorAvailabilityResponse MapAvailability(DoctorAvailability a) =>
+    private async Task<string?> ResolveClinicTimeZoneAsync(Guid clinicId, CancellationToken cancellationToken) =>
+        await _dbContext.Clinics.AsNoTracking()
+            .Where(c => c.Id == clinicId)
+            .Select(c => c.TimeZoneId)
+            .SingleOrDefaultAsync(cancellationToken);
+
+    private static DoctorAvailabilityResponse MapAvailability(DoctorAvailability a, string? timeZoneId) =>
         new()
         {
             Id = a.Id,
@@ -435,6 +546,7 @@ public sealed class DoctorAvailabilityService : IDoctorAvailabilityService
             EffectiveTo = a.EffectiveTo,
             IsActive = a.IsActive,
             Version = a.Version,
+            ClinicTimeZoneId = timeZoneId,
         };
 
     private static DoctorAvailabilityExceptionResponse MapException(DoctorAvailabilityException e) =>

@@ -798,11 +798,41 @@ internal sealed class AppointmentHarness : IAsyncDisposable
                 Role = role,
             };
         return new DoctorAvailabilityService(
-            Db, user, staff, NullLogger<DoctorAvailabilityService>.Instance);
+            Db, user, staff, new NoOpAuthorizationAuditLogger(), NullLogger<DoctorAvailabilityService>.Instance);
     }
 
-    public DoctorDirectoryService CreateDirectory() => new(Db, new ClinicPublicLookup(Db));
-
+    public DoctorDirectoryService CreateDirectory(
+        Guid? userId = null,
+        Guid? orgId = null,
+        Guid? clinicId = null,
+        Guid? staffMemberId = null,
+        string? role = null)
+    {
+        var user = userId is null
+            ? new FakeCurrentUser()
+            : new FakeCurrentUser
+            {
+                IsAuthenticated = true,
+                UserId = userId.Value,
+                Roles = role is null ? [] : [role],
+            };
+        var staff = role is null
+            ? new FakeCurrentStaff()
+            : new FakeCurrentStaff
+            {
+                HasActiveMembership = true,
+                StaffMemberId = staffMemberId ?? Guid.Empty,
+                OrganizationId = orgId ?? Guid.Empty,
+                ClinicId = clinicId ?? Guid.Empty,
+                Role = role,
+            };
+        return new DoctorDirectoryService(
+            Db,
+            new ClinicPublicLookup(Db),
+            user,
+            staff,
+            new NoOpAuthorizationAuditLogger());
+    }
     public MedicalNoteService CreateMedicalNoteService(
         Guid userId,
         Guid organizationId,

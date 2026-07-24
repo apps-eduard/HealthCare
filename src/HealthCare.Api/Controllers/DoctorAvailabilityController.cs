@@ -37,6 +37,27 @@ public sealed class DoctorAvailabilityController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// Staff-scoped doctors for a validated clinic id (Org Admin: any clinic in trusted org).
+    /// </summary>
+    [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    [AuthorizeAnyPermission(
+        Permissions.Availability.Read,
+        Permissions.Availability.ManageClinic,
+        Permissions.Availability.ManageOrganization)]
+    [HttpGet("staff/clinics/{clinicId:guid}/doctors")]
+    [ProducesResponseType(typeof(IReadOnlyList<ClinicDoctorResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<IReadOnlyList<ClinicDoctorResponse>>> ListDoctorsByClinicId(
+        Guid clinicId,
+        [FromQuery] bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default)
+    {
+        var bypass = platformAdminBypass ? PlatformAdminBypass.Explicit : PlatformAdminBypass.None;
+        var result = await _directory.ListDoctorsByClinicIdAsync(clinicId, bypass, cancellationToken);
+        return Ok(result);
+    }
+
     [AuthorizePermission(Permissions.Availability.Read)]
     [HttpGet("clinics/{clinicCode}/doctors/{staffMemberId:guid}/available-slots")]
     [ProducesResponseType(typeof(IReadOnlyList<AvailableSlotResponse>), StatusCodes.Status200OK)]
@@ -67,11 +88,12 @@ public sealed class DoctorAvailabilityController : ControllerBase
     [ProducesResponseType(typeof(IReadOnlyList<DoctorAvailabilityResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<DoctorAvailabilityResponse>>> ListAvailability(
         Guid staffMemberId,
+        [FromQuery] Guid? clinicId = null,
         [FromQuery] bool platformAdminBypass = false,
         CancellationToken cancellationToken = default)
     {
         var bypass = platformAdminBypass ? PlatformAdminBypass.Explicit : PlatformAdminBypass.None;
-        var result = await _availability.ListAvailabilityAsync(staffMemberId, bypass, cancellationToken);
+        var result = await _availability.ListAvailabilityAsync(staffMemberId, clinicId, bypass, cancellationToken);
         return Ok(result);
     }
 
@@ -84,11 +106,12 @@ public sealed class DoctorAvailabilityController : ControllerBase
     [ProducesResponseType(typeof(IReadOnlyList<DoctorAvailabilityExceptionResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<DoctorAvailabilityExceptionResponse>>> ListExceptions(
         Guid staffMemberId,
+        [FromQuery] Guid? clinicId = null,
         [FromQuery] bool platformAdminBypass = false,
         CancellationToken cancellationToken = default)
     {
         var bypass = platformAdminBypass ? PlatformAdminBypass.Explicit : PlatformAdminBypass.None;
-        var result = await _availability.ListExceptionsAsync(staffMemberId, bypass, cancellationToken);
+        var result = await _availability.ListExceptionsAsync(staffMemberId, clinicId, bypass, cancellationToken);
         return Ok(result);
     }
 
@@ -106,11 +129,17 @@ public sealed class DoctorAvailabilityController : ControllerBase
     public async Task<ActionResult<DoctorAvailabilityResponse>> CreateAvailability(
         Guid staffMemberId,
         [FromBody] CreateDoctorAvailabilityRequest request,
+        [FromQuery] Guid? clinicId = null,
         [FromQuery] bool platformAdminBypass = false,
         CancellationToken cancellationToken = default)
     {
         var bypass = platformAdminBypass ? PlatformAdminBypass.Explicit : PlatformAdminBypass.None;
-        var result = await _availability.CreateAvailabilityAsync(staffMemberId, request, bypass, cancellationToken);
+        var result = await _availability.CreateAvailabilityAsync(
+            staffMemberId,
+            request,
+            clinicId,
+            bypass,
+            cancellationToken);
         return Ok(result);
     }
 
@@ -126,6 +155,7 @@ public sealed class DoctorAvailabilityController : ControllerBase
         Guid staffMemberId,
         Guid availabilityId,
         [FromBody] UpdateDoctorAvailabilityRequest request,
+        [FromQuery] Guid? clinicId = null,
         [FromQuery] bool platformAdminBypass = false,
         CancellationToken cancellationToken = default)
     {
@@ -134,6 +164,7 @@ public sealed class DoctorAvailabilityController : ControllerBase
             staffMemberId,
             availabilityId,
             request,
+            clinicId,
             bypass,
             cancellationToken);
         return Ok(result);
@@ -151,6 +182,7 @@ public sealed class DoctorAvailabilityController : ControllerBase
         Guid staffMemberId,
         Guid availabilityId,
         [FromQuery] int expectedVersion,
+        [FromQuery] Guid? clinicId = null,
         [FromQuery] bool platformAdminBypass = false,
         CancellationToken cancellationToken = default)
     {
@@ -159,6 +191,7 @@ public sealed class DoctorAvailabilityController : ControllerBase
             staffMemberId,
             availabilityId,
             expectedVersion,
+            clinicId,
             bypass,
             cancellationToken);
         return NoContent();
@@ -176,11 +209,17 @@ public sealed class DoctorAvailabilityController : ControllerBase
     public async Task<ActionResult<DoctorAvailabilityExceptionResponse>> CreateException(
         Guid staffMemberId,
         [FromBody] CreateDoctorAvailabilityExceptionRequest request,
+        [FromQuery] Guid? clinicId = null,
         [FromQuery] bool platformAdminBypass = false,
         CancellationToken cancellationToken = default)
     {
         var bypass = platformAdminBypass ? PlatformAdminBypass.Explicit : PlatformAdminBypass.None;
-        var result = await _availability.CreateExceptionAsync(staffMemberId, request, bypass, cancellationToken);
+        var result = await _availability.CreateExceptionAsync(
+            staffMemberId,
+            request,
+            clinicId,
+            bypass,
+            cancellationToken);
         return Ok(result);
     }
 
@@ -196,6 +235,7 @@ public sealed class DoctorAvailabilityController : ControllerBase
         Guid staffMemberId,
         Guid exceptionId,
         [FromQuery] int expectedVersion,
+        [FromQuery] Guid? clinicId = null,
         [FromQuery] bool platformAdminBypass = false,
         CancellationToken cancellationToken = default)
     {
@@ -204,6 +244,7 @@ public sealed class DoctorAvailabilityController : ControllerBase
             staffMemberId,
             exceptionId,
             expectedVersion,
+            clinicId,
             bypass,
             cancellationToken);
         return NoContent();

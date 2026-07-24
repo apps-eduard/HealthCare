@@ -183,6 +183,8 @@ public sealed class LayerDependencyTests
         typeof(IAppointmentSlotService).Namespace.Should().StartWith("HealthCare.Application.Appointments");
         typeof(IClinicTimeZoneConverter).Namespace.Should().StartWith("HealthCare.Application.Appointments");
         typeof(IDoctorDirectoryService).Namespace.Should().StartWith("HealthCare.Application.Appointments");
+        typeof(IDoctorDirectoryService).GetMethod(nameof(IDoctorDirectoryService.ListDoctorsByClinicIdAsync))
+            .Should().NotBeNull();
         typeof(ITenantAccessService).Namespace.Should().StartWith("HealthCare.Application");
         typeof(ICurrentStaff).Namespace.Should().StartWith("HealthCare.Application");
         typeof(ICurrentPatient).Namespace.Should().StartWith("HealthCare.Application");

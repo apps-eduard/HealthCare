@@ -21,23 +21,35 @@ public interface IDoctorDirectoryService
     Task<IReadOnlyList<ClinicDoctorResponse>> ListDoctorsByClinicCodeAsync(
         string clinicCode,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Staff-scoped doctor list for a validated clinic (ORGANIZATION_ADMIN: any clinic in trusted org;
+    /// clinic staff: membership clinic only).
+    /// </summary>
+    Task<IReadOnlyList<ClinicDoctorResponse>> ListDoctorsByClinicIdAsync(
+        Guid clinicId,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default);
 }
 
 public interface IDoctorAvailabilityService
 {
     Task<IReadOnlyList<DoctorAvailabilityResponse>> ListAvailabilityAsync(
         Guid staffMemberId,
+        Guid? clinicId = null,
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<DoctorAvailabilityExceptionResponse>> ListExceptionsAsync(
         Guid staffMemberId,
+        Guid? clinicId = null,
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default);
 
     Task<DoctorAvailabilityResponse> CreateAvailabilityAsync(
         Guid staffMemberId,
         CreateDoctorAvailabilityRequest request,
+        Guid? clinicId = null,
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default);
 
@@ -45,6 +57,7 @@ public interface IDoctorAvailabilityService
         Guid staffMemberId,
         Guid availabilityId,
         UpdateDoctorAvailabilityRequest request,
+        Guid? clinicId = null,
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default);
 
@@ -52,12 +65,14 @@ public interface IDoctorAvailabilityService
         Guid staffMemberId,
         Guid availabilityId,
         int expectedVersion,
+        Guid? clinicId = null,
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default);
 
     Task<DoctorAvailabilityExceptionResponse> CreateExceptionAsync(
         Guid staffMemberId,
         CreateDoctorAvailabilityExceptionRequest request,
+        Guid? clinicId = null,
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default);
 
@@ -65,6 +80,7 @@ public interface IDoctorAvailabilityService
         Guid staffMemberId,
         Guid exceptionId,
         int expectedVersion,
+        Guid? clinicId = null,
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default);
 }

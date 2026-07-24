@@ -305,6 +305,22 @@ public sealed class AppointmentAvailabilityEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Staff_Can_List_Doctors_By_Clinic_Id()
+    {
+        await AuthenticateAsync(StaffAEmail, StaffAPassword);
+        using var scope = _factory!.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+        var clinicAId = await db.Clinics.Where(c => c.Slug == "dev-clinic-a").Select(c => c.Id).SingleAsync();
+
+        var response = await _client!.GetAsync($"/api/v1/staff/clinics/{clinicAId}/doctors");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var doctors = await response.Content.ReadFromJsonAsync<List<ClinicDoctorResponse>>();
+        doctors.Should().NotBeNull();
+        doctors!.Should().OnlyContain(d => d.ClinicId == clinicAId);
+        doctors.Should().Contain(d => !string.IsNullOrWhiteSpace(d.ClinicTimeZoneId));
+    }
+
+    [Fact]
     public async Task Booking_With_Invalid_Slot_Boundary_Returns_409()
     {
         await AuthenticateAsync(PatientEmail, PatientPassword);
