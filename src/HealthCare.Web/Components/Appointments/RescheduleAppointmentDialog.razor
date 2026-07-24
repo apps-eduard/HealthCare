@@ -191,7 +191,7 @@ else
 
     private async Task LoadDoctorsAsync()
     {
-        if (string.IsNullOrWhiteSpace(_clinicSlug))
+        if (Appointment.ClinicId == Guid.Empty && string.IsNullOrWhiteSpace(_clinicSlug))
         {
             _error = "Clinic timezone/slug is missing for this appointment.";
             return;
@@ -200,7 +200,18 @@ else
         _doctorsLoading = true;
         try
         {
-            var doctors = await AppointmentsApi.ListClinicDoctorsAsync(_clinicSlug);
+            IReadOnlyList<ClinicDoctorResponse> doctors;
+            if (Appointment.ClinicId != Guid.Empty)
+            {
+                doctors = await AppointmentsApi.ListClinicDoctorsByIdAsync(
+                    Appointment.ClinicId,
+                    platformAdminBypass: PlatformAdminBypass);
+            }
+            else
+            {
+                doctors = await AppointmentsApi.ListClinicDoctorsAsync(_clinicSlug!);
+            }
+
             _doctors = doctors.Where(d => d.AcceptsBookings).ToList();
         }
         catch (ApiProblemException ex)

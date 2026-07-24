@@ -8,13 +8,14 @@
 @inject IAppointmentApiClient AppointmentsApi
 @inject IPermissionState Permissions
 @inject IPlatformTenantContext PlatformTenant
+@inject IClinicWorkingContext ClinicContext
 @inject IUiModalService Modals
 @inject IUserNotificationService Notify
 @inject NavigationManager Navigation
 @inject IClinicDirectoryCache ClinicCache
 @inject IClinicDirectoryApiClient ClinicsApi
 
-<PageTitle>Appointments</PageTitle>
+<PageTitle>Appointment Queue</PageTitle>
 
 @if (Permissions.IsPatientOnly)
 {
@@ -26,20 +27,33 @@ else if (!Permissions.Has(WebPermissions.AppointmentsRead))
 }
 else
 {
-    <HcPageHeader Title="Appointments" Subtitle="@(string.IsNullOrWhiteSpace(_timezoneLabel) ? null : $"Times shown in {_timezoneLabel}")">
-        <Button OnClick='() => Navigation.NavigateTo("/appointments/calendar")'>
-            <Icon Type="calendar" Theme="IconThemeType.Outline" /> Calendar
-        </Button>
-        <Button OnClick="RefreshClicked" Disabled="_loading">
-            <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
-        </Button>
-        @if (Permissions.Has(WebPermissions.AppointmentsCreate))
-        {
-            <Button Type="@ButtonType.Primary" OnClick="OpenCreateAsync"
-                    Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !PlatformTenant.HasClinic))">
-                <Icon Type="plus" Theme="IconThemeType.Outline" /> Create
-            </Button>
-        }
+    <HcPageHeader Title="Appointment Queue"
+                  Subtitle="@(string.IsNullOrWhiteSpace(_timezoneLabel) ? "Active appointments across the organization" : $"Times shown in {_timezoneLabel}")">
+        <Breadcrumb>
+            <Breadcrumb>
+                <BreadcrumbItem Href="/dashboard">Home</BreadcrumbItem>
+                <BreadcrumbItem>Appointments</BreadcrumbItem>
+                <BreadcrumbItem>Queue</BreadcrumbItem>
+            </Breadcrumb>
+        </Breadcrumb>
+        <ChildContent>
+            <Space>
+                <Button OnClick='() => Navigation.NavigateTo("/appointments/calendar")' AriaLabel="Open appointment calendar">
+                    <Icon Type="calendar" Theme="IconThemeType.Outline" /> Calendar
+                </Button>
+                <Button OnClick="RefreshClicked" Disabled="_loading" AriaLabel="Refresh appointment queue">
+                    <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
+                </Button>
+                @if (Permissions.Has(WebPermissions.AppointmentsCreate))
+                {
+                    <Button Type="@ButtonType.Primary" OnClick="OpenCreateAsync"
+                            Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !PlatformTenant.HasClinic))"
+                            AriaLabel="Create appointment">
+                        <Icon Type="plus" Theme="IconThemeType.Outline" /> Create
+                    </Button>
+                }
+            </Space>
+        </ChildContent>
     </HcPageHeader>
 
     @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
@@ -60,18 +74,18 @@ else
     <div class="hc-card">
         <div class="hc-filter-grid">
             <div>
-                <span class="hc-filter-label">From</span>
-                <DatePicker TValue="DateTime?" @bind-Value="_fromDate" Style="width:100%;" />
+                <label class="hc-filter-label" for="queue-from">From</label>
+                <DatePicker Id="queue-from" TValue="DateTime?" @bind-Value="_fromDate" Style="width:100%;" />
             </div>
             <div>
-                <span class="hc-filter-label">To</span>
-                <DatePicker TValue="DateTime?" @bind-Value="_toDate" Style="width:100%;" />
+                <label class="hc-filter-label" for="queue-to">To</label>
+                <DatePicker Id="queue-to" TValue="DateTime?" @bind-Value="_toDate" Style="width:100%;" />
             </div>
             <div>
-                <span class="hc-filter-label">Status</span>
-                <Select TItemValue="string" TItem="string" @bind-Value="_status" Style="width:100%;" AllowClear>
+                <label class="hc-filter-label" for="queue-status">Status</label>
+                <Select Id="queue-status" TItemValue="string" TItem="string" @bind-Value="_status" Style="width:100%;" AllowClear>
                     <SelectOptions>
-                        <SelectOption TItemValue="string" TItem="string" Value="@("")" Label="Any" />
+                        <SelectOption TItemValue="string" TItem="string" Value="@("")" Label="Active (exclude completed/cancelled)" />
                         @foreach (var status in AppointmentStatusPresentation.AllStatuses)
                         {
                             <SelectOption TItemValue="string" TItem="string" Value="@status" Label="@status" />
@@ -80,8 +94,8 @@ else
                 </Select>
             </div>
             <div>
-                <span class="hc-filter-label">Doctor</span>
-                <Select TItemValue="string" TItem="string" Value="@(_doctorId?.ToString() ?? "")" ValueChanged="OnDoctorFilterChanged" Style="width:100%;" AllowClear>
+                <label class="hc-filter-label" for="queue-doctor">Doctor</label>
+                <Select Id="queue-doctor" TItemValue="string" TItem="string" Value="@(_doctorId?.ToString() ?? "")" ValueChanged="OnDoctorFilterChanged" Style="width:100%;" AllowClear>
                     <SelectOptions>
                         <SelectOption TItemValue="string" TItem="string" Value="@("")" Label="Any" />
                         @foreach (var doctor in _doctors)
@@ -101,39 +115,22 @@ else
                               Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)" />
             }
             <div>
-                <span class="hc-filter-label">Sort by</span>
-                <Select TItemValue="string" TItem="string" @bind-Value="_sortBy" Style="width:100%;">
+                <label class="hc-filter-label" for="queue-page-size">Page size</label>
+                <Select Id="queue-page-size" TItemValue="string" TItem="string" Value="@_pageSize.ToString()" ValueChanged="OnPageSizeChanged" Style="width:100%;">
                     <SelectOptions>
-                        <SelectOption TItemValue="string" TItem="string" Value="@("appointmentDateUtc")" Label="Appointment time" />
-                        <SelectOption TItemValue="string" TItem="string" Value="@("createdAtUtc")" Label="Created" />
-                        <SelectOption TItemValue="string" TItem="string" Value="@("status")" Label="Status" />
-                        <SelectOption TItemValue="string" TItem="string" Value="@("durationMinutes")" Label="Duration" />
-                    </SelectOptions>
-                </Select>
-            </div>
-            <div>
-                <span class="hc-filter-label">Direction</span>
-                <Select TItemValue="string" TItem="string" @bind-Value="_sortDirection" Style="width:100%;">
-                    <SelectOptions>
-                        <SelectOption TItemValue="string" TItem="string" Value="@("asc")" Label="Ascending" />
-                        <SelectOption TItemValue="string" TItem="string" Value="@("desc")" Label="Descending" />
-                    </SelectOptions>
-                </Select>
-            </div>
-            <div>
-                <span class="hc-filter-label">Page size</span>
-                <Select TItemValue="string" TItem="string" Value="@_pageSize.ToString()" ValueChanged="OnPageSizeChanged" Style="width:100%;">
-                    <SelectOptions>
-                        <SelectOption TItemValue="string" TItem="string" Value="@("10")" Label="10" />
                         <SelectOption TItemValue="string" TItem="string" Value="@("20")" Label="20" />
                         <SelectOption TItemValue="string" TItem="string" Value="@("50")" Label="50" />
+                        <SelectOption TItemValue="string" TItem="string" Value="@("100")" Label="100" />
                     </SelectOptions>
                 </Select>
             </div>
-            <div>
-                <span class="hc-filter-label">&nbsp;</span>
+            <div style="display:flex;gap:8px;align-items:flex-end;">
                 <Button Type="@ButtonType.Primary" OnClick="ApplyFiltersAsync"
-                        Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !_clinicId.HasValue))">Apply</Button>
+                        Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !_clinicId.HasValue))"
+                        AriaLabel="Search appointment queue">
+                    Search
+                </Button>
+                <Button OnClick="ResetFiltersAsync" Disabled="_loading" AriaLabel="Reset queue filters">Reset</Button>
             </div>
         </div>
     </div>
@@ -170,8 +167,10 @@ else
                         <td>@row.DurationMinutes min</td>
                         <td>@ClinicTimeDisplay.FormatLocal(row.UpdatedAtUtc, row.ClinicTimeZoneId ?? _timezoneLabel)</td>
                         <td class="hc-actions" @onclick:stopPropagation="true">
-                            <Button Type="@ButtonType.Text" OnClick="@(() => OpenDetailAsync(row.Id))" AriaLabel="Details">
-                                <Icon Type="eye" Theme="IconThemeType.Outline" />
+                            <Button Type="@ButtonType.Link"
+                                    OnClick="@(() => OpenDetailAsync(row.Id))"
+                                    AriaLabel="@($"Details for appointment {row.Id}")">
+                                Details
                             </Button>
                         </td>
                     </tr>
@@ -200,10 +199,8 @@ else
     private string? _status;
     private Guid? _doctorId;
     private Guid? _clinicId;
-    private string _sortBy = "appointmentDateUtc";
-    private string _sortDirection = "asc";
     private int _page = 1;
-    private int _pageSize = 20;
+    private int _pageSize = 50;
     private int _totalCount;
     private int _pageCount = 1;
     private string? _timezoneLabel;
@@ -212,22 +209,40 @@ else
     private CancellationTokenSource? _pollCts;
     private bool _dialogOpen;
     private bool _loadInFlight;
+    private bool _subscribedPlatform;
+    private bool _subscribedClinic;
 
     protected override async Task OnInitializedAsync()
     {
-        PlatformTenant.Changed += OnPlatformTenantChanged;
-
         if (Permissions.IsPatientOnly || !Permissions.Has(WebPermissions.AppointmentsRead))
         {
             return;
         }
 
-        SyncFromPlatformTenant();
+        if (Permissions.IsPlatformAdmin)
+        {
+            PlatformTenant.Changed += OnPlatformTenantChanged;
+            _subscribedPlatform = true;
+            SyncFromPlatformTenant();
+        }
+        else if (Permissions.IsOrganizationAdmin)
+        {
+            ClinicContext.Changed += OnClinicContextChanged;
+            _subscribedClinic = true;
+            if (ClinicContext.HasClinic)
+            {
+                _clinicId = ClinicContext.SelectedClinicId;
+            }
+        }
 
         if (!Permissions.CanFilterByClinic && Permissions.CurrentUser?.ClinicId is Guid clinicId)
         {
             _clinicId = clinicId;
             await ResolveTimezoneAsync(clinicId);
+        }
+        else if (_clinicId is Guid selected)
+        {
+            await ResolveTimezoneAsync(selected);
         }
 
         await LoadDoctorsForFilterAsync();
@@ -248,6 +263,16 @@ else
             _timezoneLabel = null;
         }
 
+        await ResolveTimezoneAsync(_clinicId);
+        await LoadDoctorsForFilterAsync();
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    private void OnClinicContextChanged() => InvokeAsync(async () =>
+    {
+        _clinicId = ClinicContext.SelectedClinicId;
+        _doctorId = null;
         await ResolveTimezoneAsync(_clinicId);
         await LoadDoctorsForFilterAsync();
         await LoadAsync();
@@ -292,7 +317,16 @@ else
 
     public void Dispose()
     {
-        PlatformTenant.Changed -= OnPlatformTenantChanged;
+        if (_subscribedPlatform)
+        {
+            PlatformTenant.Changed -= OnPlatformTenantChanged;
+        }
+
+        if (_subscribedClinic)
+        {
+            ClinicContext.Changed -= OnClinicContextChanged;
+        }
+
         _pollCts?.Cancel();
         _pollCts?.Dispose();
         _pollTimer?.Dispose();
@@ -301,6 +335,34 @@ else
     private async Task ApplyFiltersAsync()
     {
         _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task ResetFiltersAsync()
+    {
+        _fromDate = DateTime.Today;
+        _toDate = DateTime.Today.AddDays(7);
+        _status = null;
+        _doctorId = null;
+        _page = 1;
+        _pageSize = 50;
+
+        if (Permissions.IsPlatformAdmin)
+        {
+            _clinicId = PlatformTenant.SelectedClinicId;
+        }
+        else if (_subscribedClinic && ClinicContext.HasClinic)
+        {
+            ClinicContext.ClearClinic();
+            return;
+        }
+        else if (Permissions.CanFilterByClinic)
+        {
+            _clinicId = null;
+        }
+
+        await ResolveTimezoneAsync(_clinicId);
+        await LoadDoctorsForFilterAsync();
         await LoadAsync();
     }
 
@@ -315,6 +377,7 @@ else
     private async Task OnClinicFilterChanged(Guid? clinicId)
     {
         _clinicId = clinicId;
+
         if (Permissions.IsPlatformAdmin)
         {
             if (clinicId is Guid id && id != Guid.Empty)
@@ -328,6 +391,26 @@ else
             {
                 PlatformTenant.ClearClinic();
             }
+
+            _doctorId = null;
+            await ResolveTimezoneAsync(clinicId);
+            await LoadDoctorsForFilterAsync();
+            await LoadAsync();
+            return;
+        }
+
+        if (Permissions.IsOrganizationAdmin)
+        {
+            if (clinicId is Guid id && id != Guid.Empty)
+            {
+                ClinicContext.SelectClinic(id);
+            }
+            else
+            {
+                ClinicContext.ClearClinic();
+            }
+
+            return;
         }
 
         _doctorId = null;
@@ -376,38 +459,17 @@ else
             return;
         }
 
-        string? slug = null;
         var clinicId = _clinicId ?? Permissions.CurrentUser?.ClinicId;
-        if (clinicId is Guid id)
-        {
-            try
-            {
-                if (ClinicCache.TryGet(id, out var cached) && cached is not null)
-                {
-                    slug = cached.Slug;
-                }
-                else
-                {
-                    var detail = await ClinicsApi.GetByIdAsync(id, Permissions.IsPlatformAdmin);
-                    ClinicCache.Set(detail);
-                    slug = detail.Slug;
-                    _timezoneLabel ??= detail.TimeZoneId;
-                }
-            }
-            catch
-            {
-                return;
-            }
-        }
-
-        if (string.IsNullOrWhiteSpace(slug))
+        if (clinicId is not Guid id)
         {
             return;
         }
 
         try
         {
-            _doctors = (await AppointmentsApi.ListClinicDoctorsAsync(slug)).ToList();
+            _doctors = (await AppointmentsApi.ListClinicDoctorsByIdAsync(
+                id,
+                platformAdminBypass: Permissions.IsPlatformAdmin)).ToList();
         }
         catch
         {
@@ -444,7 +506,7 @@ else
             var clinicId = Permissions.CanFilterByClinic ? _clinicId : null;
             var bypass = Permissions.IsPlatformAdmin && clinicId is not null;
 
-            var query = AppointmentListQueryBuilder.Build(
+            var query = AppointmentListQueryBuilder.BuildQueue(
                 _fromDate,
                 _toDate,
                 _status,
@@ -452,11 +514,9 @@ else
                 clinicId,
                 _page,
                 _pageSize,
-                _sortBy,
-                _sortDirection,
                 _timezoneLabel);
 
-            var result = await AppointmentsApi.ListStaffAsync(query, bypass);
+            var result = await AppointmentsApi.ListQueueAsync(query, bypass);
             _items.Clear();
             _items.AddRange(result.Items);
             _totalCount = result.TotalCount;
@@ -536,7 +596,10 @@ else
                     "Create appointment",
                     new CreateAppointmentDialog.Args
                     {
-                        InitialClinicId = _clinicId ?? Permissions.CurrentUser?.ClinicId ?? PlatformTenant.SelectedClinicId,
+                        InitialClinicId = _clinicId
+                            ?? ClinicContext.SelectedClinicId
+                            ?? Permissions.CurrentUser?.ClinicId
+                            ?? PlatformTenant.SelectedClinicId,
                         PlatformAdminBypass = Permissions.IsPlatformAdmin,
                     },
                     "560px"))

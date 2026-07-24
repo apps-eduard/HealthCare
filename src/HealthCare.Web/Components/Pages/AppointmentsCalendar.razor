@@ -8,13 +8,14 @@
 @inject IAppointmentApiClient AppointmentsApi
 @inject IPermissionState Permissions
 @inject IPlatformTenantContext PlatformTenant
+@inject IClinicWorkingContext ClinicContext
 @inject IUiModalService Modals
 @inject IUserNotificationService Notify
 @inject NavigationManager Navigation
 @inject IClinicDirectoryCache ClinicCache
 @inject IClinicDirectoryApiClient ClinicsApi
 
-<PageTitle>Appointment calendar</PageTitle>
+<PageTitle>Appointment Calendar</PageTitle>
 
 @if (Permissions.IsPatientOnly)
 {
@@ -26,13 +27,25 @@ else if (!Permissions.Has(WebPermissions.AppointmentsRead))
 }
 else
 {
-    <HcPageHeader Title="Calendar" Subtitle="@(string.IsNullOrWhiteSpace(_timezoneLabel) ? null : $"Clinic timezone: {_timezoneLabel}")">
-        <Button OnClick='() => Navigation.NavigateTo("/appointments")'>
-            <Icon Type="unordered-list" Theme="IconThemeType.Outline" /> Queue
-        </Button>
-        <Button OnClick="LoadAsync" Disabled="_loading">
-            <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
-        </Button>
+    <HcPageHeader Title="Appointment Calendar"
+                  Subtitle="@(string.IsNullOrWhiteSpace(_timezoneLabel) ? "Day and week clinic schedule" : $"Clinic timezone: {_timezoneLabel}")">
+        <Breadcrumb>
+            <Breadcrumb>
+                <BreadcrumbItem Href="/dashboard">Home</BreadcrumbItem>
+                <BreadcrumbItem Href="/appointments">Appointments</BreadcrumbItem>
+                <BreadcrumbItem>Calendar</BreadcrumbItem>
+            </Breadcrumb>
+        </Breadcrumb>
+        <ChildContent>
+            <Space>
+                <Button OnClick='() => Navigation.NavigateTo("/appointments")' AriaLabel="Open appointment queue">
+                    <Icon Type="unordered-list" Theme="IconThemeType.Outline" /> Queue
+                </Button>
+                <Button OnClick="LoadAsync" Disabled="_loading" AriaLabel="Refresh calendar">
+                    <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
+                </Button>
+            </Space>
+        </ChildContent>
     </HcPageHeader>
 
     @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
@@ -185,17 +198,31 @@ else
     private string? _timezoneLabel;
     private string? _rangeLabel;
     private Guid? _boundOrganizationId;
+    private bool _subscribedPlatform;
+    private bool _subscribedClinic;
 
     protected override async Task OnInitializedAsync()
     {
-        PlatformTenant.Changed += OnPlatformTenantChanged;
-
         if (Permissions.IsPatientOnly || !Permissions.Has(WebPermissions.AppointmentsRead))
         {
             return;
         }
 
-        SyncFromPlatformTenant();
+        if (Permissions.IsPlatformAdmin)
+        {
+            PlatformTenant.Changed += OnPlatformTenantChanged;
+            _subscribedPlatform = true;
+            SyncFromPlatformTenant();
+        }
+        else if (Permissions.IsOrganizationAdmin)
+        {
+            ClinicContext.Changed += OnClinicContextChanged;
+            _subscribedClinic = true;
+            if (ClinicContext.HasClinic)
+            {
+                _clinicId = ClinicContext.SelectedClinicId;
+            }
+        }
 
         if (Permissions.IsPlatformAdmin
             && (!PlatformTenant.HasOrganization || !PlatformTenant.HasClinic))
@@ -209,14 +236,17 @@ else
             _clinicId = clinicId;
             await ResolveClinicMetaAsync(clinicId);
         }
-        else if (Permissions.CanFilterByClinic && !Permissions.IsPlatformAdmin && Permissions.CurrentUser?.ClinicId is Guid membershipClinic)
+        else if (_clinicId is Guid selected)
         {
+            await ResolveClinicMetaAsync(selected);
+        }
+        else if (Permissions.CanFilterByClinic
+                 && !Permissions.IsPlatformAdmin
+                 && Permissions.CurrentUser?.ClinicId is Guid membershipClinic)
+        {
+            // Prefer membership clinic until Org Admin picks / syncs working clinic.
             _clinicId = membershipClinic;
             await ResolveClinicMetaAsync(membershipClinic);
-        }
-        else if (Permissions.IsPlatformAdmin && _clinicId is Guid platformClinic)
-        {
-            await ResolveClinicMetaAsync(platformClinic);
         }
 
         RebuildWeekDays();
@@ -224,7 +254,18 @@ else
         await LoadAsync();
     }
 
-    public void Dispose() => PlatformTenant.Changed -= OnPlatformTenantChanged;
+    public void Dispose()
+    {
+        if (_subscribedPlatform)
+        {
+            PlatformTenant.Changed -= OnPlatformTenantChanged;
+        }
+
+        if (_subscribedClinic)
+        {
+            ClinicContext.Changed -= OnClinicContextChanged;
+        }
+    }
 
     private void OnPlatformTenantChanged() => InvokeAsync(async () =>
     {
@@ -245,6 +286,20 @@ else
         }
 
         RebuildWeekDays();
+        await LoadDoctorsAsync();
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    private void OnClinicContextChanged() => InvokeAsync(async () =>
+    {
+        _clinicId = ClinicContext.SelectedClinicId;
+        _doctorId = null;
+        if (_clinicId is Guid clinicId)
+        {
+            await ResolveClinicMetaAsync(clinicId);
+        }
+
         await LoadDoctorsAsync();
         await LoadAsync();
         StateHasChanged();
@@ -304,6 +359,7 @@ else
     private async Task OnClinicFilterChanged(Guid? clinicId)
     {
         _clinicId = clinicId;
+
         if (Permissions.IsPlatformAdmin)
         {
             if (clinicId is Guid id && id != Guid.Empty)
@@ -317,6 +373,26 @@ else
             {
                 PlatformTenant.ClearClinic();
             }
+
+            _doctorId = null;
+            await ResolveClinicMetaAsync(clinicId);
+            await LoadDoctorsAsync();
+            await LoadAsync();
+            return;
+        }
+
+        if (Permissions.IsOrganizationAdmin)
+        {
+            if (clinicId is Guid id && id != Guid.Empty)
+            {
+                ClinicContext.SelectClinic(id);
+            }
+            else
+            {
+                ClinicContext.ClearClinic();
+            }
+
+            return;
         }
 
         _doctorId = null;
@@ -367,23 +443,9 @@ else
 
         try
         {
-            string? slug = null;
-            if (ClinicCache.TryGet(clinicId, out var cached) && cached is not null)
-            {
-                slug = cached.Slug;
-            }
-            else
-            {
-                var detail = await ClinicsApi.GetByIdAsync(clinicId, Permissions.IsPlatformAdmin);
-                ClinicCache.Set(detail);
-                slug = detail.Slug;
-                _timezoneLabel ??= detail.TimeZoneId;
-            }
-
-            if (!string.IsNullOrWhiteSpace(slug))
-            {
-                _doctors = (await AppointmentsApi.ListClinicDoctorsAsync(slug)).ToList();
-            }
+            _doctors = (await AppointmentsApi.ListClinicDoctorsByIdAsync(
+                clinicId,
+                platformAdminBypass: Permissions.IsPlatformAdmin)).ToList();
         }
         catch
         {
@@ -431,20 +493,18 @@ else
             }
 
             var bypass = Permissions.IsPlatformAdmin && _clinicId is not null;
-
-            var query = AppointmentListQueryBuilder.Build(
-                from.ToDateTime(TimeOnly.MinValue),
-                to.ToDateTime(TimeOnly.MinValue),
+            var query = AppointmentListQueryBuilder.BuildCalendar(
+                from,
+                to,
+                view: _mode == CalendarMode.Week ? "week" : "day",
                 _status,
                 _doctorId,
                 _clinicId,
                 page: 1,
-                pageSize: 100,
-                sortBy: "appointmentDateUtc",
-                sortDirection: "asc",
+                pageSize: 200,
                 clinicTimeZoneId: _timezoneLabel);
 
-            var result = await AppointmentsApi.ListStaffAsync(query, bypass);
+            var result = await AppointmentsApi.ListCalendarAsync(query, bypass);
             _items.Clear();
             _items.AddRange(result.Items);
             if (_items.Count > 0 && string.IsNullOrWhiteSpace(_timezoneLabel))

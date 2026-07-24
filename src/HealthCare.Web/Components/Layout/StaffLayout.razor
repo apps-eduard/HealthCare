@@ -34,11 +34,11 @@
             @if (Permissions.Has(WebPermissions.AppointmentsRead))
             {
                 <MenuItem Key="appointments" RouterLink="/appointments" RouterMatch="NavLinkMatch.All">
-                    <Icon Type="calendar" Theme="IconThemeType.Outline" />
-                    <span>Appointments</span>
+                    <Icon Type="unordered-list" Theme="IconThemeType.Outline" />
+                    <span>Appointment Queue</span>
                 </MenuItem>
                 <MenuItem Key="calendar" RouterLink="/appointments/calendar" RouterMatch="NavLinkMatch.Prefix">
-                    <Icon Type="schedule" Theme="IconThemeType.Outline" />
+                    <Icon Type="calendar" Theme="IconThemeType.Outline" />
                     <span>Appointment Calendar</span>
                 </MenuItem>
             }

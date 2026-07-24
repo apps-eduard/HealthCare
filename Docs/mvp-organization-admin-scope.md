@@ -711,6 +711,10 @@ The Organization Admin must not:
 - `/patients` — organization patient directory via `IStaffPatientApiClient` (`patients.search` for list; `patients.read` for detail). Search, local number, enrollment status, patient active, clinic filter (synced with `IClinicWorkingContext`), sort/paging.
 - Detail `Drawer` lists org-scoped enrollments; status update sends `ClinicId` + `ExpectedVersion`; enroll into another org clinic (`POST .../clinics/{id}/patients/{id}/enroll`). Patient self-scope blocked in UI presentation. `PatientPicker` uses appointment-safe `GET .../lookup`.
 
+**Frontend status (2026-07-24) — Phase 4 (Appointment queue + calendar):**
+- `/appointments` — Appointment Queue via `ListQueueAsync` (`GET .../staff/appointments/queue`); terminal statuses excluded when Status is empty. Filters: date range, status, doctor, clinic (`IClinicWorkingContext` sync). Create/detail with confirm/check-in/cancel/reschedule/no-show; Complete remains permission-gated (`appointments.complete` not granted to Org Admin).
+- `/appointments/calendar` — day/week via `ListCalendarAsync` (`GET .../staff/appointments/calendar` + `view`). Clinic-scoped calendar with doctor filter; Guid clinic doctors via `GET .../staff/clinics/{id}/doctors`.
+
 ### Phase 2 — Scheduling and operations
 
 11. Doctor availability

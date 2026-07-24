@@ -286,7 +286,13 @@ else
     private async Task LoadDoctorsAsync()
     {
         _doctors = [];
-        if (string.IsNullOrWhiteSpace(_clinicSlug) || !Permissions.Has(WebPermissions.AvailabilityRead))
+        if (!Permissions.Has(WebPermissions.AvailabilityRead))
+        {
+            return;
+        }
+
+        if (_clinicId is not Guid clinicId
+            && string.IsNullOrWhiteSpace(_clinicSlug))
         {
             return;
         }
@@ -294,7 +300,18 @@ else
         _doctorsLoading = true;
         try
         {
-            var doctors = await AppointmentsApi.ListClinicDoctorsAsync(_clinicSlug);
+            IReadOnlyList<ClinicDoctorResponse> doctors;
+            if (_clinicId is Guid id)
+            {
+                doctors = await AppointmentsApi.ListClinicDoctorsByIdAsync(
+                    id,
+                    platformAdminBypass: PlatformAdminBypass || Permissions.IsPlatformAdmin);
+            }
+            else
+            {
+                doctors = await AppointmentsApi.ListClinicDoctorsAsync(_clinicSlug!);
+            }
+
             _doctors = doctors.Where(d => d.AcceptsBookings).ToList();
         }
         catch (ApiProblemException ex)

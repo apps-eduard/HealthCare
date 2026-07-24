@@ -11,6 +11,16 @@ public interface IAppointmentApiClient
         bool platformAdminBypass = false,
         CancellationToken cancellationToken = default);
 
+    Task<PagedResponse<AppointmentResponse>> ListQueueAsync(
+        AppointmentQueueQuery query,
+        bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default);
+
+    Task<PagedResponse<AppointmentResponse>> ListCalendarAsync(
+        AppointmentCalendarQuery query,
+        bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default);
+
     Task<AppointmentResponse> GetByIdAsync(
         Guid appointmentId,
         bool platformAdminBypass = false,
@@ -61,6 +71,11 @@ public interface IAppointmentApiClient
         string clinicCode,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<ClinicDoctorResponse>> ListClinicDoctorsByIdAsync(
+        Guid clinicId,
+        bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<AvailableSlotResponse>> GetAvailableSlotsAsync(
         string clinicCode,
         Guid doctorStaffMemberId,
@@ -85,6 +100,32 @@ public sealed class AppointmentApiClient : IAppointmentApiClient
     {
         var client = _httpClientFactory.CreateClient("HealthCareApi");
         var url = BuildListQuery("api/v1/staff/appointments", query, platformAdminBypass);
+        using var response = await client.GetAsync(url, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return (await response.Content.ReadFromJsonAsync<PagedResponse<AppointmentResponse>>(cancellationToken))
+               ?? PagedResponse<AppointmentResponse>.Create([], query.Page, query.PageSize, 0);
+    }
+
+    public async Task<PagedResponse<AppointmentResponse>> ListQueueAsync(
+        AppointmentQueueQuery query,
+        bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default)
+    {
+        var client = _httpClientFactory.CreateClient("HealthCareApi");
+        var url = BuildQueueQuery("api/v1/staff/appointments/queue", query, platformAdminBypass);
+        using var response = await client.GetAsync(url, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return (await response.Content.ReadFromJsonAsync<PagedResponse<AppointmentResponse>>(cancellationToken))
+               ?? PagedResponse<AppointmentResponse>.Create([], query.Page, query.PageSize, 0);
+    }
+
+    public async Task<PagedResponse<AppointmentResponse>> ListCalendarAsync(
+        AppointmentCalendarQuery query,
+        bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default)
+    {
+        var client = _httpClientFactory.CreateClient("HealthCareApi");
+        var url = BuildCalendarQuery("api/v1/staff/appointments/calendar", query, platformAdminBypass);
         using var response = await client.GetAsync(url, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
         return (await response.Content.ReadFromJsonAsync<PagedResponse<AppointmentResponse>>(cancellationToken))
@@ -177,6 +218,18 @@ public sealed class AppointmentApiClient : IAppointmentApiClient
         return (await response.Content.ReadFromJsonAsync<List<ClinicDoctorResponse>>(cancellationToken)) ?? [];
     }
 
+    public async Task<IReadOnlyList<ClinicDoctorResponse>> ListClinicDoctorsByIdAsync(
+        Guid clinicId,
+        bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default)
+    {
+        var client = _httpClientFactory.CreateClient("HealthCareApi");
+        var url = AppendBypass($"api/v1/staff/clinics/{clinicId:D}/doctors", platformAdminBypass);
+        using var response = await client.GetAsync(url, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return (await response.Content.ReadFromJsonAsync<List<ClinicDoctorResponse>>(cancellationToken)) ?? [];
+    }
+
     public async Task<IReadOnlyList<AvailableSlotResponse>> GetAvailableSlotsAsync(
         string clinicCode,
         Guid doctorStaffMemberId,
@@ -241,6 +294,81 @@ public sealed class AppointmentApiClient : IAppointmentApiClient
         {
             parts.Add($"toUtc={Uri.EscapeDataString(to.UtcDateTime.ToString("O"))}");
         }
+
+        if (!string.IsNullOrWhiteSpace(query.Status))
+        {
+            parts.Add($"status={Uri.EscapeDataString(query.Status)}");
+        }
+
+        if (query.DoctorStaffMemberId is Guid doctorId && doctorId != Guid.Empty)
+        {
+            parts.Add($"doctorStaffMemberId={doctorId:D}");
+        }
+
+        if (query.ClinicId is Guid clinicId && clinicId != Guid.Empty)
+        {
+            parts.Add($"clinicId={clinicId:D}");
+        }
+
+        if (platformAdminBypass)
+        {
+            parts.Add("platformAdminBypass=true");
+        }
+
+        return $"{path}?{string.Join('&', parts)}";
+    }
+
+    private static string BuildQueueQuery(string path, AppointmentQueueQuery query, bool platformAdminBypass)
+    {
+        var parts = new List<string>
+        {
+            $"page={query.Page}",
+            $"pageSize={query.PageSize}",
+        };
+
+        if (query.FromUtc is DateTimeOffset from)
+        {
+            parts.Add($"fromUtc={Uri.EscapeDataString(from.UtcDateTime.ToString("O"))}");
+        }
+
+        if (query.ToUtc is DateTimeOffset to)
+        {
+            parts.Add($"toUtc={Uri.EscapeDataString(to.UtcDateTime.ToString("O"))}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Status))
+        {
+            parts.Add($"status={Uri.EscapeDataString(query.Status)}");
+        }
+
+        if (query.DoctorStaffMemberId is Guid doctorId && doctorId != Guid.Empty)
+        {
+            parts.Add($"doctorStaffMemberId={doctorId:D}");
+        }
+
+        if (query.ClinicId is Guid clinicId && clinicId != Guid.Empty)
+        {
+            parts.Add($"clinicId={clinicId:D}");
+        }
+
+        if (platformAdminBypass)
+        {
+            parts.Add("platformAdminBypass=true");
+        }
+
+        return $"{path}?{string.Join('&', parts)}";
+    }
+
+    private static string BuildCalendarQuery(string path, AppointmentCalendarQuery query, bool platformAdminBypass)
+    {
+        var parts = new List<string>
+        {
+            $"fromUtc={Uri.EscapeDataString(query.FromUtc.UtcDateTime.ToString("O"))}",
+            $"toUtc={Uri.EscapeDataString(query.ToUtc.UtcDateTime.ToString("O"))}",
+            $"view={Uri.EscapeDataString(query.View)}",
+            $"page={query.Page}",
+            $"pageSize={query.PageSize}",
+        };
 
         if (!string.IsNullOrWhiteSpace(query.Status))
         {

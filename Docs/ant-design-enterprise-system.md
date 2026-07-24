@@ -87,6 +87,13 @@ Shape: **4px** radius, minimal shadow, compact controls, **8px** spacing scale.
 |-------|-------|
 | `/patients` | Patient directory + detail drawer + enrollment status + enroll |
 
+## Org Admin Phase 4 pages
+
+| Route | Notes |
+|-------|-------|
+| `/appointments` | Appointment Queue (`GET .../queue`) + create/detail mutations |
+| `/appointments/calendar` | Day/week calendar (`GET .../calendar`) |
+
 ## NU1900
 
 `Directory.Build.props` keeps `NuGetAudit=true` and adds `NU1900` to `WarningsNotAsErrors` so transient nuget.org vulnerability-feed timeouts do not fail restore under `TreatWarningsAsErrors`. Advisory codes NU1901–NU1904 remain non-fatal as before; audit is not disabled.

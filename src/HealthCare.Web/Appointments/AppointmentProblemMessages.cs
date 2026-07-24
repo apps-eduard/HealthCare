@@ -35,8 +35,22 @@ public static class AppointmentProblemMessages
                 "The patient is not enrolled at this clinic.",
             "appointment.inactive_patient" =>
                 "The selected patient is inactive.",
+            "appointment.inactive_clinic" =>
+                "The clinic is inactive.",
+            "appointment.invalid_assigned_staff" =>
+                "The selected doctor is not valid for this clinic.",
+            "appointment.invalid_time" =>
+                "The appointment time is not valid.",
+            "appointment.invalid_request" =>
+                "The appointment request is not valid.",
+            "appointment.reschedule_same_slot" =>
+                "Choose a different slot to reschedule.",
+            "appointment.reschedule_failed" =>
+                "Reschedule failed. Reload and try again.",
             "authorization.permission_denied" =>
                 "You do not have permission to perform this action.",
+            "authz.patient_self_scope_denied" =>
+                "Patient self-scope accounts cannot use staff appointment APIs.",
             _ => ex.ToUserMessage(),
         };
     }
