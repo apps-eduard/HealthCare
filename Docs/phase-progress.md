@@ -1000,6 +1000,7 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 | 2026-07-23 | 3 | Fine-grained permission catalog + authorization matrix; overall ~53% |
 | 2026-07-23 | 8 | Staff availability management UI + list-exceptions GET; overall ~63% |
 | 2026-07-23 | 9 | Medical notes secure backend foundation + migration; overall ~64% |
+| 2026-07-24 | 8 / 4 | Organization Admin dashboard foundation (`organization_dashboard.read` + aggregates UI) |
 
 ---
 

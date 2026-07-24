@@ -1,8 +1,14 @@
 @page "/"
 @page "/dashboard"
 @attribute [Authorize]
+@using HealthCare.Contracts.Organizations
+@using HealthCare.Web.Components.Clinics
 @inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
+@inject IOrganizationDashboardApiClient DashboardApi
 @inject NavigationManager Navigation
+@inject IUserNotificationService Notify
+@implements IDisposable
 
 <PageTitle>Dashboard</PageTitle>
 
@@ -17,6 +23,218 @@ else if (!Permissions.IsStaffUser)
     <Alert Type="@AlertType.Warning"
            Message="An active staff membership is required."
            ShowIcon="true" />
+}
+else if (Permissions.Has(WebPermissions.OrganizationDashboardRead))
+{
+    <HcPageHeader Title="Organization Dashboard"
+                  Subtitle="@_subtitle">
+        <Breadcrumb>
+            <Breadcrumb>
+                <BreadcrumbItem>Home</BreadcrumbItem>
+                <BreadcrumbItem>Dashboard</BreadcrumbItem>
+            </Breadcrumb>
+        </Breadcrumb>
+        <ChildContent>
+            <Space>
+                <Button Type="@ButtonType.Default" OnClick="RefreshAsync" Loading="_loading">
+                    <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
+                </Button>
+            </Space>
+        </ChildContent>
+    </HcPageHeader>
+
+    @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+    {
+        <Alert Type="@AlertType.Info"
+               Message="Select an organization in the tenant banner to load the organization dashboard."
+               ShowIcon="true"
+               Style="margin-bottom:16px;" />
+    }
+    else
+    {
+        <div class="hc-dashboard-filters" style="margin-bottom:16px;">
+            <AntDesign.Row Gutter="(16,16)">
+                @if (Permissions.CanFilterByClinic)
+                {
+                    <AntDesign.Col Xs="24" Md="10" Lg="8">
+                        <ClinicPicker Value="_clinicId"
+                                      Label="Clinic"
+                                      AllowClear="true"
+                                      HelperText="All clinics in the organization when cleared"
+                                      PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
+                                      PlatformAdminBypass="@(Permissions.IsPlatformAdmin && PlatformTenant.ExplicitBypassEnabled)"
+                                      ValueChanged="OnClinicChangedAsync" />
+                    </AntDesign.Col>
+                }
+                <AntDesign.Col Xs="24" Md="8" Lg="6">
+                    <div>
+                        <label>Date</label>
+                        <input class="hc-auth-input"
+                               type="date"
+                               value="@_dateInput"
+                               @onchange="OnDateChangedAsync"
+                               disabled="@_loading"
+                               style="width:100%;" />
+                        <div class="hc-caption" style="margin-top:0.35rem;">
+                            Leave empty to use each clinic’s local today
+                        </div>
+                    </div>
+                </AntDesign.Col>
+            </AntDesign.Row>
+        </div>
+
+        @if (_loading && _dashboard is null)
+        {
+            <Skeleton Active="true" />
+        }
+        else if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <ErrorState Message="@_error" />
+        }
+        else if (_dashboard is null)
+        {
+            <Empty Description="@("No dashboard data")" />
+        }
+        else
+        {
+            <AntDesign.Row Gutter="(16,16)" Style="margin-bottom:16px;">
+                <AntDesign.Col Xs="12" Sm="12" Md="6">
+                    <Card Size="CardSize.Small">
+                        <Statistic Title="Total clinics" Value="@_dashboard.Organization.TotalClinicCount" />
+                        <div class="hc-caption" style="margin-top:8px;">
+                            @_dashboard.Organization.ActiveClinicCount active · @_dashboard.Organization.InactiveClinicCount inactive
+                        </div>
+                    </Card>
+                </AntDesign.Col>
+                <AntDesign.Col Xs="12" Sm="12" Md="6">
+                    <Card Size="CardSize.Small">
+                        <Statistic Title="Active staff" Value="@_dashboard.Staff.ActiveStaffCount" />
+                        <div class="hc-caption" style="margin-top:8px;">
+                            @_dashboard.Staff.InactiveStaffCount inactive
+                        </div>
+                    </Card>
+                </AntDesign.Col>
+                <AntDesign.Col Xs="12" Sm="12" Md="6">
+                    <Card Size="CardSize.Small">
+                        <Statistic Title="Doctors" Value="@_dashboard.Staff.DoctorCount" />
+                        <div class="hc-caption" style="margin-top:8px;">
+                            N @_dashboard.Staff.NurseCount · R @_dashboard.Staff.ReceptionistCount · CA @_dashboard.Staff.ClinicAdminCount
+                        </div>
+                    </Card>
+                </AntDesign.Col>
+                <AntDesign.Col Xs="12" Sm="12" Md="6">
+                    <Card Size="CardSize.Small">
+                        <Statistic Title="Patients" Value="@_dashboard.Patients.TotalPatientCount" />
+                        <div class="hc-caption" style="margin-top:8px;">
+                            @_dashboard.Patients.ActivePatientCount active · @_dashboard.Patients.InactivePatientCount inactive
+                        </div>
+                    </Card>
+                </AntDesign.Col>
+            </AntDesign.Row>
+
+            <AntDesign.Row Gutter="(16,16)" Style="margin-bottom:16px;">
+                <AntDesign.Col Xs="24" Lg="14">
+                    <Card Title="@AppointmentCardTitle()" Size="CardSize.Small">
+                        <AntDesign.Row Gutter="(12,12)">
+                            <AntDesign.Col Span="6"><Statistic Title="Total" Value="@_dashboard.Appointments.TotalAppointments" /></AntDesign.Col>
+                            <AntDesign.Col Span="6"><Statistic Title="Requested" Value="@_dashboard.Appointments.RequestedCount" /></AntDesign.Col>
+                            <AntDesign.Col Span="6"><Statistic Title="Confirmed" Value="@_dashboard.Appointments.ConfirmedCount" /></AntDesign.Col>
+                            <AntDesign.Col Span="6"><Statistic Title="Checked in" Value="@_dashboard.Appointments.CheckedInCount" /></AntDesign.Col>
+                            <AntDesign.Col Span="6"><Statistic Title="In progress" Value="@_dashboard.Appointments.InProgressCount" /></AntDesign.Col>
+                            <AntDesign.Col Span="6"><Statistic Title="Completed" Value="@_dashboard.Appointments.CompletedCount" /></AntDesign.Col>
+                            <AntDesign.Col Span="6"><Statistic Title="Cancelled" Value="@_dashboard.Appointments.CancelledCount" /></AntDesign.Col>
+                            <AntDesign.Col Span="6"><Statistic Title="No-show" Value="@_dashboard.Appointments.NoShowCount" /></AntDesign.Col>
+                        </AntDesign.Row>
+                        @if (_dashboard.Appointments.TotalAppointments > 0)
+                        {
+                            <div style="margin-top:16px;">
+                                <div class="hc-caption" style="margin-bottom:6px;">Completed share</div>
+                                <Progress Percent="@CompletedPercent()" />
+                            </div>
+                        }
+                        <div class="hc-caption" style="margin-top:12px;">
+                            @ContextCaption()
+                        </div>
+                    </Card>
+                </AntDesign.Col>
+                <AntDesign.Col Xs="24" Lg="10">
+                    <Card Title="Operational alerts" Size="CardSize.Small">
+                        @if (HasAlerts())
+                        {
+                            <div class="hc-dashboard-alerts">
+                                <div style="padding:8px 0;">
+                                    <Space>
+                                        <Tag Color="@(AlertTone(_dashboard.Alerts.FailedReminderCount))">@_dashboard.Alerts.FailedReminderCount</Tag>
+                                        <span>Failed reminders</span>
+                                    </Space>
+                                </div>
+                                <div style="padding:8px 0;">
+                                    <Space>
+                                        <Tag Color="@(AlertTone(_dashboard.Alerts.FailedClinicSummaryCount))">@_dashboard.Alerts.FailedClinicSummaryCount</Tag>
+                                        <span>Failed clinic summaries</span>
+                                    </Space>
+                                </div>
+                                <div style="padding:8px 0;">
+                                    <Space>
+                                        <Tag Color="@(AlertTone(_dashboard.Alerts.ClinicsWithoutActiveDoctorCount))">@_dashboard.Alerts.ClinicsWithoutActiveDoctorCount</Tag>
+                                        <span>Clinics without active doctor</span>
+                                    </Space>
+                                </div>
+                                <div style="padding:8px 0;">
+                                    <Space>
+                                        <Tag Color="@(AlertTone(_dashboard.Alerts.ClinicsWithoutAvailabilityCount))">@_dashboard.Alerts.ClinicsWithoutAvailabilityCount</Tag>
+                                        <span>Clinics without availability</span>
+                                    </Space>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <Empty Description="@("No operational alerts")" />
+                        }
+                    </Card>
+                </AntDesign.Col>
+            </AntDesign.Row>
+
+            <Card Title="Quick actions" Size="CardSize.Small">
+                <Space Wrap>
+                    @if (Permissions.Has(WebPermissions.ClinicsRead))
+                    {
+                        <Button OnClick='() => Navigation.NavigateTo("/staff")'>
+                            <Icon Type="bank" Theme="IconThemeType.Outline" /> Clinics via staff scope
+                        </Button>
+                    }
+                    @if (Permissions.Has(WebPermissions.StaffRead))
+                    {
+                        <Button Type="@ButtonType.Primary" OnClick='() => Navigation.NavigateTo("/staff")'>
+                            <Icon Type="user" Theme="IconThemeType.Outline" /> Staff
+                        </Button>
+                    }
+                    @if (Permissions.Has(WebPermissions.PatientsSearch))
+                    {
+                        <Button Type="@ButtonType.Primary" OnClick='() => Navigation.NavigateTo("/patients")'>
+                            <Icon Type="team" Theme="IconThemeType.Outline" /> Patients
+                        </Button>
+                    }
+                    @if (Permissions.Has(WebPermissions.AppointmentsRead))
+                    {
+                        <Button Type="@ButtonType.Primary" OnClick='() => Navigation.NavigateTo("/appointments")'>
+                            <Icon Type="calendar" Theme="IconThemeType.Outline" /> Appointments
+                        </Button>
+                        <Button OnClick='() => Navigation.NavigateTo("/appointments/calendar")'>
+                            <Icon Type="schedule" Theme="IconThemeType.Outline" /> Calendar
+                        </Button>
+                    }
+                    @if (AvailabilityPermissionRules.CanManage(Permissions))
+                    {
+                        <Button Type="@ButtonType.Primary" OnClick='() => Navigation.NavigateTo("/availability")'>
+                            <Icon Type="clock-circle" Theme="IconThemeType.Outline" /> Availability
+                        </Button>
+                    }
+                </Space>
+            </Card>
+        }
+    }
 }
 else
 {
@@ -67,6 +285,14 @@ else
 }
 
 @code {
+    private OrganizationDashboardResponse? _dashboard;
+    private Guid? _clinicId;
+    private string? _dateInput;
+    private bool _loading;
+    private string? _error;
+    private string _subtitle = "Organization operational summary";
+    private bool _subscribed;
+
     protected override void OnInitialized()
     {
         if (Permissions.IsPatientOnly)
@@ -77,6 +303,168 @@ else
         if (!Permissions.IsStaffUser)
         {
             Navigation.NavigateTo("/forbidden");
+            return;
+        }
+
+        if (Permissions.IsPlatformAdmin)
+        {
+            PlatformTenant.Changed += OnPlatformTenantChanged;
+            _subscribed = true;
+            if (PlatformTenant.HasClinic)
+            {
+                _clinicId = PlatformTenant.SelectedClinicId;
+            }
         }
     }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Permissions.Has(WebPermissions.OrganizationDashboardRead))
+        {
+            await LoadAsync();
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_subscribed)
+        {
+            PlatformTenant.Changed -= OnPlatformTenantChanged;
+        }
+    }
+
+    private void OnPlatformTenantChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            _dashboard = null;
+            if (PlatformTenant.HasClinic)
+            {
+                _clinicId = PlatformTenant.SelectedClinicId;
+            }
+            else if (!PlatformTenant.HasOrganization)
+            {
+                _clinicId = null;
+            }
+
+            await LoadAsync();
+        });
+    }
+
+    private async Task OnClinicChangedAsync(Guid? clinicId)
+    {
+        _clinicId = clinicId;
+        _dashboard = null;
+        await LoadAsync();
+    }
+
+    private async Task OnDateChangedAsync(ChangeEventArgs args)
+    {
+        _dateInput = args.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(_dateInput))
+        {
+            _dateInput = null;
+        }
+
+        _dashboard = null;
+        await LoadAsync();
+    }
+
+    private async Task RefreshAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (!Permissions.Has(WebPermissions.OrganizationDashboardRead))
+        {
+            return;
+        }
+
+        if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+        {
+            _dashboard = null;
+            _error = null;
+            _subtitle = "Select an organization to continue";
+            return;
+        }
+
+        _loading = true;
+        _error = null;
+        try
+        {
+            var query = new OrganizationDashboardQuery
+            {
+                OrganizationId = Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null,
+                ClinicId = _clinicId,
+                Date = string.IsNullOrWhiteSpace(_dateInput) ? null : _dateInput,
+            };
+
+            _dashboard = await DashboardApi.GetAsync(
+                query,
+                platformAdminBypass: Permissions.IsPlatformAdmin && PlatformTenant.ExplicitBypassEnabled);
+
+            _subtitle = $"{_dashboard.Organization.OrganizationName} · {_dashboard.Organization.TotalClinicCount} clinics";
+        }
+        catch (ApiProblemException ex)
+        {
+            _dashboard = null;
+            _error = ex.Title ?? "Unable to load organization dashboard.";
+            Notify.Error(_error);
+        }
+        catch (Exception)
+        {
+            _dashboard = null;
+            _error = "Unable to load organization dashboard.";
+            Notify.Error(_error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string AppointmentCardTitle()
+    {
+        if (_dashboard?.Context.DashboardDate is { } date)
+        {
+            return $"Appointments · {date}";
+        }
+
+        return "Today’s appointments (per clinic local date)";
+    }
+
+    private string ContextCaption()
+    {
+        if (_dashboard is null)
+        {
+            return string.Empty;
+        }
+
+        var ctx = _dashboard.Context;
+        if (ctx.SelectedClinicName is not null)
+        {
+            return $"Clinic: {ctx.SelectedClinicName} · Timezone: {ctx.TimeZoneId} · Strategy: {ctx.TimeZoneStrategy}";
+        }
+
+        return $"All clinics · Strategy: {ctx.TimeZoneStrategy} (each clinic’s local today when date is empty)";
+    }
+
+    private int CompletedPercent()
+    {
+        if (_dashboard is null || _dashboard.Appointments.TotalAppointments <= 0)
+        {
+            return 0;
+        }
+
+        return (int)Math.Round(
+            100.0 * _dashboard.Appointments.CompletedCount / _dashboard.Appointments.TotalAppointments);
+    }
+
+    private bool HasAlerts() =>
+        _dashboard is not null
+        && (_dashboard.Alerts.FailedReminderCount > 0
+            || _dashboard.Alerts.FailedClinicSummaryCount > 0
+            || _dashboard.Alerts.ClinicsWithoutActiveDoctorCount > 0
+            || _dashboard.Alerts.ClinicsWithoutAvailabilityCount > 0);
+
+    private static string AlertTone(int count) => count > 0 ? "error" : "default";
 }

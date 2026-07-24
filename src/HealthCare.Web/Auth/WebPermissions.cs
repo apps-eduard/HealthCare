@@ -12,6 +12,7 @@ public static class WebPermissions
     public const string ClinicsRead = "clinics.read";
     public const string OrganizationsRead = "organizations.read";
     public const string OrganizationsSelect = "organizations.select";
+    public const string OrganizationDashboardRead = "organization_dashboard.read";
 
     public const string AppointmentsRead = "appointments.read";
     public const string AppointmentsCreate = "appointments.create";

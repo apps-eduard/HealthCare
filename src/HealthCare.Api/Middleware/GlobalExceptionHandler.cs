@@ -129,6 +129,18 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
                 cancellationToken);
         }
 
+        if (exception is OrganizationDashboardException organizationDashboardException)
+        {
+            return await WriteAuthProblemAsync(
+                httpContext,
+                organizationDashboardException.StatusCode,
+                organizationDashboardException.Title,
+                organizationDashboardException.ErrorCode,
+                correlationId,
+                "Organization dashboard denied",
+                cancellationToken);
+        }
+
         if (exception is PatientClinicRegistrationException clinicRegistrationException)
         {
             return await WriteAuthProblemAsync(

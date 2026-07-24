@@ -29,6 +29,7 @@ Resolution uses server-side Identity roles (DB) + active staff membership + pati
 | `clinics.read` / `clinics.manage` | Clinic discovery / management foundation |
 | `organizations.read` | PLATFORM_ADMIN organization directory search/detail |
 | `organizations.select` | PLATFORM_ADMIN UI tenant selection (Web usability aid; API remains authoritative) |
+| `organization_dashboard.read` | Organization Admin (and PLATFORM_ADMIN with explicit tenant bypass) operational dashboard aggregates |
 | `staff.read` / `staff.manage` | Staff-management list/detail/create/update/activate |
 | `roles.read` / `roles.assign` | Assignable-role catalog and role assignment |
 | `hangfire.dashboard` | Hangfire dashboard (with PLATFORM_ADMIN) |
@@ -40,8 +41,8 @@ Resolution uses server-side Identity roles (DB) + active staff membership + pati
 
 ## Role mappings (assumptions)
 
-- **PLATFORM_ADMIN:** broad permissions including dashboard + `organizations.read` / `organizations.select`; **does not** auto-bypass tenants — requires `PlatformAdminBypass.Explicit`. Organization directory listing is a platform operation and does **not** grant clinic/resource access. No `medical_notes.*`.
-- **ORGANIZATION_ADMIN:** org-scoped ops; can assign roles except PLATFORM_ADMIN. **No** global organization directory.
+- **PLATFORM_ADMIN:** broad permissions including `organization_dashboard.read` + `organizations.read` / `organizations.select`; **does not** auto-bypass tenants — requires `PlatformAdminBypass.Explicit`. Organization directory listing is a platform operation and does **not** grant clinic/resource access. No `medical_notes.*`.
+- **ORGANIZATION_ADMIN:** org-scoped ops including `organization_dashboard.read`; can assign roles except PLATFORM_ADMIN. **No** global organization directory.
 - **CLINIC_ADMIN:** clinic-scoped ops; cannot assign ORG/PLATFORM admin.
 - **DOCTOR:** clinic appointments + own availability; no clinic administration.
 - **NURSE:** clinical-operational appointment actions (no create/reschedule/availability manage); medical notes: `medical_notes.read/create/update_draft/sign` limited to **Nursing** note type in services.
@@ -159,7 +160,7 @@ Doctor directory and available-slots require authentication + `availability.read
 
 ## Staff web application (HealthCare.Web)
 
-Ant Design Interactive Server app consumes the API. UI permissions (`staff.read` / `staff.manage` / `roles.read` / `roles.assign` / `clinics.read` / `organizations.read` / `organizations.select`) only control presentation; the API enforces authorization.
+Ant Design Interactive Server app consumes the API. UI permissions (`staff.read` / `staff.manage` / `roles.read` / `roles.assign` / `clinics.read` / `organizations.read` / `organizations.select` / `organization_dashboard.read`) only control presentation; the API enforces authorization.
 
 Pages:
 
@@ -194,6 +195,14 @@ Tenant behavior:
 - PATIENT: denied on staff clinic directory
 
 Staff UI uses `ClinicPicker` / `OrganizationPicker` (no free-text ClinicId or OrganizationId). Staff Web auth is BFF-based: HttpOnly cookie + server-side token session (no browser token storage). UI is Ant Design Blazor (Fluent UI removed).
+
+### Organization dashboard
+
+- `GET /api/v1/organization/dashboard` — org-scoped operational aggregates (`organization_dashboard.read`)
+- Optional `ClinicId`, `Date` (yyyy-MM-dd); optional `OrganizationId` **only** for PLATFORM_ADMIN with `platformAdminBypass=true`
+- ORGANIZATION_ADMIN: trusted membership organization; client OrganizationId overrides rejected
+- Appointment “today” uses each clinic’s local calendar date when no date is supplied and multiple clinics are in scope
+- Does not return PHI beyond aggregate counts
 
 ## Securing new endpoints
 
