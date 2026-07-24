@@ -58,6 +58,7 @@
     public sealed class Args
     {
         public Guid DoctorStaffMemberId { get; init; }
+        public Guid? ClinicId { get; init; }
         public bool PlatformAdminBypass { get; init; }
     }
 
@@ -134,7 +135,8 @@
                     EndLocalTime = requiresTimes ? _end?.Trim() : null,
                     Reason = string.IsNullOrWhiteSpace(_reason) ? null : _reason.Trim(),
                 },
-                Options.PlatformAdminBypass);
+                clinicId: Options.ClinicId,
+                platformAdminBypass: Options.PlatformAdminBypass);
             Notify.Success("Exception created.");
             await ConfirmOkAsync();
         }

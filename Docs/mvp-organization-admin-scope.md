@@ -715,6 +715,10 @@ The Organization Admin must not:
 - `/appointments` — Appointment Queue via `ListQueueAsync` (`GET .../staff/appointments/queue`); terminal statuses excluded when Status is empty. Filters: date range, status, doctor, clinic (`IClinicWorkingContext` sync). Create/detail with confirm/check-in/cancel/reschedule/no-show; Complete remains permission-gated (`appointments.complete` not granted to Org Admin).
 - `/appointments/calendar` — day/week via `ListCalendarAsync` (`GET .../staff/appointments/calendar` + `view`). Clinic-scoped calendar with doctor filter; Guid clinic doctors via `GET .../staff/clinics/{id}/doctors`.
 
+**Frontend status (2026-07-24) — Phase 5 (Doctor availability):**
+- `/availability` — Doctor Availability via `IDoctorAvailabilityApiClient`. Gate: `availability.read` **or** any manage permission; mutations require manage. Clinic + doctor selection (`IClinicWorkingContext` for Org Admin); Guid doctors via `GET .../staff/clinics/{id}/doctors`; optional `clinicId` on availability mutations.
+- Tabs: Weekly Schedule (CRUD windows), Exceptions (create/delete; no exception edit API), Effective Availability (client-side composition, max 14 days), Slot Preview (`available-slots`). Clinic timezone from `ClinicTimeZoneId` / clinic meta. Optimistic concurrency via `ExpectedVersion` + reload on conflict.
+
 ### Phase 2 — Scheduling and operations
 
 11. Doctor availability

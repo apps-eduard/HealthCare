@@ -20,7 +20,7 @@ Resolution uses server-side Identity roles (DB) + active staff membership + pati
 | `patients.update_clinic_status` | Clinic patient profile / enroll |
 | `patients.update_own_profile` | Patient self profile |
 | `appointments.*` | Create/read/confirm/cancel/check_in/complete/no_show/reschedule |
-| `availability.read` | Clinic doctors + slots |
+| `availability.read` | Clinic doctors + slots; opens Doctor Availability UI (read) |
 | `availability.manage_self` | Doctor own availability |
 | `availability.manage_clinic` | Clinic admin availability |
 | `availability.manage_organization` | Org admin availability |

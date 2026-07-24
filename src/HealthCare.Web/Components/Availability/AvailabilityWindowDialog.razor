@@ -67,6 +67,7 @@
     public sealed class Args
     {
         public Guid DoctorStaffMemberId { get; init; }
+        public Guid? ClinicId { get; init; }
         public bool PlatformAdminBypass { get; init; }
         public DoctorAvailabilityResponse? Existing { get; init; }
     }
@@ -141,7 +142,8 @@
                         ClearEffectiveTo = _effectiveTo is null,
                         IsActive = _isActive,
                     },
-                    Options.PlatformAdminBypass);
+                    clinicId: Options.ClinicId,
+                    platformAdminBypass: Options.PlatformAdminBypass);
                 Notify.Success("Availability updated.");
                 await ConfirmOkAsync();
             }
@@ -158,7 +160,8 @@
                         EffectiveFrom = DateOnly.FromDateTime(_effectiveFrom.Value),
                         EffectiveTo = _effectiveTo is DateTime to ? DateOnly.FromDateTime(to) : null,
                     },
-                    Options.PlatformAdminBypass);
+                    clinicId: Options.ClinicId,
+                    platformAdminBypass: Options.PlatformAdminBypass);
                 Notify.Success("Availability created.");
                 await ConfirmOkAsync();
             }

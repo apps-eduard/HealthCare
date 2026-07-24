@@ -9,14 +9,21 @@ public interface IDoctorAvailabilityApiClient
         string clinicCode,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<ClinicDoctorResponse>> ListClinicDoctorsByIdAsync(
+        Guid clinicId,
+        bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<DoctorAvailabilityResponse>> ListAvailabilityAsync(
         Guid doctorStaffMemberId,
+        Guid? clinicId = null,
         bool platformAdminBypass = false,
         CancellationToken cancellationToken = default);
 
     Task<DoctorAvailabilityResponse> CreateAvailabilityAsync(
         Guid doctorStaffMemberId,
         CreateDoctorAvailabilityRequest request,
+        Guid? clinicId = null,
         bool platformAdminBypass = false,
         CancellationToken cancellationToken = default);
 
@@ -24,6 +31,7 @@ public interface IDoctorAvailabilityApiClient
         Guid doctorStaffMemberId,
         Guid availabilityId,
         UpdateDoctorAvailabilityRequest request,
+        Guid? clinicId = null,
         bool platformAdminBypass = false,
         CancellationToken cancellationToken = default);
 
@@ -31,17 +39,20 @@ public interface IDoctorAvailabilityApiClient
         Guid doctorStaffMemberId,
         Guid availabilityId,
         int expectedVersion,
+        Guid? clinicId = null,
         bool platformAdminBypass = false,
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<DoctorAvailabilityExceptionResponse>> ListExceptionsAsync(
         Guid doctorStaffMemberId,
+        Guid? clinicId = null,
         bool platformAdminBypass = false,
         CancellationToken cancellationToken = default);
 
     Task<DoctorAvailabilityExceptionResponse> CreateExceptionAsync(
         Guid doctorStaffMemberId,
         CreateDoctorAvailabilityExceptionRequest request,
+        Guid? clinicId = null,
         bool platformAdminBypass = false,
         CancellationToken cancellationToken = default);
 
@@ -49,6 +60,7 @@ public interface IDoctorAvailabilityApiClient
         Guid doctorStaffMemberId,
         Guid exceptionId,
         int expectedVersion,
+        Guid? clinicId = null,
         bool platformAdminBypass = false,
         CancellationToken cancellationToken = default);
 
@@ -80,13 +92,29 @@ public sealed class DoctorAvailabilityApiClient : IDoctorAvailabilityApiClient
         return (await response.Content.ReadFromJsonAsync<List<ClinicDoctorResponse>>(cancellationToken)) ?? [];
     }
 
-    public async Task<IReadOnlyList<DoctorAvailabilityResponse>> ListAvailabilityAsync(
-        Guid doctorStaffMemberId,
+    public async Task<IReadOnlyList<ClinicDoctorResponse>> ListClinicDoctorsByIdAsync(
+        Guid clinicId,
         bool platformAdminBypass = false,
         CancellationToken cancellationToken = default)
     {
         var client = _httpClientFactory.CreateClient("HealthCareApi");
-        var url = AppendBypass($"api/v1/staff/doctors/{doctorStaffMemberId:D}/availability", platformAdminBypass);
+        var url = AppendQuery($"api/v1/staff/clinics/{clinicId:D}/doctors", clinicId: null, platformAdminBypass);
+        using var response = await client.GetAsync(url, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return (await response.Content.ReadFromJsonAsync<List<ClinicDoctorResponse>>(cancellationToken)) ?? [];
+    }
+
+    public async Task<IReadOnlyList<DoctorAvailabilityResponse>> ListAvailabilityAsync(
+        Guid doctorStaffMemberId,
+        Guid? clinicId = null,
+        bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default)
+    {
+        var client = _httpClientFactory.CreateClient("HealthCareApi");
+        var url = AppendQuery(
+            $"api/v1/staff/doctors/{doctorStaffMemberId:D}/availability",
+            clinicId,
+            platformAdminBypass);
         using var response = await client.GetAsync(url, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
         return (await response.Content.ReadFromJsonAsync<List<DoctorAvailabilityResponse>>(cancellationToken)) ?? [];
@@ -95,11 +123,15 @@ public sealed class DoctorAvailabilityApiClient : IDoctorAvailabilityApiClient
     public async Task<DoctorAvailabilityResponse> CreateAvailabilityAsync(
         Guid doctorStaffMemberId,
         CreateDoctorAvailabilityRequest request,
+        Guid? clinicId = null,
         bool platformAdminBypass = false,
         CancellationToken cancellationToken = default)
     {
         var client = _httpClientFactory.CreateClient("HealthCareApi");
-        var url = AppendBypass($"api/v1/staff/doctors/{doctorStaffMemberId:D}/availability", platformAdminBypass);
+        var url = AppendQuery(
+            $"api/v1/staff/doctors/{doctorStaffMemberId:D}/availability",
+            clinicId,
+            platformAdminBypass);
         using var response = await client.PostAsJsonAsync(url, request, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
         return (await response.Content.ReadFromJsonAsync<DoctorAvailabilityResponse>(cancellationToken))
@@ -110,12 +142,14 @@ public sealed class DoctorAvailabilityApiClient : IDoctorAvailabilityApiClient
         Guid doctorStaffMemberId,
         Guid availabilityId,
         UpdateDoctorAvailabilityRequest request,
+        Guid? clinicId = null,
         bool platformAdminBypass = false,
         CancellationToken cancellationToken = default)
     {
         var client = _httpClientFactory.CreateClient("HealthCareApi");
-        var url = AppendBypass(
+        var url = AppendQuery(
             $"api/v1/staff/doctors/{doctorStaffMemberId:D}/availability/{availabilityId:D}",
+            clinicId,
             platformAdminBypass);
         using var response = await client.PatchAsJsonAsync(url, request, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
@@ -127,29 +161,28 @@ public sealed class DoctorAvailabilityApiClient : IDoctorAvailabilityApiClient
         Guid doctorStaffMemberId,
         Guid availabilityId,
         int expectedVersion,
+        Guid? clinicId = null,
         bool platformAdminBypass = false,
         CancellationToken cancellationToken = default)
     {
         var client = _httpClientFactory.CreateClient("HealthCareApi");
         var url =
             $"api/v1/staff/doctors/{doctorStaffMemberId:D}/availability/{availabilityId:D}?expectedVersion={expectedVersion}";
-        if (platformAdminBypass)
-        {
-            url += "&platformAdminBypass=true";
-        }
-
+        url = AppendExtraQuery(url, clinicId, platformAdminBypass);
         using var response = await client.DeleteAsync(url, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
     }
 
     public async Task<IReadOnlyList<DoctorAvailabilityExceptionResponse>> ListExceptionsAsync(
         Guid doctorStaffMemberId,
+        Guid? clinicId = null,
         bool platformAdminBypass = false,
         CancellationToken cancellationToken = default)
     {
         var client = _httpClientFactory.CreateClient("HealthCareApi");
-        var url = AppendBypass(
+        var url = AppendQuery(
             $"api/v1/staff/doctors/{doctorStaffMemberId:D}/availability-exceptions",
+            clinicId,
             platformAdminBypass);
         using var response = await client.GetAsync(url, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
@@ -160,12 +193,14 @@ public sealed class DoctorAvailabilityApiClient : IDoctorAvailabilityApiClient
     public async Task<DoctorAvailabilityExceptionResponse> CreateExceptionAsync(
         Guid doctorStaffMemberId,
         CreateDoctorAvailabilityExceptionRequest request,
+        Guid? clinicId = null,
         bool platformAdminBypass = false,
         CancellationToken cancellationToken = default)
     {
         var client = _httpClientFactory.CreateClient("HealthCareApi");
-        var url = AppendBypass(
+        var url = AppendQuery(
             $"api/v1/staff/doctors/{doctorStaffMemberId:D}/availability-exceptions",
+            clinicId,
             platformAdminBypass);
         using var response = await client.PostAsJsonAsync(url, request, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
@@ -177,17 +212,14 @@ public sealed class DoctorAvailabilityApiClient : IDoctorAvailabilityApiClient
         Guid doctorStaffMemberId,
         Guid exceptionId,
         int expectedVersion,
+        Guid? clinicId = null,
         bool platformAdminBypass = false,
         CancellationToken cancellationToken = default)
     {
         var client = _httpClientFactory.CreateClient("HealthCareApi");
         var url =
             $"api/v1/staff/doctors/{doctorStaffMemberId:D}/availability-exceptions/{exceptionId:D}?expectedVersion={expectedVersion}";
-        if (platformAdminBypass)
-        {
-            url += "&platformAdminBypass=true";
-        }
-
+        url = AppendExtraQuery(url, clinicId, platformAdminBypass);
         using var response = await client.DeleteAsync(url, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
     }
@@ -221,6 +253,34 @@ public sealed class DoctorAvailabilityApiClient : IDoctorAvailabilityApiClient
         }
     }
 
-    private static string AppendBypass(string path, bool platformAdminBypass) =>
-        platformAdminBypass ? $"{path}?platformAdminBypass=true" : path;
+    private static string AppendQuery(string path, Guid? clinicId, bool platformAdminBypass)
+    {
+        var parts = new List<string>();
+        if (clinicId is Guid id && id != Guid.Empty)
+        {
+            parts.Add($"clinicId={id:D}");
+        }
+
+        if (platformAdminBypass)
+        {
+            parts.Add("platformAdminBypass=true");
+        }
+
+        return parts.Count == 0 ? path : $"{path}?{string.Join('&', parts)}";
+    }
+
+    private static string AppendExtraQuery(string urlWithQuery, Guid? clinicId, bool platformAdminBypass)
+    {
+        if (clinicId is Guid id && id != Guid.Empty)
+        {
+            urlWithQuery += $"&clinicId={id:D}";
+        }
+
+        if (platformAdminBypass)
+        {
+            urlWithQuery += "&platformAdminBypass=true";
+        }
+
+        return urlWithQuery;
+    }
 }

@@ -8,27 +8,37 @@
 @inject IDoctorAvailabilityApiClient AvailabilityApi
 @inject IPermissionState Permissions
 @inject IPlatformTenantContext PlatformTenant
+@inject IClinicWorkingContext ClinicContext
 @inject IUiModalService Modals
 @inject IUserNotificationService Notify
 @inject IClinicDirectoryApiClient ClinicsApi
 @inject IClinicDirectoryCache ClinicCache
 
-<PageTitle>Availability</PageTitle>
+<PageTitle>Doctor Availability</PageTitle>
 
 @if (Permissions.IsPatientOnly)
 {
     <Alert Type="@AlertType.Error" Message="Patient accounts cannot manage staff availability." ShowIcon="true" />
 }
-else if (!AvailabilityPermissionRules.CanManage(Permissions))
+else if (!AvailabilityPermissionRules.CanView(Permissions))
 {
-    <PermissionDeniedState Message="You do not have permission to manage doctor availability." />
+    <PermissionDeniedState Message="You do not have permission to view doctor availability." />
 }
 else
 {
-    <HcPageHeader Title="Availability" Subtitle="@(string.IsNullOrWhiteSpace(_timeZoneId) ? null : $"Clinic timezone: {_timeZoneId}")">
-        <Button OnClick="RefreshAllAsync" Disabled="_loading">
-            <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
-        </Button>
+    <HcPageHeader Title="Doctor Availability"
+                  Subtitle="@(string.IsNullOrWhiteSpace(_timeZoneId) ? "Weekly windows and exceptions in clinic local time" : $"Clinic timezone: {_timeZoneId}")">
+        <Breadcrumb>
+            <Breadcrumb>
+                <BreadcrumbItem Href="/dashboard">Home</BreadcrumbItem>
+                <BreadcrumbItem>Doctor Availability</BreadcrumbItem>
+            </Breadcrumb>
+        </Breadcrumb>
+        <ChildContent>
+            <Button OnClick="RefreshAllAsync" Disabled="_loading || _doctorId is null" AriaLabel="Refresh availability">
+                <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
+            </Button>
+        </ChildContent>
     </HcPageHeader>
 
     @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
@@ -55,27 +65,33 @@ else
                               PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
                               Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)" />
             }
-            else if (Permissions.Has(WebPermissions.ClinicsRead))
+            else if (Permissions.Has(WebPermissions.ClinicsRead) || _clinicId is not null)
             {
                 <div>
                     <ClinicPicker Label="Clinic" AllowClear="false" Required="false" Disabled="true" />
-                    <div class="hc-caption">@_clinicName</div>
+                    <div class="hc-caption">@(_clinicName ?? "Your clinic")</div>
                 </div>
             }
 
             @if (_selfOnly)
             {
                 <div>
-                    <span class="hc-filter-label">Doctor</span>
-                    <Input Value="@_selfDoctorLabel" Disabled="true" Style="width:100%;" />
+                    <label class="hc-filter-label" for="availability-doctor-self">Doctor</label>
+                    <Input Id="availability-doctor-self" Value="@_selfDoctorLabel" Disabled="true" Style="width:100%;" AriaLabel="Selected doctor (self)" />
                 </div>
             }
             else
             {
                 <div>
-                    <label>@FieldLabel.Mark("Doctor")</label>
-                    <Select TItemValue="string" TItem="string" Value="@(_doctorId?.ToString() ?? "")" ValueChanged="OnDoctorStringChanged"
-                            Disabled="_doctorsLoading || string.IsNullOrWhiteSpace(_clinicSlug)" Style="width:100%;">
+                    <label class="hc-filter-label" for="availability-doctor">@FieldLabel.Mark("Doctor")</label>
+                    <Select Id="availability-doctor"
+                            TItemValue="string"
+                            TItem="string"
+                            Value="@(_doctorId?.ToString() ?? "")"
+                            ValueChanged="OnDoctorStringChanged"
+                            Disabled="_doctorsLoading || _clinicId is null"
+                            Style="width:100%;"
+                            AriaLabel="Select doctor">
                         <SelectOptions>
                             @foreach (var doctor in _doctors)
                             {
@@ -86,25 +102,43 @@ else
                     </Select>
                 </div>
             }
+
+            <div>
+                <label class="hc-filter-label" for="availability-from">Date range from</label>
+                <DatePicker Id="availability-from" TValue="DateTime?" @bind-Value="_rangeFrom" Style="width:100%;" AriaLabel="Effective range start" />
+            </div>
+            <div>
+                <label class="hc-filter-label" for="availability-to">Date range to</label>
+                <DatePicker Id="availability-to" TValue="DateTime?" @bind-Value="_rangeTo" Style="width:100%;" AriaLabel="Effective range end" />
+            </div>
         </div>
+        @if (!string.IsNullOrWhiteSpace(_timeZoneId))
+        {
+            <div class="hc-caption" style="margin-top:0.5rem;">
+                All times are clinic-local (@_timeZoneId). The API interprets windows in this timezone — not your browser clock.
+            </div>
+        }
     </div>
 
     @if (!string.IsNullOrWhiteSpace(_error)) { <ErrorState Message="@_error" /> }
 
     @if (_doctorId is null)
     {
-        <Alert Type="@AlertType.Info" Message="Select a clinic and doctor to manage availability." ShowIcon="true" />
+        <Alert Type="@AlertType.Info" Message="Select a clinic and doctor to view availability." ShowIcon="true" />
     }
     else
     {
         <Tabs>
-            <TabPane Tab="Weekly windows" Key="windows">
+            <TabPane Tab="Weekly Schedule" Key="windows">
                 <div style="padding:1rem 0;">
-                    <div style="display:flex;justify-content:flex-end;margin-bottom:0.75rem;">
-                        <Button Type="@ButtonType.Primary" OnClick="OpenCreateWindowAsync" Disabled="_loading">
-                            <Icon Type="plus" Theme="IconThemeType.Outline" /> Add window
-                        </Button>
-                    </div>
+                    @if (_canManage)
+                    {
+                        <div style="display:flex;justify-content:flex-end;margin-bottom:0.75rem;">
+                            <Button Type="@ButtonType.Primary" OnClick="OpenCreateWindowAsync" Disabled="_loading" AriaLabel="Add weekly availability window">
+                                <Icon Type="plus" Theme="IconThemeType.Outline" /> Add window
+                            </Button>
+                        </div>
+                    }
                     @if (_loading) { <PageLoading /> }
                     else if (_windows.Count == 0) { <EmptyState Message="No weekly availability windows." /> }
                     else
@@ -113,8 +147,8 @@ else
                         {
                             <h3 style="font-size:1rem;margin:1rem 0 0.5rem;">@day</h3>
                             <div class="hc-table-wrap" style="margin-bottom:0.75rem;">
-                                <table class="hc-table">
-                                    <thead><tr><th>Time</th><th>Slot</th><th>Effective</th><th>Status</th><th>Version</th><th class="hc-actions">Actions</th></tr></thead>
+                                <table class="hc-table" aria-label="@($"Weekly availability for {day}")">
+                                    <thead><tr><th>Time</th><th>Slot</th><th>Effective</th><th>Status</th><th>Version</th>@if (_canManage) { <th class="hc-actions">Actions</th> }</tr></thead>
                                     <tbody>
                                     @foreach (var row in list)
                                     {
@@ -124,14 +158,17 @@ else
                                             <td>@AvailabilityPresentation.FormatEffectiveRange(row.EffectiveFrom, row.EffectiveTo)</td>
                                             <td><StatusBadge Text="@AvailabilityPresentation.ActiveLabel(row.IsActive)" Tone="@AvailabilityPresentation.ActiveTone(row.IsActive)" /></td>
                                             <td>@row.Version</td>
-                                            <td class="hc-actions">
-                                                <Button Type="@ButtonType.Text" OnClick="@(() => OpenEditWindowAsync(row))" AriaLabel="Edit">
-                                                    <Icon Type="edit" Theme="IconThemeType.Outline" />
-                                                </Button>
-                                                <Button Type="@ButtonType.Text" OnClick="@(() => DeleteWindowAsync(row))" AriaLabel="Delete">
-                                                    <Icon Type="delete" Theme="IconThemeType.Outline" />
-                                                </Button>
-                                            </td>
+                                            @if (_canManage)
+                                            {
+                                                <td class="hc-actions">
+                                                    <Button Type="@ButtonType.Text" OnClick="@(() => OpenEditWindowAsync(row))" AriaLabel="Edit availability window">
+                                                        <Icon Type="edit" Theme="IconThemeType.Outline" />
+                                                    </Button>
+                                                    <Button Type="@ButtonType.Text" OnClick="@(() => DeleteWindowAsync(row))" AriaLabel="Delete availability window">
+                                                        <Icon Type="delete" Theme="IconThemeType.Outline" />
+                                                    </Button>
+                                                </td>
+                                            }
                                         </tr>
                                     }
                                     </tbody>
@@ -143,18 +180,21 @@ else
             </TabPane>
             <TabPane Tab="Exceptions" Key="exceptions">
                 <div style="padding:1rem 0;">
-                    <div style="display:flex;justify-content:flex-end;margin-bottom:0.75rem;">
-                        <Button Type="@ButtonType.Primary" OnClick="OpenCreateExceptionAsync" Disabled="_loading">
-                            <Icon Type="plus" Theme="IconThemeType.Outline" /> Add exception
-                        </Button>
-                    </div>
+                    @if (_canManage)
+                    {
+                        <div style="display:flex;justify-content:flex-end;margin-bottom:0.75rem;">
+                            <Button Type="@ButtonType.Primary" OnClick="OpenCreateExceptionAsync" Disabled="_loading" AriaLabel="Add availability exception">
+                                <Icon Type="plus" Theme="IconThemeType.Outline" /> Add exception
+                            </Button>
+                        </div>
+                    }
                     @if (_loading) { <PageLoading /> }
                     else if (_exceptions.Count == 0) { <EmptyState Message="No date-specific exceptions." /> }
                     else
                     {
                         <div class="hc-table-wrap">
-                            <table class="hc-table">
-                                <thead><tr><th>Date</th><th>Type</th><th>Time</th><th>Reason</th><th>Version</th><th class="hc-actions">Actions</th></tr></thead>
+                            <table class="hc-table" aria-label="Availability exceptions">
+                                <thead><tr><th>Date</th><th>Type</th><th>Time</th><th>Reason</th><th>Version</th>@if (_canManage) { <th class="hc-actions">Actions</th> }</tr></thead>
                                 <tbody>
                                 @foreach (var row in _exceptions)
                                 {
@@ -164,11 +204,14 @@ else
                                         <td>@(string.IsNullOrWhiteSpace(row.StartLocalTime) ? "Full day" : AvailabilityPresentation.FormatLocalWindow(row.StartLocalTime!, row.EndLocalTime ?? ""))</td>
                                         <td>@(row.Reason ?? "—")</td>
                                         <td>@row.Version</td>
-                                        <td class="hc-actions">
-                                            <Button Type="@ButtonType.Text" OnClick="@(() => DeleteExceptionAsync(row))" AriaLabel="Delete exception">
-                                                <Icon Type="delete" Theme="IconThemeType.Outline" />
-                                            </Button>
-                                        </td>
+                                        @if (_canManage)
+                                        {
+                                            <td class="hc-actions">
+                                                <Button Type="@ButtonType.Text" OnClick="@(() => DeleteExceptionAsync(row))" AriaLabel="Delete exception">
+                                                    <Icon Type="delete" Theme="IconThemeType.Outline" />
+                                                </Button>
+                                            </td>
+                                        }
                                     </tr>
                                 }
                                 </tbody>
@@ -177,28 +220,98 @@ else
                     }
                 </div>
             </TabPane>
-            <TabPane Tab="Slot preview" Key="slots">
+            <TabPane Tab="Effective Availability" Key="effective">
+                <div style="padding:1rem 0;">
+                    <Alert Type="@AlertType.Info"
+                           Message="Client-side composition of weekly windows and exceptions for the selected date range (max 14 days). Booking rules remain enforced by the API."
+                           ShowIcon="true"
+                           Style="margin-bottom:0.75rem;" />
+                    @if (_loading) { <PageLoading /> }
+                    else
+                    {
+                        var days = AvailabilityEffectiveComposer.Build(
+                            _windows,
+                            _exceptions,
+                            DateOnly.FromDateTime(_rangeFrom ?? DateTime.Today),
+                            DateOnly.FromDateTime(_rangeTo ?? DateTime.Today.AddDays(6)));
+                        @if (days.Count == 0)
+                        {
+                            <EmptyState Message="No days in the selected range." />
+                        }
+                        else
+                        {
+                            @foreach (var day in days)
+                            {
+                                <div style="margin-bottom:1rem;">
+                                    <h3 style="font-size:1rem;margin:0 0 0.35rem;">@day.Date.ToString("yyyy-MM-dd") · @day.DayOfWeek</h3>
+                                    @if (day.Windows.Count == 0 && day.Exceptions.Count == 0)
+                                    {
+                                        <div class="hc-caption">No applicable windows or exceptions.</div>
+                                    }
+                                    else
+                                    {
+                                        @if (day.Windows.Count > 0)
+                                        {
+                                            <div class="hc-caption" style="margin-bottom:0.25rem;">Windows</div>
+                                            <Space Wrap>
+                                                @foreach (var w in day.Windows)
+                                                {
+                                                    <StatusBadge Text="@($"{AvailabilityPresentation.FormatLocalWindow(w.StartLocalTime, w.EndLocalTime)} · {w.SlotDurationMinutes}m{(w.IsActive ? "" : " · inactive")}")"
+                                                                 Tone="@(w.IsActive ? StatusTone.Success : StatusTone.Default)" />
+                                                }
+                                            </Space>
+                                        }
+                                        @if (day.Exceptions.Count > 0)
+                                        {
+                                            <div class="hc-caption" style="margin:0.5rem 0 0.25rem;">Exceptions</div>
+                                            <Space Wrap>
+                                                @foreach (var ex in day.Exceptions)
+                                                {
+                                                    var label = string.IsNullOrWhiteSpace(ex.StartLocalTime)
+                                                        ? AvailabilityPresentation.ExceptionTypeLabel(ex.ExceptionType)
+                                                        : $"{AvailabilityPresentation.ExceptionTypeLabel(ex.ExceptionType)} · {AvailabilityPresentation.FormatLocalWindow(ex.StartLocalTime!, ex.EndLocalTime ?? "")}";
+                                                    <StatusBadge Text="@label" Tone="StatusTone.Warning" />
+                                                }
+                                            </Space>
+                                        }
+                                    }
+                                </div>
+                            }
+                        }
+                    }
+                </div>
+            </TabPane>
+            <TabPane Tab="Slot Preview" Key="slots">
                 <div style="padding:1rem 0;">
                     <div class="hc-filter-grid">
                         <div>
-                            <span class="hc-filter-label">Date</span>
-                            <DatePicker TValue="DateTime?"
+                            <label class="hc-filter-label" for="slot-preview-date">Date</label>
+                            <DatePicker Id="slot-preview-date"
+                                        TValue="DateTime?"
                                         Value="_previewDate"
                                         OnChange="OnPreviewDatePickerChanged"
-                                        Style="width:100%;" />
+                                        Style="width:100%;"
+                                        AriaLabel="Slot preview date" />
                         </div>
                         <div>
-                            <span class="hc-filter-label">Duration (minutes)</span>
-                            <AntDesign.InputNumber TValue="int"
+                            <label class="hc-filter-label" for="slot-preview-duration">Duration (minutes)</label>
+                            <AntDesign.InputNumber Id="slot-preview-duration"
+                                                    TValue="int"
                                                     @bind-Value="_previewDuration"
                                                     OnChange="OnPreviewDurationChanged"
                                                     Min="10"
                                                     Max="240"
-                                                    Style="width:100%;" />
+                                                    Style="width:100%;"
+                                                    AriaLabel="Slot duration minutes" />
                         </div>
                         <div>
-                            <span class="hc-filter-label">&nbsp;</span>
-                            <Button Type="@ButtonType.Primary" OnClick="LoadSlotsAsync" Disabled="_slotsLoading || string.IsNullOrWhiteSpace(_clinicSlug)">Preview</Button>
+                            <label class="hc-filter-label">&nbsp;</label>
+                            <Button Type="@ButtonType.Primary"
+                                    OnClick="LoadSlotsAsync"
+                                    Disabled="_slotsLoading || string.IsNullOrWhiteSpace(_clinicSlug) || !Permissions.Has(WebPermissions.AvailabilityRead)"
+                                    AriaLabel="Preview bookable slots">
+                                Preview
+                            </Button>
                         </div>
                     </div>
                     @if (_slotsLoading) { <PageLoading /> }
@@ -225,9 +338,12 @@ else
     private readonly List<AvailableSlotResponse> _slots = [];
 
     private bool _selfOnly;
+    private bool _canManage;
     private bool _loading;
     private bool _doctorsLoading;
     private bool _slotsLoading;
+    private bool _subscribedPlatform;
+    private bool _subscribedClinic;
     private string? _error;
     private Guid? _clinicId;
     private string? _clinicSlug;
@@ -237,19 +353,35 @@ else
     private string? _selfDoctorLabel;
     private Guid? _boundOrganizationId;
     private DateTime? _previewDate = DateTime.Today;
+    private DateTime? _rangeFrom = DateTime.Today;
+    private DateTime? _rangeTo = DateTime.Today.AddDays(6);
     private int _previewDuration = 30;
 
     protected override async Task OnInitializedAsync()
     {
-        PlatformTenant.Changed += OnPlatformTenantChanged;
-
-        if (Permissions.IsPatientOnly || !AvailabilityPermissionRules.CanManage(Permissions))
+        if (Permissions.IsPatientOnly || !AvailabilityPermissionRules.CanView(Permissions))
         {
             return;
         }
 
         _selfOnly = AvailabilityPermissionRules.IsSelfOnly(Permissions);
-        SyncFromPlatformTenant();
+        _canManage = AvailabilityPermissionRules.CanManage(Permissions);
+
+        if (Permissions.IsPlatformAdmin)
+        {
+            PlatformTenant.Changed += OnPlatformTenantChanged;
+            _subscribedPlatform = true;
+            SyncFromPlatformTenant();
+        }
+        else if (Permissions.IsOrganizationAdmin)
+        {
+            ClinicContext.Changed += OnClinicContextChanged;
+            _subscribedClinic = true;
+            if (ClinicContext.HasClinic)
+            {
+                _clinicId = ClinicContext.SelectedClinicId;
+            }
+        }
 
         if (Permissions.IsPlatformAdmin
             && (!PlatformTenant.HasOrganization || !PlatformTenant.HasClinic))
@@ -262,9 +394,9 @@ else
             _clinicId = clinicId;
             await ResolveClinicMetaAsync(clinicId);
         }
-        else if (Permissions.IsPlatformAdmin && _clinicId is Guid platformClinic)
+        else if (_clinicId is Guid selected)
         {
-            await ResolveClinicMetaAsync(platformClinic);
+            await ResolveClinicMetaAsync(selected);
         }
 
         if (_selfOnly)
@@ -287,7 +419,18 @@ else
         }
     }
 
-    public void Dispose() => PlatformTenant.Changed -= OnPlatformTenantChanged;
+    public void Dispose()
+    {
+        if (_subscribedPlatform)
+        {
+            PlatformTenant.Changed -= OnPlatformTenantChanged;
+        }
+
+        if (_subscribedClinic)
+        {
+            ClinicContext.Changed -= OnClinicContextChanged;
+        }
+    }
 
     private void OnPlatformTenantChanged() => InvokeAsync(async () =>
     {
@@ -295,19 +438,7 @@ else
         SyncFromPlatformTenant();
         if (orgChanged)
         {
-            if (!_selfOnly)
-            {
-                _doctorId = null;
-            }
-
-            _windows.Clear();
-            _exceptions.Clear();
-            _slots.Clear();
-            _doctors.Clear();
-            _clinicSlug = null;
-            _clinicName = null;
-            _timeZoneId = null;
-            _error = null;
+            ClearDoctorScopedState(clearDoctor: !_selfOnly);
         }
 
         if (_clinicId is Guid id)
@@ -321,16 +452,40 @@ else
         }
         else
         {
-            _windows.Clear();
-            _exceptions.Clear();
-            _slots.Clear();
-            _doctors.Clear();
+            ClearDoctorScopedState(clearDoctor: !_selfOnly);
             _clinicSlug = null;
             _clinicName = null;
             _timeZoneId = null;
-            if (!_selfOnly)
+            _doctors.Clear();
+        }
+
+        StateHasChanged();
+    });
+
+    private void OnClinicContextChanged() => InvokeAsync(async () =>
+    {
+        _clinicId = ClinicContext.SelectedClinicId;
+        if (!_selfOnly)
+        {
+            _doctorId = null;
+        }
+
+        _windows.Clear();
+        _exceptions.Clear();
+        _slots.Clear();
+        _doctors.Clear();
+        _clinicSlug = null;
+        _clinicName = null;
+        _timeZoneId = null;
+        _error = null;
+
+        if (_clinicId is Guid id)
+        {
+            await ResolveClinicMetaAsync(id);
+            await LoadDoctorsAsync();
+            if (_doctorId is not null)
             {
-                _doctorId = null;
+                await RefreshAllAsync();
             }
         }
 
@@ -346,9 +501,24 @@ else
         }
     }
 
+    private void ClearDoctorScopedState(bool clearDoctor)
+    {
+        if (clearDoctor)
+        {
+            _doctorId = null;
+        }
+
+        _windows.Clear();
+        _exceptions.Clear();
+        _slots.Clear();
+        _doctors.Clear();
+        _error = null;
+    }
+
     private async Task OnClinicChanged(Guid? clinicId)
     {
         _clinicId = clinicId;
+
         if (Permissions.IsPlatformAdmin)
         {
             if (clinicId is Guid id && id != Guid.Empty)
@@ -362,6 +532,19 @@ else
             {
                 PlatformTenant.ClearClinic();
             }
+        }
+        else if (Permissions.IsOrganizationAdmin)
+        {
+            if (clinicId is Guid id && id != Guid.Empty)
+            {
+                ClinicContext.SelectClinic(id);
+            }
+            else
+            {
+                ClinicContext.ClearClinic();
+            }
+
+            return;
         }
 
         if (!_selfOnly)
@@ -429,16 +612,32 @@ else
         }
     }
 
+    private void PreferTimeZoneFromPayload()
+    {
+        var fromWindow = _windows.FirstOrDefault(w => !string.IsNullOrWhiteSpace(w.ClinicTimeZoneId))?.ClinicTimeZoneId;
+        if (!string.IsNullOrWhiteSpace(fromWindow))
+        {
+            _timeZoneId = fromWindow;
+            return;
+        }
+
+        var fromDoctor = _doctors.FirstOrDefault(d => d.StaffMemberId == _doctorId)?.ClinicTimeZoneId;
+        if (!string.IsNullOrWhiteSpace(fromDoctor))
+        {
+            _timeZoneId = fromDoctor;
+        }
+    }
+
     private async Task LoadDoctorsAsync()
     {
         _doctors.Clear();
-        if (string.IsNullOrWhiteSpace(_clinicSlug))
+        if (_clinicId is not Guid clinicId || clinicId == Guid.Empty)
         {
             return;
         }
 
         if (Permissions.IsPlatformAdmin
-            && (!PlatformTenant.HasOrganization || _clinicId is null || _clinicId == Guid.Empty))
+            && (!PlatformTenant.HasOrganization || clinicId == Guid.Empty))
         {
             return;
         }
@@ -446,8 +645,9 @@ else
         _doctorsLoading = true;
         try
         {
-            var doctors = await AvailabilityApi.ListClinicDoctorsAsync(_clinicSlug);
+            var doctors = await AvailabilityApi.ListClinicDoctorsByIdAsync(clinicId, Permissions.IsPlatformAdmin);
             _doctors.AddRange(doctors.Where(d => d.AcceptsBookings));
+            PreferTimeZoneFromPayload();
             if (_selfOnly && _doctorId is Guid selfId)
             {
                 var me = _doctors.FirstOrDefault(d => d.StaffMemberId == selfId);
@@ -487,12 +687,14 @@ else
         try
         {
             var bypass = Permissions.IsPlatformAdmin;
-            var windows = await AvailabilityApi.ListAvailabilityAsync(doctorId, bypass);
-            var exceptions = await AvailabilityApi.ListExceptionsAsync(doctorId, bypass);
+            var clinicId = _clinicId;
+            var windows = await AvailabilityApi.ListAvailabilityAsync(doctorId, clinicId, bypass);
+            var exceptions = await AvailabilityApi.ListExceptionsAsync(doctorId, clinicId, bypass);
             _windows.Clear();
             _windows.AddRange(windows);
             _exceptions.Clear();
             _exceptions.AddRange(exceptions.OrderBy(e => e.Date).ThenBy(e => e.StartLocalTime));
+            PreferTimeZoneFromPayload();
         }
         catch (ApiProblemException ex)
         {
@@ -508,7 +710,7 @@ else
 
     private async Task OpenCreateWindowAsync()
     {
-        if (_doctorId is not Guid doctorId)
+        if (!_canManage || _doctorId is not Guid doctorId)
         {
             return;
         }
@@ -518,6 +720,7 @@ else
                 new AvailabilityWindowDialog.Args
                 {
                     DoctorStaffMemberId = doctorId,
+                    ClinicId = _clinicId,
                     PlatformAdminBypass = Permissions.IsPlatformAdmin,
                 }))
         {
@@ -527,7 +730,7 @@ else
 
     private async Task OpenEditWindowAsync(DoctorAvailabilityResponse window)
     {
-        if (_doctorId is not Guid doctorId)
+        if (!_canManage || _doctorId is not Guid doctorId)
         {
             return;
         }
@@ -537,6 +740,7 @@ else
                 new AvailabilityWindowDialog.Args
                 {
                     DoctorStaffMemberId = doctorId,
+                    ClinicId = _clinicId,
                     PlatformAdminBypass = Permissions.IsPlatformAdmin,
                     Existing = window,
                 }))
@@ -547,7 +751,7 @@ else
 
     private async Task DeleteWindowAsync(DoctorAvailabilityResponse window)
     {
-        if (_doctorId is not Guid doctorId)
+        if (!_canManage || _doctorId is not Guid doctorId)
         {
             return;
         }
@@ -561,7 +765,12 @@ else
 
         try
         {
-            await AvailabilityApi.DeleteAvailabilityAsync(doctorId, window.Id, window.Version, Permissions.IsPlatformAdmin);
+            await AvailabilityApi.DeleteAvailabilityAsync(
+                doctorId,
+                window.Id,
+                window.Version,
+                _clinicId,
+                Permissions.IsPlatformAdmin);
             Notify.Success("Availability deleted.");
             await RefreshAllAsync();
         }
@@ -578,7 +787,7 @@ else
 
     private async Task OpenCreateExceptionAsync()
     {
-        if (_doctorId is not Guid doctorId)
+        if (!_canManage || _doctorId is not Guid doctorId)
         {
             return;
         }
@@ -588,6 +797,7 @@ else
                 new AvailabilityExceptionDialog.Args
                 {
                     DoctorStaffMemberId = doctorId,
+                    ClinicId = _clinicId,
                     PlatformAdminBypass = Permissions.IsPlatformAdmin,
                 }))
         {
@@ -597,7 +807,7 @@ else
 
     private async Task DeleteExceptionAsync(DoctorAvailabilityExceptionResponse exception)
     {
-        if (_doctorId is not Guid doctorId)
+        if (!_canManage || _doctorId is not Guid doctorId)
         {
             return;
         }
@@ -611,7 +821,12 @@ else
 
         try
         {
-            await AvailabilityApi.DeleteExceptionAsync(doctorId, exception.Id, exception.Version, Permissions.IsPlatformAdmin);
+            await AvailabilityApi.DeleteExceptionAsync(
+                doctorId,
+                exception.Id,
+                exception.Version,
+                _clinicId,
+                Permissions.IsPlatformAdmin);
             Notify.Success("Exception deleted.");
             await RefreshAllAsync();
         }
@@ -664,6 +879,11 @@ else
                 DateOnly.FromDateTime(date),
                 _previewDuration);
             _slots.AddRange(slots);
+            var tz = slots.FirstOrDefault(s => !string.IsNullOrWhiteSpace(s.TimeZoneId))?.TimeZoneId;
+            if (!string.IsNullOrWhiteSpace(tz))
+            {
+                _timeZoneId = tz;
+            }
         }
         catch (ApiProblemException ex)
         {

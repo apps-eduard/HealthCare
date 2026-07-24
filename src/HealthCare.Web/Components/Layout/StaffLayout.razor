@@ -49,11 +49,11 @@
                     <span>Patients</span>
                 </MenuItem>
             }
-            @if (AvailabilityPermissionRules.CanManage(Permissions))
+            @if (AvailabilityPermissionRules.CanView(Permissions))
             {
                 <MenuItem Key="availability" RouterLink="/availability" RouterMatch="NavLinkMatch.Prefix">
                     <Icon Type="clock-circle" Theme="IconThemeType.Outline" />
-                    <span>Availability</span>
+                    <span>Doctor Availability</span>
                 </MenuItem>
             }
             @if (Permissions.Has(WebPermissions.ClinicsRead))

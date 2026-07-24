@@ -80,8 +80,72 @@ public static class AvailabilityPresentation
     }
 }
 
+/// <summary>
+/// Client-side effective availability composition for Org Admin review (no separate API).
+/// </summary>
+public static class AvailabilityEffectiveComposer
+{
+    public sealed record DaySummary(
+        DateOnly Date,
+        string DayOfWeek,
+        IReadOnlyList<WindowSlice> Windows,
+        IReadOnlyList<Contracts.Appointments.DoctorAvailabilityExceptionResponse> Exceptions);
+
+    public sealed record WindowSlice(
+        string StartLocalTime,
+        string EndLocalTime,
+        int SlotDurationMinutes,
+        bool IsActive);
+
+    public static IReadOnlyList<DaySummary> Build(
+        IEnumerable<Contracts.Appointments.DoctorAvailabilityResponse> windows,
+        IEnumerable<Contracts.Appointments.DoctorAvailabilityExceptionResponse> exceptions,
+        DateOnly from,
+        DateOnly to)
+    {
+        if (to < from)
+        {
+            (from, to) = (to, from);
+        }
+
+        // Cap UI composition to two weeks to keep the tab readable.
+        if (to.DayNumber - from.DayNumber > 13)
+        {
+            to = from.AddDays(13);
+        }
+
+        var windowList = windows.ToList();
+        var exceptionList = exceptions.ToList();
+        var days = new List<DaySummary>();
+
+        for (var date = from; date <= to; date = date.AddDays(1))
+        {
+            var dayName = date.DayOfWeek.ToString();
+            var applicable = windowList
+                .Where(w => string.Equals(w.DayOfWeek, dayName, StringComparison.OrdinalIgnoreCase)
+                            && w.EffectiveFrom <= date
+                            && (w.EffectiveTo is null || w.EffectiveTo >= date))
+                .OrderBy(w => w.StartLocalTime)
+                .Select(w => new WindowSlice(w.StartLocalTime, w.EndLocalTime, w.SlotDurationMinutes, w.IsActive))
+                .ToList();
+
+            var dayExceptions = exceptionList
+                .Where(e => e.Date == date)
+                .OrderBy(e => e.StartLocalTime)
+                .ToList();
+
+            days.Add(new DaySummary(date, dayName, applicable, dayExceptions));
+        }
+
+        return days;
+    }
+}
+
 public static class AvailabilityPermissionRules
 {
+    public static bool CanView(IPermissionState permissions) =>
+        permissions.Has(WebPermissions.AvailabilityRead) || CanManage(permissions);
+
     public static bool CanManage(IPermissionState permissions) =>
         permissions.Has(WebPermissions.AvailabilityManageSelf)
         || permissions.Has(WebPermissions.AvailabilityManageClinic)
@@ -118,8 +182,14 @@ public static class AvailabilityProblemMessages
                 "The availability definition is invalid.",
             "appointment.doctor_not_found" =>
                 "Doctor was not found or you do not have access.",
+            "appointment.slot_unavailable" =>
+                "That time slot is no longer available.",
+            "appointment.invalid_timezone" =>
+                "The clinic timezone is invalid.",
             "authorization.permission_denied" =>
                 "You do not have permission to perform this action.",
+            "authz.clinic_access_denied" =>
+                "That clinic is outside your organization scope.",
             _ => ex.ToUserMessage(),
         };
     }

@@ -25,6 +25,7 @@ public sealed class AvailabilitySupportTests
         });
 
         AvailabilityPermissionRules.CanManage(state).Should().BeFalse();
+        AvailabilityPermissionRules.CanView(state).Should().BeTrue();
         AvailabilityPermissionRules.IsSelfOnly(state).Should().BeFalse();
     }
 
@@ -277,6 +278,8 @@ public sealed class AvailabilitySupportTests
     public void Typed_Availability_Client_Surface_Exists()
     {
         typeof(IDoctorAvailabilityApiClient).GetMethod(nameof(IDoctorAvailabilityApiClient.ListClinicDoctorsAsync))
+            .Should().NotBeNull();
+        typeof(IDoctorAvailabilityApiClient).GetMethod(nameof(IDoctorAvailabilityApiClient.ListClinicDoctorsByIdAsync))
             .Should().NotBeNull();
         typeof(IDoctorAvailabilityApiClient).GetMethod(nameof(IDoctorAvailabilityApiClient.ListAvailabilityAsync))
             .Should().NotBeNull();
