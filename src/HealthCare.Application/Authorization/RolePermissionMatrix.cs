@@ -59,7 +59,6 @@ public static class RolePermissionMatrix
                 Permissions.Appointments.Confirm,
                 Permissions.Appointments.Cancel,
                 Permissions.Appointments.CheckIn,
-                Permissions.Appointments.Complete,
                 Permissions.Appointments.NoShow,
                 Permissions.Appointments.Reschedule,
                 Permissions.Availability.Read,

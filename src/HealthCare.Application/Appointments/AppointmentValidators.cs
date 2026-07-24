@@ -107,6 +107,68 @@ public sealed class AppointmentListQueryValidator : AbstractValidator<Appointmen
     }
 }
 
+public sealed class AppointmentQueueQueryValidator : AbstractValidator<AppointmentQueueQuery>
+{
+    public const int DefaultPageSize = 50;
+    public const int MaxPageSize = 100;
+
+    public AppointmentQueueQueryValidator()
+    {
+        RuleFor(x => x.Page).GreaterThanOrEqualTo(1);
+        RuleFor(x => x.PageSize).InclusiveBetween(1, MaxPageSize);
+
+        RuleFor(x => x.Status)
+            .Must(s => Enum.TryParse<AppointmentStatus>(s, ignoreCase: true, out _))
+            .When(x => !string.IsNullOrWhiteSpace(x.Status))
+            .WithMessage("Invalid appointment status filter.");
+
+        RuleFor(x => x)
+            .Must(x => !x.FromUtc.HasValue || !x.ToUtc.HasValue || x.FromUtc <= x.ToUtc)
+            .WithMessage("FromUtc must be less than or equal to ToUtc.");
+    }
+}
+
+public sealed class AppointmentCalendarQueryValidator : AbstractValidator<AppointmentCalendarQuery>
+{
+    public const int DefaultPageSize = 200;
+    public const int MaxPageSize = 500;
+    public static readonly TimeSpan MaxSpan = TimeSpan.FromDays(8);
+
+    public static readonly HashSet<string> AllowedViews = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "day",
+        "week",
+    };
+
+    public AppointmentCalendarQueryValidator()
+    {
+        RuleFor(x => x.Page).GreaterThanOrEqualTo(1);
+        RuleFor(x => x.PageSize).InclusiveBetween(1, MaxPageSize);
+
+        RuleFor(x => x.FromUtc).NotEmpty();
+        RuleFor(x => x.ToUtc).NotEmpty();
+
+        RuleFor(x => x.View)
+            .Must(v => AllowedViews.Contains(v))
+            .WithMessage("View must be day or week.");
+
+        RuleFor(x => x.Status)
+            .Must(s => Enum.TryParse<AppointmentStatus>(s, ignoreCase: true, out _))
+            .When(x => !string.IsNullOrWhiteSpace(x.Status))
+            .WithMessage("Invalid appointment status filter.");
+
+        RuleFor(x => x)
+            .Must(x => x.FromUtc <= x.ToUtc)
+            .WithErrorCode(AppointmentErrorCodes.InvalidRequest)
+            .WithMessage("FromUtc must be less than or equal to ToUtc.");
+
+        RuleFor(x => x)
+            .Must(x => x.ToUtc - x.FromUtc <= MaxSpan)
+            .WithErrorCode(AppointmentErrorCodes.InvalidRequest)
+            .WithMessage("Calendar range cannot exceed 8 days.");
+    }
+}
+
 public sealed class AppointmentActionRequestValidator : AbstractValidator<AppointmentActionRequest>
 {
     public AppointmentActionRequestValidator()

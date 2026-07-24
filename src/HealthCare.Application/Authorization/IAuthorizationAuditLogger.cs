@@ -33,4 +33,14 @@ public interface IAuthorizationAuditLogger
         Guid? organizationId = null,
         Guid? clinicId = null,
         Guid? patientId = null);
+
+    /// <summary>
+    /// Appointment operational audit. Must never include passwords, tokens, or clinical note content.
+    /// </summary>
+    void AppointmentOperation(
+        string operation,
+        string resultCode,
+        Guid? organizationId = null,
+        Guid? clinicId = null,
+        Guid? appointmentId = null);
 }

@@ -79,6 +79,34 @@ public sealed class AppointmentsController : ControllerBase
         return Ok(result);
     }
 
+    [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    [AuthorizePermission(Permissions.Appointments.Read)]
+    [HttpGet("staff/appointments/queue")]
+    [ProducesResponseType(typeof(PagedResponse<AppointmentResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PagedResponse<AppointmentResponse>>> ListQueueForStaff(
+        [FromQuery] AppointmentQueueQuery query,
+        [FromQuery] bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default)
+    {
+        var bypass = platformAdminBypass ? PlatformAdminBypass.Explicit : PlatformAdminBypass.None;
+        var result = await _appointments.ListQueueForStaffAsync(query, bypass, cancellationToken);
+        return Ok(result);
+    }
+
+    [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    [AuthorizePermission(Permissions.Appointments.Read)]
+    [HttpGet("staff/appointments/calendar")]
+    [ProducesResponseType(typeof(PagedResponse<AppointmentResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PagedResponse<AppointmentResponse>>> ListCalendarForStaff(
+        [FromQuery] AppointmentCalendarQuery query,
+        [FromQuery] bool platformAdminBypass = false,
+        CancellationToken cancellationToken = default)
+    {
+        var bypass = platformAdminBypass ? PlatformAdminBypass.Explicit : PlatformAdminBypass.None;
+        var result = await _appointments.ListCalendarForStaffAsync(query, bypass, cancellationToken);
+        return Ok(result);
+    }
+
     [AuthorizePermission(Permissions.Appointments.Read)]
     [HttpGet("appointments/{appointmentId:guid}")]
     [ProducesResponseType(typeof(AppointmentResponse), StatusCodes.Status200OK)]

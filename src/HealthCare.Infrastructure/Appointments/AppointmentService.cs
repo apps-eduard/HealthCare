@@ -34,6 +34,7 @@ public sealed class AppointmentService : IAppointmentService
     private readonly IClinicPublicLookup _clinicLookup;
     private readonly IAppointmentSlotService _slots;
     private readonly IAppointmentReminderScheduler _reminders;
+    private readonly IAuthorizationAuditLogger _audit;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<AppointmentService> _logger;
 
@@ -45,6 +46,7 @@ public sealed class AppointmentService : IAppointmentService
         IClinicPublicLookup clinicLookup,
         IAppointmentSlotService slots,
         IAppointmentReminderScheduler reminders,
+        IAuthorizationAuditLogger audit,
         TimeProvider timeProvider,
         ILogger<AppointmentService> logger)
     {
@@ -55,6 +57,7 @@ public sealed class AppointmentService : IAppointmentService
         _clinicLookup = clinicLookup;
         _slots = slots;
         _reminders = reminders;
+        _audit = audit;
         _timeProvider = timeProvider;
         _logger = logger;
     }
@@ -208,27 +211,92 @@ public sealed class AppointmentService : IAppointmentService
         CancellationToken cancellationToken = default)
     {
         var scope = await ResolveStaffListScopeAsync(query.ClinicId, bypass, cancellationToken);
-
-        IQueryable<Appointment> appointments = _dbContext.Appointments.AsNoTracking();
-        if (scope.Mode == StaffScopeMode.Clinic)
-        {
-            appointments = appointments.Where(a => a.ClinicId == scope.ClinicId);
-        }
-        else if (scope.Mode == StaffScopeMode.Organization)
-        {
-            appointments = appointments.Where(a => a.OrganizationId == scope.OrganizationId);
-            if (scope.ClinicId.HasValue)
-            {
-                appointments = appointments.Where(a => a.ClinicId == scope.ClinicId.Value);
-            }
-        }
-        else
-        {
-            appointments = appointments.Where(a => a.ClinicId == scope.ClinicId);
-        }
-
+        var appointments = ApplyStaffScope(_dbContext.Appointments.AsNoTracking(), scope);
         appointments = ApplyListFilters(appointments, query);
-        return await PageAsync(appointments, query, cancellationToken);
+        var page = await PageAsync(appointments, query, cancellationToken);
+        _audit.AppointmentOperation(
+            "staff_appointment_list",
+            "succeeded",
+            scope.OrganizationId,
+            scope.ClinicId,
+            appointmentId: null);
+        return page;
+    }
+
+    public async Task<PagedResponse<AppointmentResponse>> ListQueueForStaffAsync(
+        AppointmentQueueQuery query,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default)
+    {
+        var listQuery = new AppointmentListQuery
+        {
+            FromUtc = query.FromUtc,
+            ToUtc = query.ToUtc,
+            Status = query.Status,
+            DoctorStaffMemberId = query.DoctorStaffMemberId,
+            ClinicId = query.ClinicId,
+            Page = query.Page < 1 ? 1 : query.Page,
+            PageSize = query.PageSize < 1
+                ? AppointmentQueueQueryValidator.DefaultPageSize
+                : Math.Min(query.PageSize, AppointmentQueueQueryValidator.MaxPageSize),
+            SortBy = "appointmentDateUtc",
+            SortDirection = "asc",
+        };
+
+        var scope = await ResolveStaffListScopeAsync(listQuery.ClinicId, bypass, cancellationToken);
+        var appointments = ApplyStaffScope(_dbContext.Appointments.AsNoTracking(), scope);
+        appointments = ApplyListFilters(appointments, listQuery);
+
+        if (string.IsNullOrWhiteSpace(listQuery.Status))
+        {
+            appointments = appointments.Where(a =>
+                a.Status != AppointmentStatus.Completed
+                && a.Status != AppointmentStatus.CancelledByPatient
+                && a.Status != AppointmentStatus.CancelledByClinic
+                && a.Status != AppointmentStatus.NoShow);
+        }
+
+        var page = await PageAsync(appointments, listQuery, cancellationToken);
+        _audit.AppointmentOperation(
+            "staff_appointment_queue",
+            "succeeded",
+            scope.OrganizationId,
+            scope.ClinicId,
+            appointmentId: null);
+        return page;
+    }
+
+    public async Task<PagedResponse<AppointmentResponse>> ListCalendarForStaffAsync(
+        AppointmentCalendarQuery query,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default)
+    {
+        var listQuery = new AppointmentListQuery
+        {
+            FromUtc = query.FromUtc,
+            ToUtc = query.ToUtc,
+            Status = query.Status,
+            DoctorStaffMemberId = query.DoctorStaffMemberId,
+            ClinicId = query.ClinicId,
+            Page = query.Page < 1 ? 1 : query.Page,
+            PageSize = query.PageSize < 1
+                ? AppointmentCalendarQueryValidator.DefaultPageSize
+                : Math.Min(query.PageSize, AppointmentCalendarQueryValidator.MaxPageSize),
+            SortBy = "appointmentDateUtc",
+            SortDirection = "asc",
+        };
+
+        var scope = await ResolveStaffListScopeAsync(listQuery.ClinicId, bypass, cancellationToken);
+        var appointments = ApplyStaffScope(_dbContext.Appointments.AsNoTracking(), scope);
+        appointments = ApplyListFilters(appointments, listQuery);
+        var page = await PageAsync(appointments, listQuery, cancellationToken);
+        _audit.AppointmentOperation(
+            "staff_appointment_calendar",
+            "succeeded",
+            scope.OrganizationId,
+            scope.ClinicId,
+            appointmentId: null);
+        return page;
     }
 
     public async Task<AppointmentResponse> GetByIdAsync(
@@ -503,6 +571,13 @@ public sealed class AppointmentService : IAppointmentService
             appointment.Version,
             "appointment_rescheduled");
 
+        _audit.AppointmentOperation(
+            "appointment_rescheduled",
+            "succeeded",
+            appointment.OrganizationId,
+            appointment.ClinicId,
+            appointment.Id);
+
         await _reminders.ScheduleAfterAppointmentRescheduledAsync(appointment.Id, cancellationToken);
         return await MapAsync(appointment, cancellationToken);
     }
@@ -556,6 +631,13 @@ public sealed class AppointmentService : IAppointmentService
             appointment.Id,
             appointment.Status,
             operation);
+
+        _audit.AppointmentOperation(
+            operation,
+            "succeeded",
+            appointment.OrganizationId,
+            appointment.ClinicId,
+            appointment.Id);
 
         if (target == AppointmentStatus.Confirmed)
         {
@@ -642,6 +724,13 @@ public sealed class AppointmentService : IAppointmentService
             appointment.ClinicId,
             appointment.PatientId,
             operation);
+
+        _audit.AppointmentOperation(
+            operation,
+            "succeeded",
+            appointment.OrganizationId,
+            appointment.ClinicId,
+            appointment.Id);
     }
 
     private async Task<bool> HasSlotConflictAsync(
@@ -830,6 +919,11 @@ public sealed class AppointmentService : IAppointmentService
                         .SingleOrDefaultAsync(c => c.Id == clinicId, cancellationToken);
                     if (clinic is null || clinic.OrganizationId != _currentStaff.OrganizationId)
                     {
+                        _audit.CrossTenantDenied(
+                            "staff_appointment_create_clinic_denied",
+                            Contracts.Identity.AuthorizationErrorCodes.ClinicAccessDenied,
+                            _currentStaff.OrganizationId,
+                            clinicId);
                         throw AuthorizationException.ClinicAccessDenied();
                     }
 
@@ -891,6 +985,11 @@ public sealed class AppointmentService : IAppointmentService
                         .SingleOrDefaultAsync(c => c.Id == clinicIdFilter.Value, cancellationToken);
                     if (clinic is null || clinic.OrganizationId != _currentStaff.OrganizationId)
                     {
+                        _audit.CrossTenantDenied(
+                            "staff_appointment_clinic_filter_denied",
+                            Contracts.Identity.AuthorizationErrorCodes.ClinicAccessDenied,
+                            _currentStaff.OrganizationId,
+                            clinicIdFilter);
                         throw AuthorizationException.ClinicAccessDenied();
                     }
 
@@ -919,6 +1018,22 @@ public sealed class AppointmentService : IAppointmentService
         }
 
         throw AuthorizationException.MissingStaffMembership();
+    }
+
+    private static IQueryable<Appointment> ApplyStaffScope(IQueryable<Appointment> appointments, StaffScope scope)
+    {
+        if (scope.Mode == StaffScopeMode.Clinic || scope.Mode == StaffScopeMode.Platform)
+        {
+            return appointments.Where(a => a.ClinicId == scope.ClinicId);
+        }
+
+        appointments = appointments.Where(a => a.OrganizationId == scope.OrganizationId);
+        if (scope.ClinicId.HasValue)
+        {
+            appointments = appointments.Where(a => a.ClinicId == scope.ClinicId.Value);
+        }
+
+        return appointments;
     }
 
     private static IQueryable<Appointment> ApplyListFilters(
@@ -1020,6 +1135,11 @@ public sealed class AppointmentService : IAppointmentService
 
     private void LogDenied(string reason, Guid resourceId)
     {
+        _audit.CrossTenantDenied(
+            reason,
+            Contracts.Identity.AuthorizationErrorCodes.Forbidden,
+            _currentStaff.HasActiveMembership ? _currentStaff.OrganizationId : null,
+            _currentStaff.HasActiveMembership ? _currentStaff.ClinicId : null);
         _logger.LogInformation(
             "Appointment access denied. UserId={UserId} Reason={ReasonCode} Resource={ResourceKey}",
             _currentUser.UserId,

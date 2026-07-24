@@ -45,7 +45,7 @@ Resolution uses server-side Identity roles (DB) + active staff membership + pati
 ## Role mappings (assumptions)
 
 - **PLATFORM_ADMIN:** broad permissions including `organization_dashboard.read` + `organizations.read` / `organizations.select`; **does not** auto-bypass tenants — requires `PlatformAdminBypass.Explicit`. Organization directory listing is a platform operation and does **not** grant clinic/resource access. No `medical_notes.*`.
-- **ORGANIZATION_ADMIN:** org-scoped ops including `organization_dashboard.read` and clinic CRUD (`clinics.create/update/activate/deactivate`); can assign roles except PLATFORM_ADMIN. **No** global organization directory.
+- **ORGANIZATION_ADMIN:** org-scoped ops including `organization_dashboard.read` and clinic CRUD (`clinics.create/update/activate/deactivate`); can assign roles except PLATFORM_ADMIN. **No** global organization directory. **No** `appointments.complete` (clinical completion remains clinic clinical roles).
 - **CLINIC_ADMIN:** clinic-scoped ops; `clinics.read` only (no organization clinic create/update/activate/deactivate); cannot assign ORG/PLATFORM admin.
 - **DOCTOR:** clinic appointments + own availability; no clinic administration.
 - **NURSE:** clinical-operational appointment actions (no create/reschedule/availability manage); medical notes: `medical_notes.read/create/update_draft/sign` limited to **Nursing** note type in services.

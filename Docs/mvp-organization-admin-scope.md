@@ -689,7 +689,8 @@ The Organization Admin must not:
 
 **Backend status (2026-07-24):**
 - Organization-scoped staff APIs under `/api/v1/staff-management` (clinic reassignment, password-reset foundation, session revocation, `GET .../clinic-admins`, last Organization Admin protection, role hierarchy). Production password email sender remains an abstraction (Development captures tokens safely).
-- Organization-scoped patient directory and clinic enrollment on `/api/v1/staff/patients` (search, detail with enrollment list, clinic-profile status with optional ClinicId targeting, appointment-safe `GET .../lookup`) plus org-aware `POST /api/v1/clinics/{clinicId}/patients/{patientId}/enroll`. Patient self-scope remains denied for staff patient APIs. Audited via `IAuthorizationAuditLogger.PatientOperation`. No migration required for this slice.
+- Organization-scoped patient directory and clinic enrollment on `/api/v1/staff/patients` (search, detail with enrollment list, clinic-profile status with optional ClinicId targeting, appointment-safe `GET .../lookup`) plus org-aware `POST /api/v1/clinics/{clinicId}/patients/{patientId}/enroll`. Patient self-scope remains denied for staff patient APIs. Audited via `IAuthorizationAuditLogger.PatientOperation`.
+- Organization-scoped appointment queue/calendar on `/api/v1/staff/appointments`, `/queue`, `/calendar` with create/confirm/check-in/cancel/reschedule/no-show. Org Admin does **not** receive `appointments.complete`. Audited via `IAuthorizationAuditLogger.AppointmentOperation`. No migration required for this slice.
 
 ### Phase 2 — Scheduling and operations
 

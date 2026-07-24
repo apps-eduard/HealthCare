@@ -24,6 +24,16 @@ public interface IAppointmentService
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default);
 
+    Task<PagedResponse<AppointmentResponse>> ListQueueForStaffAsync(
+        AppointmentQueueQuery query,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default);
+
+    Task<PagedResponse<AppointmentResponse>> ListCalendarForStaffAsync(
+        AppointmentCalendarQuery query,
+        PlatformAdminBypass bypass = PlatformAdminBypass.None,
+        CancellationToken cancellationToken = default);
+
     Task<AppointmentResponse> GetByIdAsync(
         Guid appointmentId,
         PlatformAdminBypass bypass = PlatformAdminBypass.None,

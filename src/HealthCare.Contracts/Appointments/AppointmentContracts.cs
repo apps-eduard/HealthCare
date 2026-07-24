@@ -90,6 +90,59 @@ public sealed class AppointmentListQuery
     public string SortDirection { get; init; } = "asc";
 }
 
+/// <summary>
+/// Operational queue view. When Status is omitted, terminal statuses are excluded.
+/// </summary>
+public sealed class AppointmentQueueQuery
+{
+    public DateTimeOffset? FromUtc { get; init; }
+
+    public DateTimeOffset? ToUtc { get; init; }
+
+    public string? Status { get; init; }
+
+    public Guid? DoctorStaffMemberId { get; init; }
+
+    /// <summary>
+    /// Optional clinic filter for ORGANIZATION_ADMIN (must belong to trusted organization)
+    /// or PLATFORM_ADMIN with explicit bypass. Ignored for clinic-scoped staff.
+    /// </summary>
+    public Guid? ClinicId { get; init; }
+
+    public int Page { get; init; } = 1;
+
+    public int PageSize { get; init; } = 50;
+}
+
+/// <summary>
+/// Day/week calendar view. FromUtc and ToUtc are required; max span is one week (+1 day buffer).
+/// </summary>
+public sealed class AppointmentCalendarQuery
+{
+    public DateTimeOffset FromUtc { get; init; }
+
+    public DateTimeOffset ToUtc { get; init; }
+
+    /// <summary>
+    /// Allowed values: day, week. Informational for clients; span is enforced via FromUtc/ToUtc.
+    /// </summary>
+    public string View { get; init; } = "day";
+
+    public string? Status { get; init; }
+
+    public Guid? DoctorStaffMemberId { get; init; }
+
+    /// <summary>
+    /// Optional clinic filter for ORGANIZATION_ADMIN (must belong to trusted organization)
+    /// or PLATFORM_ADMIN with explicit bypass. Ignored for clinic-scoped staff.
+    /// </summary>
+    public Guid? ClinicId { get; init; }
+
+    public int Page { get; init; } = 1;
+
+    public int PageSize { get; init; } = 200;
+}
+
 public sealed class AppointmentActionRequest
 {
     public int ExpectedVersion { get; init; }

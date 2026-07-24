@@ -194,6 +194,19 @@ public sealed class AppointmentFoundationEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Staff_Queue_And_Calendar_Endpoints_Return_Ok()
+    {
+        await AuthenticateAsync(StaffAEmail, StaffAPassword);
+        var queue = await _client!.GetAsync("/api/v1/staff/appointments/queue");
+        queue.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var from = Uri.EscapeDataString(DateTimeOffset.UtcNow.AddDays(-1).ToString("o"));
+        var to = Uri.EscapeDataString(DateTimeOffset.UtcNow.AddDays(7).ToString("o"));
+        var calendar = await _client!.GetAsync($"/api/v1/staff/appointments/calendar?fromUtc={from}&toUtc={to}&view=week");
+        calendar.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
     public async Task Client_Tenant_Identifiers_Cannot_Bypass_On_Patient_Create_Contract()
     {
         typeof(CreatePatientAppointmentRequest).GetProperty("OrganizationId").Should().BeNull();

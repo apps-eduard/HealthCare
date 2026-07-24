@@ -145,6 +145,20 @@ public sealed class PermissionAuthorizationMatrixTests
     }
 
     [Fact]
+    public void Organization_Admin_Cannot_Complete_Appointments()
+    {
+        var sut = CreateStaff(AppRoles.OrganizationAdmin);
+        sut.HasPermission(Permissions.Appointments.Read).Should().BeTrue();
+        sut.HasPermission(Permissions.Appointments.Create).Should().BeTrue();
+        sut.HasPermission(Permissions.Appointments.Confirm).Should().BeTrue();
+        sut.HasPermission(Permissions.Appointments.CheckIn).Should().BeTrue();
+        sut.HasPermission(Permissions.Appointments.Cancel).Should().BeTrue();
+        sut.HasPermission(Permissions.Appointments.Reschedule).Should().BeTrue();
+        sut.HasPermission(Permissions.Appointments.NoShow).Should().BeTrue();
+        sut.HasPermission(Permissions.Appointments.Complete).Should().BeFalse();
+    }
+
+    [Fact]
     public void Platform_Admin_Has_Broad_Permissions_Including_Dashboard()
     {
         var sut = CreatePermissionService(

@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FluentValidation.TestHelper;
 using HealthCare.Application.Appointments;
 using HealthCare.Application.Authorization;
 using HealthCare.Contracts.Appointments;
@@ -291,6 +292,97 @@ public sealed class AppointmentFoundationTests
     }
 
     [Fact]
+    public async Task Organization_Admin_ClinicId_Filter_Is_Validated()
+    {
+        await using var h = await AppointmentHarness.CreateAsync();
+        var data = await h.SeedAsync();
+        await h.EnrollPatientInClinicBAsync(data);
+        var staffB = h.CreateStaffService(data.DoctorBUserId, data.Org1Id, data.ClinicBId, data.DoctorBStaffId, AppRoles.Doctor);
+        var orgAdmin = h.CreateStaffService(Guid.NewGuid(), data.Org1Id, data.ClinicAId, Guid.NewGuid(), AppRoles.OrganizationAdmin);
+
+        await staffB.CreateForStaffAsync(new CreateStaffAppointmentRequest
+        {
+            PatientId = data.PatientId,
+            DoctorStaffMemberId = data.DoctorBStaffId,
+            AppointmentDateUtc = h.Now.AddDays(12),
+            DurationMinutes = 30,
+        });
+
+        var filtered = await orgAdmin.ListForStaffAsync(new AppointmentListQuery { ClinicId = data.ClinicBId });
+        filtered.Items.Should().OnlyContain(i => i.ClinicId == data.ClinicBId);
+
+        var deny = () => orgAdmin.ListForStaffAsync(new AppointmentListQuery { ClinicId = Guid.NewGuid() });
+        await deny.Should().ThrowAsync<AuthorizationException>();
+    }
+
+    [Fact]
+    public async Task Organization_Admin_Queue_Excludes_Terminal_And_Calendar_Requires_Range()
+    {
+        await using var h = await AppointmentHarness.CreateAsync();
+        var data = await h.SeedAsync();
+        var staff = h.CreateStaffService(data.DoctorAUserId, data.Org1Id, data.ClinicAId, data.DoctorAStaffId, AppRoles.Doctor);
+        var orgAdmin = h.CreateStaffService(Guid.NewGuid(), data.Org1Id, data.ClinicAId, Guid.NewGuid(), AppRoles.OrganizationAdmin);
+
+        var active = await staff.CreateForStaffAsync(new CreateStaffAppointmentRequest
+        {
+            PatientId = data.PatientId,
+            DoctorStaffMemberId = data.DoctorAStaffId,
+            AppointmentDateUtc = h.Now.AddDays(13),
+            DurationMinutes = 30,
+        });
+        var completedSeed = await h.SeedAppointmentAsync(data, AppointmentStatus.Completed);
+
+        var queue = await orgAdmin.ListQueueForStaffAsync(new AppointmentQueueQuery
+        {
+            ClinicId = data.ClinicAId,
+            FromUtc = h.Now,
+            ToUtc = h.Now.AddDays(30),
+        });
+        queue.Items.Select(i => i.Id).Should().Contain(active.Id);
+        queue.Items.Select(i => i.Id).Should().NotContain(completedSeed.Id);
+
+        var dayStart = h.Now.Date;
+        var calendar = await orgAdmin.ListCalendarForStaffAsync(new AppointmentCalendarQuery
+        {
+            FromUtc = new DateTimeOffset(dayStart, TimeSpan.Zero),
+            ToUtc = new DateTimeOffset(dayStart.AddDays(7), TimeSpan.Zero),
+            View = "week",
+            ClinicId = data.ClinicAId,
+        });
+        calendar.Items.Should().NotBeEmpty();
+
+        new AppointmentCalendarQueryValidator()
+            .TestValidate(new AppointmentCalendarQuery
+            {
+                FromUtc = h.Now,
+                ToUtc = h.Now.AddDays(10),
+                View = "week",
+            })
+            .IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Organization_Admin_Can_Create_In_Sibling_Clinic()
+    {
+        await using var h = await AppointmentHarness.CreateAsync();
+        var data = await h.SeedAsync();
+        await h.EnrollPatientInClinicBAsync(data);
+        var orgAdmin = h.CreateStaffService(Guid.NewGuid(), data.Org1Id, data.ClinicAId, Guid.NewGuid(), AppRoles.OrganizationAdmin);
+
+        var created = await orgAdmin.CreateForStaffAsync(new CreateStaffAppointmentRequest
+        {
+            PatientId = data.PatientId,
+            DoctorStaffMemberId = data.DoctorBStaffId,
+            AppointmentDateUtc = h.Now.AddDays(14),
+            DurationMinutes = 30,
+            ClinicId = data.ClinicBId,
+        });
+
+        created.ClinicId.Should().Be(data.ClinicBId);
+        created.Status.Should().Be(nameof(AppointmentStatus.Confirmed));
+    }
+
+    [Fact]
     public async Task Platform_Admin_Requires_Explicit_Bypass()
     {
         await using var h = await AppointmentHarness.CreateAsync();
@@ -312,6 +404,7 @@ public sealed class AppointmentFoundationTests
             new ClinicPublicLookup(h.Db),
             h.CreateSlots(),
             h.CreateReminderScheduler(),
+            new NoOpAuthorizationAuditLogger(),
             h.Time,
             NullLogger<AppointmentService>.Instance);
 
@@ -594,7 +687,7 @@ internal sealed class AppointmentHarness : IAsyncDisposable
         var patient = new FakeCurrentPatient { HasLinkedPatient = true, PatientId = patientId };
         return new AppointmentService(
             Db, user, new FakeCurrentStaff(), patient, new ClinicPublicLookup(Db), CreateSlots(),
-            CreateReminderScheduler(), Time,
+            CreateReminderScheduler(), new NoOpAuthorizationAuditLogger(), Time,
             NullLogger<AppointmentService>.Instance);
     }
 
@@ -621,7 +714,7 @@ internal sealed class AppointmentHarness : IAsyncDisposable
         };
         return new AppointmentService(
             Db, user, staff, new FakeCurrentPatient(), new ClinicPublicLookup(Db), CreateSlots(),
-            CreateReminderScheduler(), Time,
+            CreateReminderScheduler(), new NoOpAuthorizationAuditLogger(), Time,
             NullLogger<AppointmentService>.Instance);
     }
 

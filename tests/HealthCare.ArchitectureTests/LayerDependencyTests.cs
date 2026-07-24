@@ -158,6 +158,12 @@ public sealed class LayerDependencyTests
             .Should().NotBeNull();
         typeof(IStaffPatientService).GetMethod(nameof(IStaffPatientService.LookupForAppointmentAsync))
             .Should().NotBeNull();
+        typeof(IAppointmentService).GetMethod(nameof(IAppointmentService.ListForStaffAsync))
+            .Should().NotBeNull();
+        typeof(IAppointmentService).GetMethod(nameof(IAppointmentService.ListQueueForStaffAsync))
+            .Should().NotBeNull();
+        typeof(IAppointmentService).GetMethod(nameof(IAppointmentService.ListCalendarForStaffAsync))
+            .Should().NotBeNull();
         typeof(IAppointmentService).GetMethod(nameof(IAppointmentService.CreateForCurrentPatientAsync))
             .Should().NotBeNull();
         typeof(IAppointmentService).GetMethod(nameof(IAppointmentService.RescheduleAsync))
