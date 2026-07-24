@@ -743,6 +743,10 @@ The Organization Admin must not:
 - `/organization/settings` — organization profile via `IOrganizationSettingsApiClient` (`organization_profile.read` / `organization_profile.update`). Editable: name, contact email/phone, country, default timezone, branding placeholder. Read-only: status, slug, MaxClinics/MaxStaff/counts/remaining + link to `/usage`. Optimistic concurrency reload; safe Problem Details mapping. PLATFORM_ADMIN requires explicit bypass + selected organization.
 - Nav: Organization → Organization Profile.
 
+**Frontend status (2026-07-24) — Phase 11 (Real browser E2E):**
+- `tests/HealthCare.EndToEndTests` — Playwright Chromium smoke against real Web + BFF + API + temporary PostgreSQL (Ubuntu docsvr only). Covers login/logout, dashboard nav, organization profile update/concurrency, audit/usage, clinic-admin/patient denial, platform-admin org selection gate.
+- Host marker `HEALTHCARE_END_TO_END_TEST_HOST=true` disables HTTPS redirection only; authorization and tenant scope remain enforced.
+
 ### Phase 2 — Scheduling and operations
 
 11. Doctor availability

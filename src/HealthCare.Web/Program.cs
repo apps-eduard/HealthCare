@@ -141,7 +141,10 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-app.UseHttpsRedirection();
+if (!IsEndToEndOrIntegrationTestHost())
+{
+    app.UseHttpsRedirection();
+}
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -175,6 +178,16 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
+
+static bool IsEndToEndOrIntegrationTestHost()
+{
+    static bool EnvTrue(string name) =>
+        string.Equals(Environment.GetEnvironmentVariable(name), "true", StringComparison.OrdinalIgnoreCase);
+
+    return EnvTrue("HEALTHCARE_END_TO_END_TEST_HOST")
+           || EnvTrue("HEALTHCARE_INTEGRATION_TEST_HOST")
+           || EnvTrue("HEALTHCARE_SKIP_STATIC_LOGGER_FLUSH");
+}
 
 static string ResolveAuthCookieName(IHostEnvironment env, BffOptions options)
 {

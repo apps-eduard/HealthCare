@@ -278,6 +278,7 @@
                 var p when p.StartsWith("/security", StringComparison.Ordinal) => "security",
                 var p when p.StartsWith("/audit-logs", StringComparison.Ordinal) => "audit-logs",
                 var p when p.StartsWith("/usage", StringComparison.Ordinal) => "usage",
+                var p when p.StartsWith("/organization/settings", StringComparison.Ordinal) => "org-settings",
                 var p when p.StartsWith("/clinics", StringComparison.Ordinal) => "clinics",
                 var p when p.StartsWith("/staff", StringComparison.Ordinal) => "staff",
                 _ => "dashboard",

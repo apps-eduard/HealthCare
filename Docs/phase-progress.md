@@ -1025,6 +1025,7 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 | 2026-07-24 | 8 | Org Admin Frontend Phase 8 — security operations UI (sessions/revoke/compromise/summaries, clinic context, tests) |
 | 2026-07-24 | 8 | Org Admin Frontend Phase 9 — audit logs + usage limits UI (list/detail/correlation, capacity snapshot, clinic context, tests) |
 | 2026-07-24 | 8 | Org Admin Frontend Phase 10 — organization profile settings UI + backend slice (read/update, concurrency, audits, tests) |
+| 2026-07-24 | 8 | Web MVP Phase 11 — Playwright E2E (Org Admin smoke) + HTTPS test-host hardening |
 
 ---
 

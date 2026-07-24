@@ -110,10 +110,17 @@ dotnet run --project src/HealthCare.Web --launch-profile http
 
 ```powershell
 dotnet build HealthCare.sln
-dotnet test HealthCare.sln
+dotnet test tests/HealthCare.UnitTests/HealthCare.UnitTests.csproj --no-build
+dotnet test tests/HealthCare.ArchitectureTests/HealthCare.ArchitectureTests.csproj --no-build
+dotnet test tests/HealthCare.Web.Tests/HealthCare.Web.Tests.csproj --no-build
 ```
 
+- **Windows:** unit, architecture, and `HealthCare.Web.Tests` (bUnit / fake services). Do **not** run Testcontainers or Playwright E2E here.
+- **Ubuntu docsvr:** integration tests (`HealthCare.IntegrationTests`) and browser E2E (`HealthCare.EndToEndTests`). See `tests/HealthCare.EndToEndTests/README.md`.
+- Never reuse or touch the long-lived `app-postgres` container for automated tests.
+
 Integration tests start PostgreSQL via Testcontainers and require Docker.
+
 
 ## Solution structure
 

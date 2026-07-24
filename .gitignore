@@ -59,6 +59,15 @@ coverage.json
 tmp/
 temp/
 
+## Playwright / E2E artifacts
+**/playwright-report/
+**/test-results/
+**/blob-report/
+**/.playwright/
+tests/HealthCare.EndToEndTests/artifacts/
+*.webm
+**/trace.zip
+
 ## MAUI / Android
 **/obj/
 **/bin/

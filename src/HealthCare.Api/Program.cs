@@ -104,7 +104,10 @@ try
         });
     }
 
-    app.UseHttpsRedirection();
+    if (!IsTestHost(app.Configuration))
+    {
+        app.UseHttpsRedirection();
+    }
     app.UseAuthentication();
     app.UseAuthorization();
     app.UseAppointmentReminderHangfire(app.Environment);
@@ -140,14 +143,22 @@ static bool IsIntegrationTestHost(IConfiguration? configuration = null)
         || string.Equals(
             Environment.GetEnvironmentVariable("HEALTHCARE_SKIP_STATIC_LOGGER_FLUSH"),
             "true",
+            StringComparison.OrdinalIgnoreCase)
+        || string.Equals(
+            Environment.GetEnvironmentVariable("HEALTHCARE_END_TO_END_TEST_HOST"),
+            "true",
             StringComparison.OrdinalIgnoreCase))
     {
         return true;
     }
 
     return configuration is not null
-           && configuration.GetValue("HealthCare:IntegrationTestHost", false);
+           && (configuration.GetValue("HealthCare:IntegrationTestHost", false)
+               || configuration.GetValue("HealthCare:EndToEndTestHost", false));
 }
+
+static bool IsTestHost(IConfiguration configuration) =>
+    IsIntegrationTestHost(configuration);
 
 // Expose Program for WebApplicationFactory integration tests.
 public partial class Program;
