@@ -46,6 +46,7 @@ Shape: **4px** radius, minimal shadow, compact controls, **8px** spacing scale.
 - Permission-aware `Menu` / `MenuItem` with `RouterLink`
 - Account `Dropdown` → Sign out → `/logout` (BFF antiforgery POST)
 - `PlatformTenantBanner` for PLATFORM_ADMIN
+- `ClinicContextBanner` for ORGANIZATION_ADMIN working clinic (All clinics / selected)
 - Responsive: sider collapses under ~992px
 
 ## Patterns
@@ -53,13 +54,22 @@ Shape: **4px** radius, minimal shadow, compact controls, **8px** spacing scale.
 | Concern | Approach |
 |---------|----------|
 | Tables | Dense `.hc-table` HTML tables (server-side page data) |
+| Narrow actions | `.hc-action-wide` / `.hc-action-narrow` Dropdown collapse under 768px |
 | Filters | `.hc-filter-grid` + Ant Input/Select/DatePicker |
 | Dialogs | `IUiModalService` → `ModalService.CreateModal` + `FeedbackComponent<T>` |
+| Detail | Ant `Drawer` for clinic detail (`ClinicDetailDrawer`) |
 | Confirms | `IUiModalService.ConfirmAsync` → `ConfirmService` |
 | Toasts | `IUserNotificationService` → `IMessageService` |
 | Status | `StatusBadge` → Ant `Tag` via `StatusTone` |
 | Calendar | Custom CSS Grid day/week (no paid scheduler) |
 | Required labels | `FieldLabel.Mark` (visual only; app validates) |
+
+## Org Admin Phase 1 pages
+
+| Route | Notes |
+|-------|-------|
+| `/dashboard` | Organization dashboard aggregates + clinic filter + refresh |
+| `/clinics` | Clinic directory + drawer + create/edit/activate/deactivate |
 
 ## NU1900
 

@@ -698,6 +698,11 @@ The Organization Admin must not:
 - Organization-scoped audit-log query on `/api/v1/organization/audit-logs` (list, detail by id, correlation-id lookup) with filters/pagination and `AuditRetention` options foundation. Permission `organization_audit_logs.read`. Persisted `OrganizationAuditEvents` + org `MaxClinics`/`MaxStaff` (`AddOrganizationAuditAndUsageLimits` migration). Operational audits persist via `IOrganizationAuditRecorder` from `AuthorizationAuditLogger` (including `ClinicOperation`).
 - Organization usage and limit visibility on `GET /api/v1/organization/usage` (`organization_usage.read`) with remaining capacity and warning flags. Clinic/staff create enforce platform limits (`clinic.limit_reached` / `staff.limit_reached`). Org Admin cannot increase limits.
 
+**Frontend status (2026-07-24) — Phase 1 (Dashboard + Clinic management):**
+- `/dashboard` — organization metrics from `GET /api/v1/organization/dashboard` via `IOrganizationDashboardApiClient`; clinic filter (“All clinics” supported); manual refresh + last-refreshed; backend date/timezone strategy displayed; permission-aware quick links to existing pages only (`/clinics`, `/staff`, `/patients`, `/appointments`, calendar, availability). Reports/security/audit UI routes are deferred.
+- `/clinics` — organization clinic directory via `IClinicManagementApiClient` (`clinics.read` for list; create/update/activate/deactivate gated per permission). Server-side search, status filter, sort, pagination; detail `Drawer`; create/edit modals; activate/deactivate confirmations with safe Problem Details mapping; optional initial Clinic Admin on create; concurrency reload on edit; clinic picker cache refresh after mutations.
+- Org Admin clinic working context: circuit-scoped `IClinicWorkingContext` (All clinics = null), header `ClinicContextBanner`, cleared on logout. No free-text tenant GUIDs; no browser API token storage (BFF unchanged).
+
 ### Phase 2 — Scheduling and operations
 
 11. Doctor availability

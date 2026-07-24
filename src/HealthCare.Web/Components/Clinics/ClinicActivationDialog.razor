@@ -1,30 +1,47 @@
 @inherits FeedbackComponent<ClinicActivationDialog.Args>
 @using HealthCare.Contracts.Clinics
+@using HealthCare.Web.Clinics
 @inject IClinicManagementApiClient ClinicsApi
 @inject IPermissionState Permissions
 @inject IPlatformTenantContext PlatformTenant
+@inject IClinicDirectoryCache ClinicCache
+@inject IClinicWorkingContext ClinicContext
 
 <p style="margin-top:0">
     @(Options.Activate ? "Activate" : "Deactivate") <b>@Options.ClinicName</b>?
 </p>
-@if (!Options.Activate)
+<p class="hc-caption">
+    Current status: <Tag Color="@(Options.Activate ? "default" : "success")">@(Options.Activate ? "Inactive" : "Active")</Tag>
+</p>
+@if (Options.Activate)
+{
+    <Alert Type="@AlertType.Info"
+           Message="Activation restores clinic operations for booking and staff access when membership rules allow."
+           ShowIcon="true"
+           Style="margin-bottom:12px;" />
+}
+else
 {
     <Alert Type="@AlertType.Warning"
-           Message="Deactivation preserves history. New appointments and staff login for this clinic are blocked until reactivation. The last active clinic in the organization cannot be deactivated."
+           Message="Historical records are retained. New appointments and new operational flows for this clinic are blocked. Staff access for this clinic may be affected. The last active clinic in the organization cannot be deactivated."
            ShowIcon="true"
            Style="margin-bottom:12px;" />
 }
 <div>
-    <label>Administrative reason (optional)</label>
-    <Input @bind-Value="_reason" Disabled="_busy" Style="width:100%;" />
+    <label for="clinic-activation-reason">Administrative reason (optional)</label>
+    <Input Id="clinic-activation-reason" @bind-Value="_reason" Disabled="_busy" Style="width:100%;" />
 </div>
 @if (!string.IsNullOrWhiteSpace(_error))
 {
-    <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" Style="margin-top:0.75rem;" />
+    <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" Style="margin-top:0.75rem;" role="alert" />
 }
 <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;">
     <Button OnClick="CancelCloseAsync" Disabled="_busy">Cancel</Button>
-    <Button Type="@ButtonType.Primary" OnClick="SubmitAsync" Loading="_busy" Disabled="_busy">
+    <Button Type="@ButtonType.Primary"
+            Danger="@(!Options.Activate)"
+            OnClick="SubmitAsync"
+            Loading="_busy"
+            Disabled="_busy">
         @(Options.Activate ? "Activate" : "Deactivate")
     </Button>
 </div>
@@ -42,6 +59,11 @@
 
     private async Task SubmitAsync()
     {
+        if (_busy)
+        {
+            return;
+        }
+
         _busy = true;
         _error = null;
         try
@@ -53,25 +75,27 @@
             };
 
             var bypass = Permissions.IsPlatformAdmin && PlatformTenant.ExplicitBypassEnabled;
+            OrganizationClinicDetailResponse result;
             if (Options.Activate)
             {
-                await ClinicsApi.ActivateAsync(Options.ClinicId, request, bypass);
+                result = await ClinicsApi.ActivateAsync(Options.ClinicId, request, bypass);
             }
             else
             {
-                await ClinicsApi.DeactivateAsync(Options.ClinicId, request, bypass);
+                result = await ClinicsApi.DeactivateAsync(Options.ClinicId, request, bypass);
+            }
+
+            ClinicCache.Clear();
+            if (ClinicContext.SelectedClinicId == result.ClinicId)
+            {
+                ClinicContext.SelectClinic(result.ClinicId, result.Name, result.IsActive);
             }
 
             await ConfirmOkAsync();
         }
         catch (ApiProblemException ex)
         {
-            _error = ex.ErrorCode switch
-            {
-                ClinicManagementErrorCodes.ConcurrencyConflict => "This clinic changed. Reload and try again.",
-                ClinicManagementErrorCodes.DeactivationNotAllowed => ex.Title,
-                _ => ex.ToUserMessage(),
-            };
+            _error = ClinicProblemMessages.From(ex);
         }
         finally
         {

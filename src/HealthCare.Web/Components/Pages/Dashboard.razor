@@ -5,6 +5,7 @@
 @using HealthCare.Web.Components.Clinics
 @inject IPermissionState Permissions
 @inject IPlatformTenantContext PlatformTenant
+@inject IClinicWorkingContext ClinicContext
 @inject IOrganizationDashboardApiClient DashboardApi
 @inject NavigationManager Navigation
 @inject IUserNotificationService Notify
@@ -36,7 +37,11 @@ else if (Permissions.Has(WebPermissions.OrganizationDashboardRead))
         </Breadcrumb>
         <ChildContent>
             <Space>
-                <Button Type="@ButtonType.Default" OnClick="RefreshAsync" Loading="_loading">
+                @if (_lastRefreshedUtc is DateTimeOffset refreshed)
+                {
+                    <span class="hc-caption">Last refreshed @refreshed.ToString("u")</span>
+                }
+                <Button Type="@ButtonType.Default" OnClick="RefreshAsync" Loading="_loading" AriaLabel="Refresh dashboard">
                     <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
                 </Button>
             </Space>
@@ -54,6 +59,15 @@ else if (Permissions.Has(WebPermissions.OrganizationDashboardRead))
     {
         <div class="hc-dashboard-filters" style="margin-bottom:16px;">
             <AntDesign.Row Gutter="(16,16)">
+                @if (!Permissions.IsPlatformAdmin && Permissions.IsOrganizationAdmin)
+                {
+                    <AntDesign.Col Xs="24" Md="24" Lg="24">
+                        <Alert Type="@AlertType.Info"
+                               Message="@($"Organization context is fixed to your membership. Clinic filter: {(ClinicContext.HasClinic ? ClinicContext.SelectedClinicName : "All clinics")}.")"
+                               ShowIcon="true"
+                               Style="margin-bottom:8px;" />
+                    </AntDesign.Col>
+                }
                 @if (Permissions.CanFilterByClinic)
                 {
                     <AntDesign.Col Xs="24" Md="10" Lg="8">
@@ -68,15 +82,16 @@ else if (Permissions.Has(WebPermissions.OrganizationDashboardRead))
                 }
                 <AntDesign.Col Xs="24" Md="8" Lg="6">
                     <div>
-                        <label>Date</label>
-                        <input class="hc-auth-input"
+                        <label for="dashboard-date">Date</label>
+                        <input id="dashboard-date"
+                               class="hc-auth-input"
                                type="date"
                                value="@_dateInput"
                                @onchange="OnDateChangedAsync"
                                disabled="@_loading"
                                style="width:100%;" />
                         <div class="hc-caption" style="margin-top:0.35rem;">
-                            Leave empty to use each clinic’s local today
+                            Leave empty to use each clinic’s local today (backend strategy)
                         </div>
                     </div>
                 </AntDesign.Col>
@@ -136,14 +151,14 @@ else if (Permissions.Has(WebPermissions.OrganizationDashboardRead))
                 <AntDesign.Col Xs="24" Lg="14">
                     <Card Title="@AppointmentCardTitle()" Size="CardSize.Small">
                         <AntDesign.Row Gutter="(12,12)">
-                            <AntDesign.Col Span="6"><Statistic Title="Total" Value="@_dashboard.Appointments.TotalAppointments" /></AntDesign.Col>
-                            <AntDesign.Col Span="6"><Statistic Title="Requested" Value="@_dashboard.Appointments.RequestedCount" /></AntDesign.Col>
-                            <AntDesign.Col Span="6"><Statistic Title="Confirmed" Value="@_dashboard.Appointments.ConfirmedCount" /></AntDesign.Col>
-                            <AntDesign.Col Span="6"><Statistic Title="Checked in" Value="@_dashboard.Appointments.CheckedInCount" /></AntDesign.Col>
-                            <AntDesign.Col Span="6"><Statistic Title="In progress" Value="@_dashboard.Appointments.InProgressCount" /></AntDesign.Col>
-                            <AntDesign.Col Span="6"><Statistic Title="Completed" Value="@_dashboard.Appointments.CompletedCount" /></AntDesign.Col>
-                            <AntDesign.Col Span="6"><Statistic Title="Cancelled" Value="@_dashboard.Appointments.CancelledCount" /></AntDesign.Col>
-                            <AntDesign.Col Span="6"><Statistic Title="No-show" Value="@_dashboard.Appointments.NoShowCount" /></AntDesign.Col>
+                            <AntDesign.Col Xs="12" Sm="6"><Statistic Title="Total" Value="@_dashboard.Appointments.TotalAppointments" /></AntDesign.Col>
+                            <AntDesign.Col Xs="12" Sm="6"><Statistic Title="Requested" Value="@_dashboard.Appointments.RequestedCount" /></AntDesign.Col>
+                            <AntDesign.Col Xs="12" Sm="6"><Statistic Title="Confirmed" Value="@_dashboard.Appointments.ConfirmedCount" /></AntDesign.Col>
+                            <AntDesign.Col Xs="12" Sm="6"><Statistic Title="Checked in" Value="@_dashboard.Appointments.CheckedInCount" /></AntDesign.Col>
+                            <AntDesign.Col Xs="12" Sm="6"><Statistic Title="In progress" Value="@_dashboard.Appointments.InProgressCount" /></AntDesign.Col>
+                            <AntDesign.Col Xs="12" Sm="6"><Statistic Title="Completed" Value="@_dashboard.Appointments.CompletedCount" /></AntDesign.Col>
+                            <AntDesign.Col Xs="12" Sm="6"><Statistic Title="Cancelled" Value="@_dashboard.Appointments.CancelledCount" /></AntDesign.Col>
+                            <AntDesign.Col Xs="12" Sm="6"><Statistic Title="No-show" Value="@_dashboard.Appointments.NoShowCount" /></AntDesign.Col>
                         </AntDesign.Row>
                         @if (_dashboard.Appointments.TotalAppointments > 0)
                         {
@@ -200,8 +215,8 @@ else if (Permissions.Has(WebPermissions.OrganizationDashboardRead))
                 <Space Wrap>
                     @if (Permissions.Has(WebPermissions.ClinicsRead))
                     {
-                        <Button OnClick='() => Navigation.NavigateTo("/staff")'>
-                            <Icon Type="bank" Theme="IconThemeType.Outline" /> Clinics via staff scope
+                        <Button OnClick='() => Navigation.NavigateTo("/clinics")'>
+                            <Icon Type="bank" Theme="IconThemeType.Outline" /> Clinics
                         </Button>
                     }
                     @if (Permissions.Has(WebPermissions.StaffRead))
@@ -257,6 +272,12 @@ else
     </div>
 
     <Space Wrap>
+        @if (Permissions.Has(WebPermissions.ClinicsRead))
+        {
+            <Button OnClick='() => Navigation.NavigateTo("/clinics")'>
+                <Icon Type="bank" Theme="IconThemeType.Outline" /> Clinics
+            </Button>
+        }
         @if (Permissions.Has(WebPermissions.AppointmentsRead))
         {
             <Button Type="@ButtonType.Primary" OnClick='() => Navigation.NavigateTo("/appointments")'>
@@ -291,7 +312,10 @@ else
     private bool _loading;
     private string? _error;
     private string _subtitle = "Organization operational summary";
-    private bool _subscribed;
+    private DateTimeOffset? _lastRefreshedUtc;
+    private bool _subscribedPlatform;
+    private bool _subscribedClinic;
+    private CancellationTokenSource? _cts;
 
     protected override void OnInitialized()
     {
@@ -309,10 +333,19 @@ else
         if (Permissions.IsPlatformAdmin)
         {
             PlatformTenant.Changed += OnPlatformTenantChanged;
-            _subscribed = true;
+            _subscribedPlatform = true;
             if (PlatformTenant.HasClinic)
             {
                 _clinicId = PlatformTenant.SelectedClinicId;
+            }
+        }
+        else if (Permissions.IsOrganizationAdmin)
+        {
+            ClinicContext.Changed += OnClinicContextChanged;
+            _subscribedClinic = true;
+            if (ClinicContext.HasClinic)
+            {
+                _clinicId = ClinicContext.SelectedClinicId;
             }
         }
     }
@@ -327,9 +360,16 @@ else
 
     public void Dispose()
     {
-        if (_subscribed)
+        _cts?.Cancel();
+        _cts?.Dispose();
+        if (_subscribedPlatform)
         {
             PlatformTenant.Changed -= OnPlatformTenantChanged;
+        }
+
+        if (_subscribedClinic)
+        {
+            ClinicContext.Changed -= OnClinicContextChanged;
         }
     }
 
@@ -351,10 +391,36 @@ else
         });
     }
 
+    private void OnClinicContextChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            _clinicId = ClinicContext.SelectedClinicId;
+            _dashboard = null;
+            await LoadAsync();
+        });
+    }
+
     private async Task OnClinicChangedAsync(Guid? clinicId)
     {
         _clinicId = clinicId;
         _dashboard = null;
+
+        if (Permissions.IsOrganizationAdmin && !Permissions.IsPlatformAdmin)
+        {
+            if (clinicId is Guid id)
+            {
+                ClinicContext.SelectClinic(id);
+            }
+            else
+            {
+                ClinicContext.ClearClinic();
+            }
+
+            // ClinicContext.Changed drives LoadAsync for Org Admin.
+            return;
+        }
+
         await LoadAsync();
     }
 
@@ -387,6 +453,11 @@ else
             return;
         }
 
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        var token = _cts.Token;
+
         _loading = true;
         _error = null;
         try
@@ -400,9 +471,27 @@ else
 
             _dashboard = await DashboardApi.GetAsync(
                 query,
-                platformAdminBypass: Permissions.IsPlatformAdmin && PlatformTenant.ExplicitBypassEnabled);
+                platformAdminBypass: Permissions.IsPlatformAdmin && PlatformTenant.ExplicitBypassEnabled,
+                cancellationToken: token);
+
+            if (token.IsCancellationRequested)
+            {
+                return;
+            }
 
             _subtitle = $"{_dashboard.Organization.OrganizationName} · {_dashboard.Organization.TotalClinicCount} clinics";
+            _lastRefreshedUtc = DateTimeOffset.UtcNow;
+
+            if (Permissions.IsOrganizationAdmin
+                && !Permissions.IsPlatformAdmin
+                && _clinicId is Guid selected
+                && _dashboard.Context.SelectedClinicName is string name)
+            {
+                ClinicContext.SelectClinic(selected, name);
+            }
+        }
+        catch (OperationCanceledException)
+        {
         }
         catch (ApiProblemException ex)
         {
@@ -418,7 +507,10 @@ else
         }
         finally
         {
-            _loading = false;
+            if (!token.IsCancellationRequested)
+            {
+                _loading = false;
+            }
         }
     }
 

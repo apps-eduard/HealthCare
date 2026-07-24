@@ -1,0 +1,51 @@
+@namespace HealthCare.Web.Components.Clinics
+@inject IPermissionState Permissions
+@inject IClinicWorkingContext ClinicContext
+@implements IDisposable
+
+@if (Permissions.IsOrganizationAdmin && !Permissions.IsPlatformAdmin)
+{
+    <div class="hc-clinic-context-banner" role="status" aria-live="polite">
+        <span class="hc-caption" style="font-weight:600;">Organization</span>
+        <Tag>@(Permissions.CurrentUser?.OrganizationId is Guid ? "Fixed membership org" : "—")</Tag>
+        <span class="hc-caption" style="margin-left:12px;font-weight:600;">Working clinic</span>
+        @if (ClinicContext.HasClinic)
+        {
+            <Tag Color="@(ClinicContext.SelectedClinicIsActive == false ? "default" : "processing")">
+                @(ClinicContext.SelectedClinicName ?? "Selected clinic")
+                @(ClinicContext.SelectedClinicIsActive == false ? " (inactive)" : "")
+            </Tag>
+            <Button Type="@ButtonType.Link" Size="@ButtonSize.Small" OnClick="ClearClinic">All clinics</Button>
+        }
+        else
+        {
+            <Tag Color="@("processing")">All clinics</Tag>
+        }
+    </div>
+}
+
+@code {
+    private bool _subscribed;
+
+    protected override void OnInitialized()
+    {
+        ClinicContext.Changed += OnChanged;
+        Permissions.Changed += OnChanged;
+        _subscribed = true;
+    }
+
+    public void Dispose()
+    {
+        if (!_subscribed)
+        {
+            return;
+        }
+
+        ClinicContext.Changed -= OnChanged;
+        Permissions.Changed -= OnChanged;
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    private void ClearClinic() => ClinicContext.ClearClinic();
+}

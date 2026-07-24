@@ -109,10 +109,13 @@ public sealed class WebArchitectureTests
         typeof(IStaffPatientApiClient).GetMethod(nameof(IStaffPatientApiClient.UpdateClinicProfileAsync)).Should().NotBeNull();
         typeof(IDoctorAvailabilityApiClient).GetMethod(nameof(IDoctorAvailabilityApiClient.ListAvailabilityAsync))
             .Should().NotBeNull();
-        typeof(IDoctorAvailabilityApiClient).GetMethod(nameof(IDoctorAvailabilityApiClient.GetAvailableSlotsAsync))
+        typeof(IOrganizationDashboardApiClient).GetMethod(nameof(IOrganizationDashboardApiClient.GetAsync))
             .Should().NotBeNull();
-        typeof(IOrganizationDirectoryApiClient).GetMethod(nameof(IOrganizationDirectoryApiClient.SearchOrganizationsAsync))
+        typeof(IClinicManagementApiClient).GetMethod(nameof(IClinicManagementApiClient.SearchAsync))
             .Should().NotBeNull();
+        typeof(IClinicManagementApiClient).GetMethod(nameof(IClinicManagementApiClient.CreateAsync))
+            .Should().NotBeNull();
+        typeof(IClinicWorkingContext).IsInterface.Should().BeTrue();
     }
 
     [Fact]

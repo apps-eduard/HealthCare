@@ -2,33 +2,47 @@
 @attribute [Authorize]
 @implements IDisposable
 @using HealthCare.Contracts.Clinics
+@using HealthCare.Web.Clinics
 @inject IClinicManagementApiClient ClinicsApi
 @inject IPermissionState Permissions
 @inject IPlatformTenantContext PlatformTenant
+@inject IClinicWorkingContext ClinicContext
+@inject IClinicDirectoryCache ClinicCache
 @inject IUiModalService Modals
 @inject IUserNotificationService Notify
 
 <PageTitle>Clinics</PageTitle>
 
-@if (!Permissions.Has(WebPermissions.ClinicsCreate) && !Permissions.Has(WebPermissions.ClinicsUpdate))
+@if (!Permissions.Has(WebPermissions.ClinicsRead))
 {
-    <PermissionDeniedState Message="You do not have permission to manage clinics." />
+    <PermissionDeniedState Message="You do not have permission to view clinics." />
 }
 else
 {
     <HcPageHeader Title="Clinics"
-                  Subtitle="Manage clinics in your organization">
-        <Button OnClick="RefreshAsync" Disabled="_loading">
-            <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
-        </Button>
-        @if (Permissions.Has(WebPermissions.ClinicsCreate))
-        {
-            <Button Type="@ButtonType.Primary"
-                    OnClick="OpenCreateAsync"
-                    Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)">
-                <Icon Type="plus" Theme="IconThemeType.Outline" /> Create Clinic
-            </Button>
-        }
+                  Subtitle="Organization clinic directory">
+        <Breadcrumb>
+            <Breadcrumb>
+                <BreadcrumbItem Href="/dashboard">Home</BreadcrumbItem>
+                <BreadcrumbItem>Clinics</BreadcrumbItem>
+            </Breadcrumb>
+        </Breadcrumb>
+        <ChildContent>
+            <Space>
+                <Button OnClick="RefreshAsync" Disabled="_loading" AriaLabel="Refresh clinic list">
+                    <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
+                </Button>
+                @if (Permissions.Has(WebPermissions.ClinicsCreate))
+                {
+                    <Button Type="@ButtonType.Primary"
+                            OnClick="OpenCreateAsync"
+                            Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)"
+                            AriaLabel="Create clinic">
+                        <Icon Type="plus" Theme="IconThemeType.Outline" /> Create Clinic
+                    </Button>
+                }
+            </Space>
+        </ChildContent>
     </HcPageHeader>
 
     @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
@@ -42,20 +56,41 @@ else
     <div class="hc-card">
         <div class="hc-filter-grid">
             <div>
-                <span class="hc-filter-label">Search</span>
-                <Input @bind-Value="_search" Disabled="_loading" Style="width:100%;" @onkeyup="OnSearchKeyUp" />
+                <label class="hc-filter-label" for="clinics-search">Search</label>
+                <Input Id="clinics-search" @bind-Value="_search" Disabled="_loading" Style="width:100%;" @onkeyup="OnSearchKeyUp" />
             </div>
             <div>
-                <span class="hc-filter-label">Status</span>
-                <Select TItemValue="string" TItem="string" @bind-Value="_activeFilter" Style="width:100%;" AllowClear>
+                <label class="hc-filter-label" for="clinics-status">Status</label>
+                <Select Id="clinics-status" TItemValue="string" TItem="string" @bind-Value="_activeFilter" Style="width:100%;" AllowClear>
                     <SelectOptions>
                         <SelectOption TItemValue="string" TItem="string" Value="@("active")" Label="Active" />
                         <SelectOption TItemValue="string" TItem="string" Value="@("inactive")" Label="Inactive" />
                     </SelectOptions>
                 </Select>
             </div>
+            <div>
+                <label class="hc-filter-label" for="clinics-sort">Sort</label>
+                <Select Id="clinics-sort" TItemValue="string" TItem="string" @bind-Value="_sortBy" Style="width:100%;" AllowClear="false">
+                    <SelectOptions>
+                        <SelectOption TItemValue="string" TItem="string" Value="@("name")" Label="Name" />
+                        <SelectOption TItemValue="string" TItem="string" Value="@("slug")" Label="Slug" />
+                        <SelectOption TItemValue="string" TItem="string" Value="@("city")" Label="City" />
+                        <SelectOption TItemValue="string" TItem="string" Value="@("createdAtUtc")" Label="Created" />
+                        <SelectOption TItemValue="string" TItem="string" Value="@("isActive")" Label="Status" />
+                    </SelectOptions>
+                </Select>
+            </div>
+            <div>
+                <label class="hc-filter-label" for="clinics-dir">Direction</label>
+                <Select Id="clinics-dir" TItemValue="string" TItem="string" @bind-Value="_sortDirection" Style="width:100%;" AllowClear="false">
+                    <SelectOptions>
+                        <SelectOption TItemValue="string" TItem="string" Value="@("asc")" Label="Ascending" />
+                        <SelectOption TItemValue="string" TItem="string" Value="@("desc")" Label="Descending" />
+                    </SelectOptions>
+                </Select>
+            </div>
             <div style="display:flex;gap:8px;align-items:flex-end;">
-                <Button Type="@ButtonType.Primary" OnClick="SearchAsync" Loading="_loading">Search</Button>
+                <Button Type="@ButtonType.Primary" OnClick="SearchFromStartAsync" Loading="_loading">Search</Button>
                 <Button OnClick="ResetAsync" Disabled="_loading">Reset</Button>
             </div>
         </div>
@@ -93,7 +128,7 @@ else
                 <tbody>
                     @foreach (var row in _items)
                     {
-                        <tr>
+                        <tr class="@(row.IsActive ? null : "hc-row-inactive")">
                             <td>@row.Name</td>
                             <td><code>@row.Slug</code></td>
                             <td>@(row.Specialty ?? "—")</td>
@@ -103,22 +138,71 @@ else
                             <td>@row.ActiveDoctorCount</td>
                             <td>
                                 <Tag Color="@(row.IsActive ? "success" : "default")">@(row.IsActive ? "Active" : "Inactive")</Tag>
+                                <span class="sr-only">@(row.IsActive ? "Active clinic" : "Inactive clinic")</span>
                             </td>
                             <td>
-                                <Space>
-                                    @if (Permissions.Has(WebPermissions.ClinicsUpdate))
-                                    {
-                                        <Button Type="@ButtonType.Link" OnClick="@(() => OpenEditAsync(row))">Edit</Button>
-                                    }
-                                    @if (row.IsActive && Permissions.Has(WebPermissions.ClinicsDeactivate))
-                                    {
-                                        <Button Type="@ButtonType.Link" OnClick="@(() => OpenActivationAsync(row, activate: false))">Deactivate</Button>
-                                    }
-                                    else if (!row.IsActive && Permissions.Has(WebPermissions.ClinicsActivate))
-                                    {
-                                        <Button Type="@ButtonType.Link" OnClick="@(() => OpenActivationAsync(row, activate: true))">Activate</Button>
-                                    }
-                                </Space>
+                                <div class="hc-table-actions">
+                                    <Space>
+                                        <Button Type="@ButtonType.Link"
+                                                OnClick="@(() => OpenDetailAsync(row))"
+                                                AriaLabel="@($"View details for {row.Name}")">
+                                            Details
+                                        </Button>
+                                        @if (Permissions.Has(WebPermissions.ClinicsUpdate))
+                                        {
+                                            <Button Type="@ButtonType.Link"
+                                                    Class="hc-action-wide"
+                                                    OnClick="@(() => OpenEditAsync(row))"
+                                                    AriaLabel="@($"Edit {row.Name}")">
+                                                Edit
+                                            </Button>
+                                        }
+                                        @if (row.IsActive && Permissions.Has(WebPermissions.ClinicsDeactivate))
+                                        {
+                                            <Button Type="@ButtonType.Link"
+                                                    Class="hc-action-wide"
+                                                    OnClick="@(() => OpenActivationAsync(row, activate: false))"
+                                                    AriaLabel="@($"Deactivate {row.Name}")">
+                                                Deactivate
+                                            </Button>
+                                        }
+                                        else if (!row.IsActive && Permissions.Has(WebPermissions.ClinicsActivate))
+                                        {
+                                            <Button Type="@ButtonType.Link"
+                                                    Class="hc-action-wide"
+                                                    OnClick="@(() => OpenActivationAsync(row, activate: true))"
+                                                    AriaLabel="@($"Activate {row.Name}")">
+                                                Activate
+                                            </Button>
+                                        }
+                                    </Space>
+                                    <Dropdown Class="hc-action-narrow">
+                                        <Overlay>
+                                            <Menu>
+                                                <MenuItem OnClick="@(() => OpenDetailAsync(row))">Details</MenuItem>
+                                                @if (Permissions.Has(WebPermissions.ClinicsUpdate))
+                                                {
+                                                    <MenuItem OnClick="@(() => OpenEditAsync(row))">Edit</MenuItem>
+                                                }
+                                                @if (row.IsActive && Permissions.Has(WebPermissions.ClinicsDeactivate))
+                                                {
+                                                    <MenuItem OnClick="@(() => OpenActivationAsync(row, activate: false))">Deactivate</MenuItem>
+                                                }
+                                                else if (!row.IsActive && Permissions.Has(WebPermissions.ClinicsActivate))
+                                                {
+                                                    <MenuItem OnClick="@(() => OpenActivationAsync(row, activate: true))">Activate</MenuItem>
+                                                }
+                                                @if (Permissions.IsOrganizationAdmin)
+                                                {
+                                                    <MenuItem OnClick="@(() => UseWorkingClinic(row))">Use as working clinic</MenuItem>
+                                                }
+                                            </Menu>
+                                        </Overlay>
+                                        <ChildContent>
+                                            <Button Type="@ButtonType.Link" AriaLabel="@($"More actions for {row.Name}")">More</Button>
+                                        </ChildContent>
+                                    </Dropdown>
+                                </div>
                             </td>
                         </tr>
                     }
@@ -127,17 +211,25 @@ else
         </div>
 
         <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px;align-items:center;">
-            <Button Disabled="@(_page <= 1 || _loading)" OnClick="@(() => ChangePageAsync(_page - 1))">Prev</Button>
+            <Button Disabled="@(_page <= 1 || _loading)" OnClick="@(() => ChangePageAsync(_page - 1))" AriaLabel="Previous page">Prev</Button>
             <span class="hc-caption">Page @_page / @_totalPages · @_totalCount clinics</span>
-            <Button Disabled="@(_page >= _totalPages || _loading)" OnClick="@(() => ChangePageAsync(_page + 1))">Next</Button>
+            <Button Disabled="@(_page >= _totalPages || _loading)" OnClick="@(() => ChangePageAsync(_page + 1))" AriaLabel="Next page">Next</Button>
         </div>
     }
+
+    <ClinicDetailDrawer @ref="_detailDrawer"
+                        EditRequested="OnDetailEditAsync"
+                        ActivateRequested="OnDetailActivateAsync"
+                        DeactivateRequested="OnDetailDeactivateAsync"
+                        OnChanged="RefreshAsync" />
 }
 
 @code {
     private readonly List<OrganizationClinicListItemResponse> _items = [];
     private string? _search;
     private string? _activeFilter;
+    private string _sortBy = "name";
+    private string _sortDirection = "asc";
     private bool _loading;
     private string? _error;
     private int _page = 1;
@@ -145,6 +237,8 @@ else
     private int _totalCount;
     private int _totalPages = 1;
     private bool _subscribed;
+    private CancellationTokenSource? _cts;
+    private ClinicDetailDrawer? _detailDrawer;
 
     protected override void OnInitialized()
     {
@@ -159,19 +253,21 @@ else
 
     public void Dispose()
     {
+        _cts?.Cancel();
+        _cts?.Dispose();
         if (_subscribed)
         {
             PlatformTenant.Changed -= OnPlatformTenantChanged;
         }
     }
 
-    private void OnPlatformTenantChanged() => _ = InvokeAsync(SearchAsync);
+    private void OnPlatformTenantChanged() => _ = InvokeAsync(SearchFromStartAsync);
 
     private async Task OnSearchKeyUp(KeyboardEventArgs args)
     {
         if (args.Key == "Enter")
         {
-            await SearchAsync();
+            await SearchFromStartAsync();
         }
     }
 
@@ -179,11 +275,19 @@ else
     {
         _search = null;
         _activeFilter = null;
+        _sortBy = "name";
+        _sortDirection = "asc";
         _page = 1;
         await SearchAsync();
     }
 
     private async Task RefreshAsync() => await SearchAsync();
+
+    private async Task SearchFromStartAsync()
+    {
+        _page = 1;
+        await SearchAsync();
+    }
 
     private async Task ChangePageAsync(int page)
     {
@@ -193,7 +297,7 @@ else
 
     private async Task SearchAsync()
     {
-        if (!Permissions.Has(WebPermissions.ClinicsCreate) && !Permissions.Has(WebPermissions.ClinicsUpdate))
+        if (!Permissions.Has(WebPermissions.ClinicsRead))
         {
             return;
         }
@@ -206,6 +310,11 @@ else
             _error = null;
             return;
         }
+
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        var token = _cts.Token;
 
         _loading = true;
         _error = null;
@@ -226,10 +335,16 @@ else
                     OrganizationId = Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null,
                     Page = _page,
                     PageSize = _pageSize,
-                    SortBy = "name",
-                    SortDirection = "asc",
+                    SortBy = string.IsNullOrWhiteSpace(_sortBy) ? "name" : _sortBy,
+                    SortDirection = string.IsNullOrWhiteSpace(_sortDirection) ? "asc" : _sortDirection,
                 },
-                platformAdminBypass: Permissions.IsPlatformAdmin && PlatformTenant.ExplicitBypassEnabled);
+                platformAdminBypass: Permissions.IsPlatformAdmin && PlatformTenant.ExplicitBypassEnabled,
+                cancellationToken: token);
+
+            if (token.IsCancellationRequested)
+            {
+                return;
+            }
 
             _items.Clear();
             _items.AddRange(result.Items);
@@ -237,9 +352,13 @@ else
             _totalPages = Math.Max(1, result.TotalPages);
             _page = result.Page;
         }
+        catch (OperationCanceledException)
+        {
+            // superseded request
+        }
         catch (ApiProblemException ex)
         {
-            _error = ex.Title ?? "Unable to load clinics.";
+            _error = ClinicProblemMessages.From(ex);
             Notify.Error(_error);
         }
         catch
@@ -249,15 +368,27 @@ else
         }
         finally
         {
-            _loading = false;
+            if (!token.IsCancellationRequested)
+            {
+                _loading = false;
+            }
+        }
+    }
+
+    private async Task OpenDetailAsync(OrganizationClinicListItemResponse row)
+    {
+        if (_detailDrawer is not null)
+        {
+            await _detailDrawer.OpenAsync(row.ClinicId);
         }
     }
 
     private async Task OpenCreateAsync()
     {
-        if (await Modals.ShowAsync<CreateClinicDialog, object?>("Create clinic", null, width: "640px"))
+        if (await Modals.ShowAsync<CreateClinicDialog, object?>("Create clinic", null, width: "720px"))
         {
             Notify.Success("Clinic created.");
+            ClinicCache.Clear();
             await SearchAsync();
         }
     }
@@ -267,9 +398,10 @@ else
         if (await Modals.ShowAsync<EditClinicDialog, EditClinicDialog.Args>(
                 "Edit clinic",
                 new EditClinicDialog.Args(row.ClinicId),
-                width: "640px"))
+                width: "720px"))
         {
             Notify.Success("Clinic updated.");
+            ClinicCache.Clear();
             await SearchAsync();
         }
     }
@@ -282,7 +414,70 @@ else
                 new ClinicActivationDialog.Args(row.ClinicId, row.Name, row.Version, activate)))
         {
             Notify.Success(activate ? "Clinic activated." : "Clinic deactivated.");
+            ClinicCache.Clear();
             await SearchAsync();
         }
+    }
+
+    private async Task OnDetailEditAsync(OrganizationClinicDetailResponse detail)
+    {
+        _detailDrawer?.Close();
+        if (await Modals.ShowAsync<EditClinicDialog, EditClinicDialog.Args>(
+                "Edit clinic",
+                new EditClinicDialog.Args(detail.ClinicId),
+                width: "720px"))
+        {
+            Notify.Success("Clinic updated.");
+            ClinicCache.Clear();
+            await SearchAsync();
+        }
+    }
+
+    private async Task OnDetailActivateAsync(OrganizationClinicDetailResponse detail)
+    {
+        _detailDrawer?.Close();
+        await OpenActivationAsync(
+            new OrganizationClinicListItemResponse
+            {
+                ClinicId = detail.ClinicId,
+                OrganizationId = detail.OrganizationId,
+                Name = detail.Name,
+                Slug = detail.Slug,
+                Specialty = detail.Specialty,
+                City = detail.City,
+                TimeZoneId = detail.TimeZoneId,
+                IsActive = detail.IsActive,
+                Version = detail.Version,
+                ActiveStaffCount = detail.ActiveStaffCount,
+                ActiveDoctorCount = detail.ActiveDoctorCount,
+            },
+            activate: true);
+    }
+
+    private async Task OnDetailDeactivateAsync(OrganizationClinicDetailResponse detail)
+    {
+        _detailDrawer?.Close();
+        await OpenActivationAsync(
+            new OrganizationClinicListItemResponse
+            {
+                ClinicId = detail.ClinicId,
+                OrganizationId = detail.OrganizationId,
+                Name = detail.Name,
+                Slug = detail.Slug,
+                Specialty = detail.Specialty,
+                City = detail.City,
+                TimeZoneId = detail.TimeZoneId,
+                IsActive = detail.IsActive,
+                Version = detail.Version,
+                ActiveStaffCount = detail.ActiveStaffCount,
+                ActiveDoctorCount = detail.ActiveDoctorCount,
+            },
+            activate: false);
+    }
+
+    private void UseWorkingClinic(OrganizationClinicListItemResponse row)
+    {
+        ClinicContext.SelectClinic(row.ClinicId, row.Name, row.IsActive);
+        Notify.Success($"Working clinic set to {row.Name}.");
     }
 }

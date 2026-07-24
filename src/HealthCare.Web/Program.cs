@@ -98,6 +98,7 @@ builder.Services.AddScoped<IApiTokenStore, ServerSessionApiTokenStore>();
 builder.Services.AddScoped<IBffAuthService, BffAuthService>();
 builder.Services.AddScoped<IPermissionState, PermissionState>();
 builder.Services.AddScoped<IPlatformTenantContext, PlatformTenantContext>();
+builder.Services.AddScoped<IClinicWorkingContext, ClinicWorkingContext>();
 builder.Services.AddScoped<IStaffWebAuthCookie, StaffWebAuthCookie>();
 builder.Services.AddScoped<StaffAuthenticationStateProvider>();
 builder.Services.AddScoped<AuthenticationStateProvider>(sp =>

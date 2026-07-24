@@ -1,8 +1,10 @@
 @inherits FeedbackComponent<object?>
 @using HealthCare.Contracts.Clinics
+@using HealthCare.Web.Clinics
 @inject IClinicManagementApiClient ClinicsApi
 @inject IPermissionState Permissions
 @inject IPlatformTenantContext PlatformTenant
+@inject IClinicDirectoryCache ClinicCache
 
 <div style="display:flex;flex-direction:column;gap:12px;max-height:70vh;overflow:auto;">
     @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
@@ -12,22 +14,84 @@
                ShowIcon="true" />
     }
 
+    <div class="hc-caption" style="font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">Basic information</div>
     <div>
-        <label>@FieldLabel.Mark("Name")</label>
-        <Input @bind-Value="_name" Disabled="_busy" Style="width:100%;" />
+        <label for="create-clinic-name">@FieldLabel.Mark("Name")</label>
+        <Input Id="create-clinic-name"
+               @bind-Value="_name"
+               @bind-Value:after="OnNameAfter"
+               Disabled="_busy"
+               Style="width:100%;" />
     </div>
     <div>
-        <label>@FieldLabel.Mark("Slug")</label>
-        <Input @bind-Value="_slug" Disabled="_busy" Style="width:100%;" Placeholder="e.g. downtown-clinic" />
-        <div class="hc-caption">Lowercase letters, numbers, and hyphens only. Used in public registration URLs.</div>
+        <label for="create-clinic-slug">@FieldLabel.Mark("Slug")</label>
+        <Input Id="create-clinic-slug"
+               @bind-Value="_slug"
+               @bind-Value:after="OnSlugAfter"
+               Disabled="_busy"
+               Style="width:100%;"
+               Placeholder="e.g. downtown-clinic" />
+        <div class="hc-caption">
+            Lowercase letters, numbers, and hyphens only. Used in public registration URLs.
+            @if (!_slugManuallyEdited && !string.IsNullOrWhiteSpace(_slug))
+            {
+                <span> Suggested from name.</span>
+            }
+        </div>
+        @if (!string.IsNullOrWhiteSpace(_slug) && !ClinicSlugHelper.LooksValid(_slug))
+        {
+            <Alert Type="@AlertType.Warning"
+                   Message="Slug format looks invalid. Use lowercase letters, numbers, and hyphens."
+                   ShowIcon="true"
+                   Style="margin-top:8px;" />
+        }
     </div>
     <div>
-        <label>Specialty</label>
-        <Input @bind-Value="_specialty" Disabled="_busy" Style="width:100%;" />
+        <label for="create-clinic-specialty">Specialty</label>
+        <Input Id="create-clinic-specialty" @bind-Value="_specialty" Disabled="_busy" Style="width:100%;" />
+    </div>
+
+    <div class="hc-caption" style="font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-top:8px;">Contact</div>
+    <div>
+        <label for="create-clinic-email">Email</label>
+        <Input Id="create-clinic-email" @bind-Value="_email" Disabled="_busy" Style="width:100%;" />
     </div>
     <div>
-        <label>@FieldLabel.Mark("Timezone")</label>
+        <label for="create-clinic-phone">Phone</label>
+        <Input Id="create-clinic-phone" @bind-Value="_phone" Disabled="_busy" Style="width:100%;" />
+    </div>
+
+    <div class="hc-caption" style="font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-top:8px;">Address</div>
+    <div>
+        <label for="create-clinic-a1">Address line 1</label>
+        <Input Id="create-clinic-a1" @bind-Value="_address1" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label for="create-clinic-a2">Address line 2</label>
+        <Input Id="create-clinic-a2" @bind-Value="_address2" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label for="create-clinic-city">City</label>
+        <Input Id="create-clinic-city" @bind-Value="_city" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label for="create-clinic-region">Region / Province</label>
+        <Input Id="create-clinic-region" @bind-Value="_region" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label for="create-clinic-postal">Postal code</label>
+        <Input Id="create-clinic-postal" @bind-Value="_postal" Disabled="_busy" Style="width:100%;" />
+    </div>
+    <div>
+        <label for="create-clinic-country">Country</label>
+        <Input Id="create-clinic-country" @bind-Value="_country" Disabled="_busy" Style="width:100%;" />
+    </div>
+
+    <div class="hc-caption" style="font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-top:8px;">Scheduling</div>
+    <div>
+        <label for="create-clinic-tz">@FieldLabel.Mark("Timezone")</label>
         <Select @bind-Value="_timeZoneId"
+                Id="create-clinic-tz"
                 Disabled="@(_busy || _timeZonesLoading)"
                 Style="width:100%;"
                 TItemValue="string"
@@ -41,64 +105,39 @@
             </SelectOptions>
         </Select>
     </div>
-    <div>
-        <label>Phone</label>
-        <Input @bind-Value="_phone" Disabled="_busy" Style="width:100%;" />
-    </div>
-    <div>
-        <label>Email</label>
-        <Input @bind-Value="_email" Disabled="_busy" Style="width:100%;" />
-    </div>
-    <div>
-        <label>Address line 1</label>
-        <Input @bind-Value="_address1" Disabled="_busy" Style="width:100%;" />
-    </div>
-    <div>
-        <label>Address line 2</label>
-        <Input @bind-Value="_address2" Disabled="_busy" Style="width:100%;" />
-    </div>
-    <div>
-        <label>City</label>
-        <Input @bind-Value="_city" Disabled="_busy" Style="width:100%;" />
-    </div>
-    <div>
-        <label>Region / Province</label>
-        <Input @bind-Value="_region" Disabled="_busy" Style="width:100%;" />
-    </div>
-    <div>
-        <label>Postal code</label>
-        <Input @bind-Value="_postal" Disabled="_busy" Style="width:100%;" />
-    </div>
-    <div>
-        <label>Country</label>
-        <Input @bind-Value="_country" Disabled="_busy" Style="width:100%;" />
-    </div>
 
-    <div class="hc-caption" style="margin-top:8px;font-weight:600;">Optional initial Clinic Admin</div>
+    <div class="hc-caption" style="font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-top:8px;">Initial Clinic Admin</div>
     <div>
-        <label>Admin email</label>
-        <Input @bind-Value="_adminEmail" Disabled="_busy" Style="width:100%;" />
+        <Switch @bind-Value="_includeAdmin" Disabled="_busy" />
+        <span style="margin-left:8px;">Create optional initial Clinic Admin</span>
     </div>
-    <div>
-        <label>Admin first name</label>
-        <Input @bind-Value="_adminFirst" Disabled="_busy" Style="width:100%;" />
-    </div>
-    <div>
-        <label>Admin last name</label>
-        <Input @bind-Value="_adminLast" Disabled="_busy" Style="width:100%;" />
-    </div>
-    <div>
-        <label>Admin job title</label>
-        <Input @bind-Value="_adminJob" Disabled="_busy" Style="width:100%;" />
-    </div>
-    <div>
-        <label>Temporary password</label>
-        <InputPassword @bind-Value="_adminPassword" Disabled="_busy" Style="width:100%;" />
-    </div>
+    @if (_includeAdmin)
+    {
+        <div>
+            <label for="create-admin-email">@FieldLabel.Mark("Admin email")</label>
+            <Input Id="create-admin-email" @bind-Value="_adminEmail" Disabled="_busy" Style="width:100%;" />
+        </div>
+        <div>
+            <label for="create-admin-first">@FieldLabel.Mark("Admin first name")</label>
+            <Input Id="create-admin-first" @bind-Value="_adminFirst" Disabled="_busy" Style="width:100%;" />
+        </div>
+        <div>
+            <label for="create-admin-last">@FieldLabel.Mark("Admin last name")</label>
+            <Input Id="create-admin-last" @bind-Value="_adminLast" Disabled="_busy" Style="width:100%;" />
+        </div>
+        <div>
+            <label for="create-admin-job">Job title</label>
+            <Input Id="create-admin-job" @bind-Value="_adminJob" Disabled="_busy" Style="width:100%;" />
+        </div>
+        <div>
+            <label for="create-admin-password">@FieldLabel.Mark("Temporary password")</label>
+            <InputPassword Id="create-admin-password" @bind-Value="_adminPassword" Disabled="_busy" Style="width:100%;" />
+        </div>
+    }
 
     @if (!string.IsNullOrWhiteSpace(_error))
     {
-        <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" />
+        <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" role="alert" />
     }
 </div>
 <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;">
@@ -109,6 +148,7 @@
 @code {
     private string _name = string.Empty;
     private string _slug = string.Empty;
+    private bool _slugManuallyEdited;
     private string? _specialty;
     private string _timeZoneId = "Asia/Riyadh";
     private string? _phone;
@@ -119,6 +159,7 @@
     private string? _region;
     private string? _postal;
     private string? _country;
+    private bool _includeAdmin;
     private string? _adminEmail;
     private string? _adminFirst;
     private string? _adminLast;
@@ -162,12 +203,31 @@
         }
     }
 
+    private void OnNameAfter()
+    {
+        if (!_slugManuallyEdited)
+        {
+            _slug = ClinicSlugHelper.SuggestFromName(_name);
+        }
+    }
+
+    private void OnSlugAfter()
+    {
+        _slug = (_slug ?? string.Empty).Trim().ToLowerInvariant();
+        _slugManuallyEdited = true;
+    }
+
     private Task CancelCloseAsync() => OkCancelRef!.CancelAsync(new ModalClosingEventArgs());
 
     private Task ConfirmOkAsync() => OkCancelRef!.OkAsync(new ModalClosingEventArgs());
 
     private async Task SubmitAsync()
     {
+        if (_busy)
+        {
+            return;
+        }
+
         _error = null;
         if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
         {
@@ -181,12 +241,14 @@
             return;
         }
 
+        if (!ClinicSlugHelper.LooksValid(_slug))
+        {
+            _error = "Slug format is invalid.";
+            return;
+        }
+
         CreateClinicInitialAdminRequest? admin = null;
-        var hasAnyAdmin = !string.IsNullOrWhiteSpace(_adminEmail)
-            || !string.IsNullOrWhiteSpace(_adminFirst)
-            || !string.IsNullOrWhiteSpace(_adminLast)
-            || !string.IsNullOrWhiteSpace(_adminPassword);
-        if (hasAnyAdmin)
+        if (_includeAdmin)
         {
             if (string.IsNullOrWhiteSpace(_adminEmail)
                 || string.IsNullOrWhiteSpace(_adminFirst)
@@ -230,11 +292,13 @@
                 },
                 platformAdminBypass: Permissions.IsPlatformAdmin && PlatformTenant.ExplicitBypassEnabled);
 
+            _adminPassword = null;
+            ClinicCache.Clear();
             await ConfirmOkAsync();
         }
         catch (ApiProblemException ex)
         {
-            _error = ex.ToUserMessage();
+            _error = ClinicProblemMessages.From(ex);
         }
         catch
         {
@@ -243,6 +307,7 @@
         finally
         {
             _busy = false;
+            _adminPassword = null;
         }
     }
 }

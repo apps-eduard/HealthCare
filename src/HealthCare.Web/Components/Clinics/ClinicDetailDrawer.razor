@@ -1,0 +1,151 @@
+@namespace HealthCare.Web.Components.Clinics
+@using HealthCare.Contracts.Clinics
+@inject IClinicManagementApiClient ClinicsApi
+@inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
+@inject IClinicWorkingContext ClinicContext
+@inject IClinicDirectoryCache ClinicCache
+@inject IUserNotificationService Notify
+
+<Drawer Title="@(_detail?.Name ?? "Clinic details")"
+        Visible="_visible"
+        Width="480"
+        Closable
+        OnClose="Close"
+        BodyStyle="padding:16px;">
+    @if (_loading)
+    {
+        <Skeleton Active="true" />
+    }
+    else if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" />
+    }
+    else if (_detail is not null)
+    {
+        <Descriptions Bordered Size="@DescriptionsSize.Small" Column="1">
+            <DescriptionsItem Title="Status">
+                <Tag Color="@(_detail.IsActive ? "success" : "default")">
+                    @(_detail.IsActive ? "Active" : "Inactive")
+                </Tag>
+            </DescriptionsItem>
+            <DescriptionsItem Title="Slug"><code>@_detail.Slug</code></DescriptionsItem>
+            <DescriptionsItem Title="Specialty">@(_detail.Specialty ?? "—")</DescriptionsItem>
+            <DescriptionsItem Title="Email">@(_detail.Email ?? "—")</DescriptionsItem>
+            <DescriptionsItem Title="Phone">@(_detail.PhoneNumber ?? "—")</DescriptionsItem>
+            <DescriptionsItem Title="Address">
+                @(FormatAddress(_detail))
+            </DescriptionsItem>
+            <DescriptionsItem Title="Timezone">@_detail.TimeZoneId</DescriptionsItem>
+            <DescriptionsItem Title="Active staff">@_detail.ActiveStaffCount</DescriptionsItem>
+            <DescriptionsItem Title="Active doctors">@_detail.ActiveDoctorCount</DescriptionsItem>
+            <DescriptionsItem Title="Appointments today">
+                @(_detail.AppointmentCountToday?.ToString() ?? "—")
+            </DescriptionsItem>
+            <DescriptionsItem Title="Created">@_detail.CreatedAtUtc.ToString("u")</DescriptionsItem>
+            <DescriptionsItem Title="Updated">@_detail.UpdatedAtUtc.ToString("u")</DescriptionsItem>
+            <DescriptionsItem Title="Version">@_detail.Version</DescriptionsItem>
+        </Descriptions>
+
+        <Space Wrap Style="margin-top:16px;">
+            @if (Permissions.Has(WebPermissions.ClinicsUpdate))
+            {
+                <Button Type="@ButtonType.Primary" OnClick="OnEdit">Edit</Button>
+            }
+            @if (_detail.IsActive && Permissions.Has(WebPermissions.ClinicsDeactivate))
+            {
+                <Button Danger OnClick="OnDeactivate">Deactivate</Button>
+            }
+            else if (!_detail.IsActive && Permissions.Has(WebPermissions.ClinicsActivate))
+            {
+                <Button Type="@ButtonType.Primary" OnClick="OnActivate">Activate</Button>
+            }
+            <Button OnClick="UseAsWorkingClinic">Use as working clinic</Button>
+        </Space>
+    }
+</Drawer>
+
+@code {
+    [Parameter] public EventCallback OnChanged { get; set; }
+    [Parameter] public EventCallback<OrganizationClinicDetailResponse> EditRequested { get; set; }
+    [Parameter] public EventCallback<OrganizationClinicDetailResponse> ActivateRequested { get; set; }
+    [Parameter] public EventCallback<OrganizationClinicDetailResponse> DeactivateRequested { get; set; }
+
+    private bool _visible;
+    private bool _loading;
+    private string? _error;
+    private OrganizationClinicDetailResponse? _detail;
+
+    public async Task OpenAsync(Guid clinicId)
+    {
+        _visible = true;
+        _loading = true;
+        _error = null;
+        _detail = null;
+        StateHasChanged();
+
+        try
+        {
+            _detail = await ClinicsApi.GetByIdAsync(
+                clinicId,
+                platformAdminBypass: Permissions.IsPlatformAdmin && PlatformTenant.ExplicitBypassEnabled);
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = ClinicProblemMessages.From(ex);
+            Notify.Error(_error);
+        }
+        catch
+        {
+            _error = "Unable to load clinic details.";
+            Notify.Error(_error);
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    public void Close()
+    {
+        _visible = false;
+        _detail = null;
+        _error = null;
+    }
+
+    private Task OnEdit() =>
+        _detail is null ? Task.CompletedTask : EditRequested.InvokeAsync(_detail);
+
+    private Task OnActivate() =>
+        _detail is null ? Task.CompletedTask : ActivateRequested.InvokeAsync(_detail);
+
+    private Task OnDeactivate() =>
+        _detail is null ? Task.CompletedTask : DeactivateRequested.InvokeAsync(_detail);
+
+    private void UseAsWorkingClinic()
+    {
+        if (_detail is null || !Permissions.IsOrganizationAdmin)
+        {
+            return;
+        }
+
+        ClinicContext.SelectClinic(_detail.ClinicId, _detail.Name, _detail.IsActive);
+        Notify.Success($"Working clinic set to {_detail.Name}.");
+    }
+
+    private static string FormatAddress(OrganizationClinicDetailResponse d)
+    {
+        var parts = new[]
+        {
+            d.AddressLine1,
+            d.AddressLine2,
+            d.City,
+            d.Region,
+            d.PostalCode,
+            d.Country,
+        }.Where(p => !string.IsNullOrWhiteSpace(p));
+        var text = string.Join(", ", parts);
+        return string.IsNullOrWhiteSpace(text) ? "—" : text;
+    }
+}

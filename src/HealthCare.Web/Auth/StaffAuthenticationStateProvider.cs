@@ -19,6 +19,7 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IClinicDirectoryCache _clinicCache;
     private readonly IPlatformTenantContext _platformTenant;
+    private readonly IClinicWorkingContext _clinicWorking;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<StaffAuthenticationStateProvider> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -31,6 +32,7 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
         IHttpClientFactory httpClientFactory,
         IClinicDirectoryCache clinicCache,
         IPlatformTenantContext platformTenant,
+        IClinicWorkingContext clinicWorking,
         IHttpContextAccessor httpContextAccessor,
         ILogger<StaffAuthenticationStateProvider> logger)
     {
@@ -40,6 +42,7 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
         _httpClientFactory = httpClientFactory;
         _clinicCache = clinicCache;
         _platformTenant = platformTenant;
+        _clinicWorking = clinicWorking;
         _httpContextAccessor = httpContextAccessor;
         _logger = logger;
     }
@@ -157,6 +160,7 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
         await _permissionState.ClearAsync();
         _clinicCache.Clear();
         _platformTenant.Clear();
+        _clinicWorking.Clear();
         _authenticatedUserId = null;
     }
 
@@ -180,6 +184,7 @@ public sealed class StaffAuthenticationStateProvider : AuthenticationStateProvid
             if (_authenticatedUserId is Guid previous && previous != user.UserId)
             {
                 _platformTenant.Clear();
+                _clinicWorking.Clear();
                 _clinicCache.Clear();
             }
 

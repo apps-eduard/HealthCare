@@ -1,8 +1,10 @@
 @inherits FeedbackComponent<EditClinicDialog.Args>
 @using HealthCare.Contracts.Clinics
+@using HealthCare.Web.Clinics
 @inject IClinicManagementApiClient ClinicsApi
 @inject IPermissionState Permissions
 @inject IPlatformTenantContext PlatformTenant
+@inject IClinicDirectoryCache ClinicCache
 
 @if (_loading)
 {
@@ -12,23 +14,35 @@ else
 {
     <div style="display:flex;flex-direction:column;gap:12px;max-height:70vh;overflow:auto;">
         <Alert Type="@AlertType.Warning"
-               Message="Changing the slug updates the public patient registration URL for this clinic."
+               Message="Changing the slug updates the public patient registration URL. Changing the timezone affects scheduling interpretation."
                ShowIcon="true" />
+        @if (_concurrencyConflict)
+        {
+            <Alert Type="@AlertType.Error"
+                   Message="Another change was saved first. Reload the latest clinic before saving again."
+                   ShowIcon="true" />
+            <Button OnClick="ReloadAsync" Disabled="_busy" Style="margin-bottom:8px;">Reload latest</Button>
+        }
         <div>
-            <label>@FieldLabel.Mark("Name")</label>
-            <Input @bind-Value="_name" Disabled="_busy" Style="width:100%;" />
+            <label for="edit-clinic-name">@FieldLabel.Mark("Name")</label>
+            <Input Id="edit-clinic-name" @bind-Value="_name" Disabled="_busy" Style="width:100%;" />
         </div>
         <div>
-            <label>@FieldLabel.Mark("Slug")</label>
-            <Input @bind-Value="_slug" Disabled="_busy" Style="width:100%;" />
+            <label for="edit-clinic-slug">@FieldLabel.Mark("Slug")</label>
+            <Input Id="edit-clinic-slug"
+                   @bind-Value="_slug"
+                   @bind-Value:after="OnSlugAfter"
+                   Disabled="_busy"
+                   Style="width:100%;" />
         </div>
         <div>
-            <label>Specialty</label>
-            <Input @bind-Value="_specialty" Disabled="_busy" Style="width:100%;" />
+            <label for="edit-clinic-specialty">Specialty</label>
+            <Input Id="edit-clinic-specialty" @bind-Value="_specialty" Disabled="_busy" Style="width:100%;" />
         </div>
         <div>
-            <label>@FieldLabel.Mark("Timezone")</label>
+            <label for="edit-clinic-tz">@FieldLabel.Mark("Timezone")</label>
             <Select @bind-Value="_timeZoneId"
+                    Id="edit-clinic-tz"
                     Disabled="@(_busy || _timeZonesLoading)"
                     Style="width:100%;"
                     TItemValue="string"
@@ -43,45 +57,45 @@ else
             </Select>
         </div>
         <div>
-            <label>Phone</label>
-            <Input @bind-Value="_phone" Disabled="_busy" Style="width:100%;" />
+            <label for="edit-clinic-phone">Phone</label>
+            <Input Id="edit-clinic-phone" @bind-Value="_phone" Disabled="_busy" Style="width:100%;" />
         </div>
         <div>
-            <label>Email</label>
-            <Input @bind-Value="_email" Disabled="_busy" Style="width:100%;" />
+            <label for="edit-clinic-email">Email</label>
+            <Input Id="edit-clinic-email" @bind-Value="_email" Disabled="_busy" Style="width:100%;" />
         </div>
         <div>
-            <label>Address line 1</label>
-            <Input @bind-Value="_address1" Disabled="_busy" Style="width:100%;" />
+            <label for="edit-clinic-a1">Address line 1</label>
+            <Input Id="edit-clinic-a1" @bind-Value="_address1" Disabled="_busy" Style="width:100%;" />
         </div>
         <div>
-            <label>Address line 2</label>
-            <Input @bind-Value="_address2" Disabled="_busy" Style="width:100%;" />
+            <label for="edit-clinic-a2">Address line 2</label>
+            <Input Id="edit-clinic-a2" @bind-Value="_address2" Disabled="_busy" Style="width:100%;" />
         </div>
         <div>
-            <label>City</label>
-            <Input @bind-Value="_city" Disabled="_busy" Style="width:100%;" />
+            <label for="edit-clinic-city">City</label>
+            <Input Id="edit-clinic-city" @bind-Value="_city" Disabled="_busy" Style="width:100%;" />
         </div>
         <div>
-            <label>Region / Province</label>
-            <Input @bind-Value="_region" Disabled="_busy" Style="width:100%;" />
+            <label for="edit-clinic-region">Region / Province</label>
+            <Input Id="edit-clinic-region" @bind-Value="_region" Disabled="_busy" Style="width:100%;" />
         </div>
         <div>
-            <label>Postal code</label>
-            <Input @bind-Value="_postal" Disabled="_busy" Style="width:100%;" />
+            <label for="edit-clinic-postal">Postal code</label>
+            <Input Id="edit-clinic-postal" @bind-Value="_postal" Disabled="_busy" Style="width:100%;" />
         </div>
         <div>
-            <label>Country</label>
-            <Input @bind-Value="_country" Disabled="_busy" Style="width:100%;" />
+            <label for="edit-clinic-country">Country</label>
+            <Input Id="edit-clinic-country" @bind-Value="_country" Disabled="_busy" Style="width:100%;" />
         </div>
         @if (!string.IsNullOrWhiteSpace(_error))
         {
-            <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" />
+            <Alert Type="@AlertType.Error" Message="@_error" ShowIcon="true" role="alert" />
         }
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;">
         <Button OnClick="CancelCloseAsync" Disabled="_busy">Cancel</Button>
-        <Button Type="@ButtonType.Primary" OnClick="SubmitAsync" Loading="_busy" Disabled="_busy">Save</Button>
+        <Button Type="@ButtonType.Primary" OnClick="SubmitAsync" Loading="_busy" Disabled="@(_busy || _concurrencyConflict)">Save</Button>
     </div>
 }
 
@@ -91,6 +105,7 @@ else
     private bool _loading = true;
     private bool _busy;
     private string? _error;
+    private bool _concurrencyConflict;
     private int _version;
     private string _name = string.Empty;
     private string _slug = string.Empty;
@@ -112,26 +127,11 @@ else
         try
         {
             _timeZones = (await ClinicsApi.ListTimeZonesAsync()).ToList();
-            var detail = await ClinicsApi.GetByIdAsync(
-                Options.ClinicId,
-                platformAdminBypass: Permissions.IsPlatformAdmin && PlatformTenant.ExplicitBypassEnabled);
-            _version = detail.Version;
-            _name = detail.Name;
-            _slug = detail.Slug;
-            _specialty = detail.Specialty;
-            _timeZoneId = detail.TimeZoneId;
-            _phone = detail.PhoneNumber;
-            _email = detail.Email;
-            _address1 = detail.AddressLine1;
-            _address2 = detail.AddressLine2;
-            _city = detail.City;
-            _region = detail.Region;
-            _postal = detail.PostalCode;
-            _country = detail.Country;
+            await LoadDetailAsync();
         }
         catch (ApiProblemException ex)
         {
-            _error = ex.ToUserMessage();
+            _error = ClinicProblemMessages.From(ex);
         }
         finally
         {
@@ -140,16 +140,74 @@ else
         }
     }
 
+    private async Task LoadDetailAsync()
+    {
+        var detail = await ClinicsApi.GetByIdAsync(
+            Options.ClinicId,
+            platformAdminBypass: Permissions.IsPlatformAdmin && PlatformTenant.ExplicitBypassEnabled);
+        ApplyDetail(detail);
+        _concurrencyConflict = false;
+        _error = null;
+    }
+
+    private void ApplyDetail(OrganizationClinicDetailResponse detail)
+    {
+        _version = detail.Version;
+        _name = detail.Name;
+        _slug = detail.Slug;
+        _specialty = detail.Specialty;
+        _timeZoneId = detail.TimeZoneId;
+        _phone = detail.PhoneNumber;
+        _email = detail.Email;
+        _address1 = detail.AddressLine1;
+        _address2 = detail.AddressLine2;
+        _city = detail.City;
+        _region = detail.Region;
+        _postal = detail.PostalCode;
+        _country = detail.Country;
+    }
+
+    private async Task ReloadAsync()
+    {
+        _busy = true;
+        try
+        {
+            await LoadDetailAsync();
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = ClinicProblemMessages.From(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void OnSlugAfter() =>
+        _slug = (_slug ?? string.Empty).Trim().ToLowerInvariant();
+
     private Task CancelCloseAsync() => OkCancelRef!.CancelAsync(new ModalClosingEventArgs());
 
     private Task ConfirmOkAsync() => OkCancelRef!.OkAsync(new ModalClosingEventArgs());
 
     private async Task SubmitAsync()
     {
+        if (_busy || _concurrencyConflict)
+        {
+            return;
+        }
+
         _error = null;
         if (string.IsNullOrWhiteSpace(_name) || string.IsNullOrWhiteSpace(_slug) || string.IsNullOrWhiteSpace(_timeZoneId))
         {
             _error = "Name, slug, and timezone are required.";
+            return;
+        }
+
+        if (!ClinicSlugHelper.LooksValid(_slug))
+        {
+            _error = "Slug format is invalid.";
             return;
         }
 
@@ -176,13 +234,20 @@ else
                 },
                 platformAdminBypass: Permissions.IsPlatformAdmin && PlatformTenant.ExplicitBypassEnabled);
 
+            ClinicCache.Clear();
             await ConfirmOkAsync();
         }
         catch (ApiProblemException ex)
         {
-            _error = ex.ErrorCode == ClinicManagementErrorCodes.ConcurrencyConflict
-                ? "This clinic changed. Close and try again."
-                : ex.ToUserMessage();
+            if (ex.ErrorCode == ClinicManagementErrorCodes.ConcurrencyConflict)
+            {
+                _concurrencyConflict = true;
+                _error = ClinicProblemMessages.From(ex);
+            }
+            else
+            {
+                _error = ClinicProblemMessages.From(ex);
+            }
         }
         catch
         {

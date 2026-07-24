@@ -56,7 +56,7 @@
                     <span>Availability</span>
                 </MenuItem>
             }
-            @if (Permissions.Has(WebPermissions.ClinicsCreate) || Permissions.Has(WebPermissions.ClinicsUpdate))
+            @if (Permissions.Has(WebPermissions.ClinicsRead))
             {
                 <MenuItem Key="clinics" RouterLink="/clinics" RouterMatch="NavLinkMatch.Prefix">
                     <Icon Type="bank" Theme="IconThemeType.Outline" />
@@ -118,6 +118,7 @@
             else
             {
                 <PlatformTenantBanner />
+                <ClinicContextBanner />
                 <div class="hc-pro-page">
                     @Body
                 </div>

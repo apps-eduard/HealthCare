@@ -315,6 +315,48 @@ h1:focus {
     white-space: nowrap;
 }
 
+.hc-table-actions .hc-action-narrow {
+    display: none;
+}
+
+.hc-row-inactive {
+    opacity: 0.72;
+}
+
+.hc-clinic-context-banner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    background: var(--hc-surface);
+    border: 1px solid var(--hc-border);
+    border-radius: var(--hc-radius);
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+@media (max-width: 768px) {
+    .hc-table-actions .hc-action-wide {
+        display: none;
+    }
+
+    .hc-table-actions .hc-action-narrow {
+        display: inline-block;
+    }
+}
+
 .hc-pager {
     display: flex;
     justify-content: space-between;

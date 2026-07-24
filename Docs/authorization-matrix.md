@@ -183,9 +183,12 @@ Ant Design Interactive Server app consumes the API. UI permissions (`staff.read`
 Pages:
 
 - `/login` — staff sign-in
-- `/dashboard` — authenticated shell home
+- `/dashboard` — authenticated shell home; Organization Admin operational dashboard (`organization_dashboard.read`)
+- `/clinics` — organization clinic directory + management (`clinics.read` for list; create/update/activate/deactivate gated separately)
 - `/staff` — staff list/management (`staff.read` required)
 - `/appointments`, `/appointments/calendar`, `/patients`, `/availability` — scoped operational pages
+
+Organization Admin working clinic context uses circuit-scoped `IClinicWorkingContext` (cleared on logout). PLATFORM_ADMIN continues to use `IPlatformTenantContext`.
 
 ### Organization directory (platform)
 

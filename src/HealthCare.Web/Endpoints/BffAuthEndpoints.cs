@@ -117,6 +117,7 @@ public static class BffAuthEndpoints
         IBffAuthService bffAuth,
         IAntiforgery antiforgery,
         IPlatformTenantContext platformTenant,
+        IClinicWorkingContext clinicWorking,
         IPermissionState permissions,
         IClinicDirectoryCache clinicCache,
         ILoggerFactory loggerFactory)
@@ -133,7 +134,7 @@ public static class BffAuthEndpoints
             return Results.Redirect("/login?error=antiforgery");
         }
 
-        await CompleteLogoutAsync(httpContext, bffAuth, platformTenant, permissions, clinicCache);
+        await CompleteLogoutAsync(httpContext, bffAuth, platformTenant, clinicWorking, permissions, clinicCache);
         return Results.Redirect("/login");
     }
 
@@ -141,6 +142,7 @@ public static class BffAuthEndpoints
         HttpContext httpContext,
         IBffAuthService bffAuth,
         IPlatformTenantContext platformTenant,
+        IClinicWorkingContext clinicWorking,
         IPermissionState permissions,
         IClinicDirectoryCache clinicCache)
     {
@@ -148,6 +150,7 @@ public static class BffAuthEndpoints
         await bffAuth.LogoutAsync(sessionId, callRemoteLogout: true, httpContext.RequestAborted);
         await permissions.ClearAsync();
         platformTenant.Clear();
+        clinicWorking.Clear();
         clinicCache.Clear();
         DeleteLegacyLoginCookies(httpContext);
         await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
