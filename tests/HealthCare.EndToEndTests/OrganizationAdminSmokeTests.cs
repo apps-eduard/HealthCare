@@ -164,10 +164,11 @@ public sealed class OrganizationAdminSmokeTests : E2ePageTestBase
                 .ToBeVisibleAsync(new() { Timeout = 30_000 });
             await Expect(Page.GetByText("Another change was saved first. Reload the latest profile and try again."))
                 .ToBeVisibleAsync();
+            // Template always includes #blazor-error-ui text; assert it is not shown.
+            await Expect(Page.Locator("#blazor-error-ui.show")).ToHaveCountAsync(0);
             var body = await Page.ContentAsync();
             body.Should().NotContain("StackTrace");
             body.Should().NotContain("at HealthCare.");
-            body.Should().NotContain("An unhandled error has occurred.");
             body.Should().Contain("Reload");
         }
         catch

@@ -52,17 +52,21 @@ public abstract class E2ePageTestBase : PageTest
     /// </summary>
     protected async Task AssertOrganizationAdminNavigationAsync()
     {
-        await Expect(Page.GetByRole(AriaRole.Menuitem, new() { Name = "Governance" })).ToBeVisibleAsync();
-        await Expect(Page.GetByRole(AriaRole.Menuitem, new() { Name = "Organization" })).ToBeVisibleAsync();
+        var menu = Page.GetByRole(AriaRole.Complementary).GetByRole(AriaRole.Menu);
+        await Expect(menu.GetByRole(AriaRole.Menuitem, new() { Name = "Governance", Exact = true }))
+            .ToBeVisibleAsync();
+        await Expect(menu.GetByRole(AriaRole.Menuitem, new() { Name = "Organization", Exact = true }))
+            .ToBeVisibleAsync();
 
-        await Page.GetByRole(AriaRole.Button, new() { Name = "Organization" }).ClickAsync();
-        await Expect(Page.GetByRole(AriaRole.Link, new() { Name = "Organization Profile" }))
+        // Exact name avoids matching dashboard quick-action "Organization Profile".
+        await menu.GetByRole(AriaRole.Button, new() { Name = "Organization", Exact = true }).ClickAsync();
+        await Expect(menu.GetByRole(AriaRole.Link, new() { Name = "Organization Profile" }))
             .ToBeVisibleAsync(new() { Timeout = 15_000 });
 
-        await Page.GetByRole(AriaRole.Button, new() { Name = "Governance" }).ClickAsync();
-        await Expect(Page.GetByRole(AriaRole.Link, new() { Name = "Audit Logs" }))
+        await menu.GetByRole(AriaRole.Button, new() { Name = "Governance", Exact = true }).ClickAsync();
+        await Expect(menu.GetByRole(AriaRole.Link, new() { Name = "Audit Logs" }))
             .ToBeVisibleAsync(new() { Timeout = 15_000 });
-        await Expect(Page.GetByRole(AriaRole.Link, new() { Name = "Usage & Limits" }))
+        await Expect(menu.GetByRole(AriaRole.Link, new() { Name = "Usage & Limits" }))
             .ToBeVisibleAsync(new() { Timeout = 15_000 });
     }
 
