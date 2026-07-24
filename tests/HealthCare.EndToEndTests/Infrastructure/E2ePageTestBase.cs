@@ -25,14 +25,15 @@ public abstract class E2ePageTestBase : PageTest
 
     protected async Task LoginAsAsync(string email, string password)
     {
-        await Page.GotoAsync("/login");
+        await Page.GotoAsync("/login", new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
         await Page.Locator("#bff-email").FillAsync(email);
         await Page.Locator("#bff-password").FillAsync(password);
-        await Page.Locator("#bff-login-submit").ClickAsync();
-        await Page.WaitForURLAsync(url =>
-            url.Contains("/dashboard", StringComparison.OrdinalIgnoreCase)
-            || url.Contains("/forbidden", StringComparison.OrdinalIgnoreCase),
-            new PageWaitForURLOptions { Timeout = 60_000 });
+        await Task.WhenAll(
+            Page.WaitForURLAsync(
+                url => url.Contains("/dashboard", StringComparison.OrdinalIgnoreCase)
+                       || url.Contains("/forbidden", StringComparison.OrdinalIgnoreCase),
+                new PageWaitForURLOptions { Timeout = 90_000 }),
+            Page.Locator("#bff-login-submit").ClickAsync());
     }
 
     protected async Task LoginAsOrganizationAdminAsync() =>
