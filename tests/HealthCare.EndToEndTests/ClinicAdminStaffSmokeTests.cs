@@ -30,14 +30,19 @@ public sealed class ClinicAdminStaffSmokeTests : E2ePageTestBase
             await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Change clinic" })).ToHaveCountAsync(0);
             await Expect(Page.GetByText("Leave empty for all clinics", new() { Exact = false })).ToHaveCountAsync(0);
 
-            // Role filter must not offer Org/Platform admin assignment options.
+            // Role filter must not offer Org/Platform admin options.
             await Page.Locator("#staff-role").ClickAsync();
             await Expect(Page.Locator(".ant-select-dropdown:visible").GetByText("ORGANIZATION_ADMIN")).ToHaveCountAsync(0);
             await Expect(Page.Locator(".ant-select-dropdown:visible").GetByText("PLATFORM_ADMIN")).ToHaveCountAsync(0);
             await Page.Keyboard.PressAsync("Escape");
 
-            await Page.GetByRole(AriaRole.Button, new() { Name = "Create Staff" }).ClickAsync();
-            var modal = Page.Locator(".ant-modal").Last;
+            // Receptionists tab presets PreferredRole = RECEPTIONIST (avoids modal/page select clash).
+            await Page.GotoAsync("/staff/receptionists");
+            await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Staff Management" }))
+                .ToBeVisibleAsync(new() { Timeout = 60_000 });
+
+            await Page.GetByRole(AriaRole.Button, new() { Name = "Create staff" }).ClickAsync();
+            var modal = Page.Locator(".ant-modal").Filter(new() { HasText = "Temporary password" });
             await Expect(modal.GetByText("New staff will be created in your membership clinic."))
                 .ToBeVisibleAsync(new() { Timeout = 15_000 });
 
@@ -45,10 +50,6 @@ public sealed class ClinicAdminStaffSmokeTests : E2ePageTestBase
             await modal.Locator("input").Nth(0).FillAsync(email);
             await modal.Locator("input").Nth(1).FillAsync("CA3");
             await modal.Locator("input").Nth(2).FillAsync("Recv");
-
-            await modal.Locator(".ant-select").ClickAsync();
-            await Page.Locator(".ant-select-dropdown:visible").GetByText("RECEPTIONIST").ClickAsync();
-
             await modal.Locator("input[type='password']").Nth(0).FillAsync("TempPass_Staff_99!");
             await modal.Locator("input[type='password']").Nth(1).FillAsync("TempPass_Staff_99!");
             await modal.GetByRole(AriaRole.Button, new() { Name = "Create" }).ClickAsync();
@@ -56,8 +57,8 @@ public sealed class ClinicAdminStaffSmokeTests : E2ePageTestBase
             await Expect(Page.GetByText(email)).ToBeVisibleAsync(new() { Timeout = 30_000 });
 
             var row = Page.Locator("tr", new() { HasText = email });
-            await row.GetByRole(AriaRole.Button, new() { Name = $"Password reset for CA3 Recv" }).ClickAsync();
-            var resetModal = Page.Locator(".ant-modal").Last;
+            await row.GetByRole(AriaRole.Button, new() { Name = "Password reset for CA3 Recv" }).ClickAsync();
+            var resetModal = Page.Locator(".ant-modal").Filter(new() { HasText = "Send reset" });
             await resetModal.GetByRole(AriaRole.Button, new() { Name = "Send reset" }).ClickAsync();
             await Expect(Page.GetByText("Password reset initiated.")).ToBeVisibleAsync(new() { Timeout = 30_000 });
 
