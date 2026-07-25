@@ -1,5 +1,6 @@
 @using HealthCare.Contracts.Clinics
 @using HealthCare.Web.Availability
+@using HealthCare.Web.ClinicDashboard
 @using HealthCare.Web.Doctors
 @using HealthCare.Web.Operations
 @inject IClinicDashboardApiClient ClinicDashboardApi
@@ -286,7 +287,7 @@ else
         catch (ApiProblemException ex)
         {
             _dashboard = null;
-            _error = ex.Title ?? "Unable to load clinic dashboard.";
+            _error = ClinicDashboardProblemMessages.ToUserMessage(ex);
             Notify.Error(_error);
         }
         catch (Exception)

@@ -9,7 +9,7 @@ Authoritative design documents:
 - [Security](Docs/security.md)
 - [Phase progress](Docs/phase-progress.md)
 - [Organization Admin MVP scope](Docs/mvp-organization-admin-scope.md)
-- [Clinic Admin MVP scope](Docs/mvp-clinic-admin-scope.md) *(approved — implementation phased)*
+- [Clinic Admin MVP scope](Docs/mvp-clinic-admin-scope.md) *(approved — **CA-1–CA-10 complete**)*
 
 ## Prerequisites
 

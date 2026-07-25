@@ -52,30 +52,26 @@ public sealed class ClinicReportsService : IClinicReportsService
         CancellationToken cancellationToken = default)
     {
         var resolved = await ResolveAsync(query, bypass, cancellationToken);
-        var appointments = await LoadAppointmentsAsync(resolved, cancellationToken);
-
-        var total = appointments.Count;
-        var byStatus = Enum.GetValues<AppointmentStatus>()
-            .Select(status =>
+        var statusCounts = await LoadStatusCountsAsync(resolved, cancellationToken);
+        var total = statusCounts.Sum(x => x.Count);
+        var byStatus = statusCounts
+            .Select(x => new ClinicAppointmentStatusCount
             {
-                var count = appointments.Count(a => a.Status == status);
-                return new ClinicAppointmentStatusCount
-                {
-                    Status = status.ToString(),
-                    Count = count,
-                    PercentageOfTotal = SafePercent(count, total),
-                };
+                Status = x.Status.ToString(),
+                Count = x.Count,
+                PercentageOfTotal = SafePercent(x.Count, total),
             })
-            .Where(x => x.Count > 0)
             .OrderByDescending(x => x.Count)
             .ThenBy(x => x.Status, StringComparer.Ordinal)
             .ToList();
 
+        // Volume series needs clinic-local day boundaries; projection stays bounded by the 93-day report window.
+        var appointments = await LoadAppointmentsAsync(resolved, cancellationToken);
         var volumeByDate = BuildVolumeSeries(resolved, appointments);
 
-        var cancelledByClinic = appointments.Count(a => a.Status == AppointmentStatus.CancelledByClinic);
-        var cancelledByPatient = appointments.Count(a => a.Status == AppointmentStatus.CancelledByPatient);
-        var noShow = appointments.Count(a => a.Status == AppointmentStatus.NoShow);
+        var cancelledByClinic = CountStatus(statusCounts, AppointmentStatus.CancelledByClinic);
+        var cancelledByPatient = CountStatus(statusCounts, AppointmentStatus.CancelledByPatient);
+        var noShow = CountStatus(statusCounts, AppointmentStatus.NoShow);
         var cancelledTotal = cancelledByClinic + cancelledByPatient;
 
         var response = new ClinicAppointmentReportResponse
@@ -105,9 +101,25 @@ public sealed class ClinicReportsService : IClinicReportsService
         CancellationToken cancellationToken = default)
     {
         var resolved = await ResolveAsync(query, bypass, cancellationToken);
-        var appointments = await LoadAppointmentsAsync(resolved, cancellationToken);
+        var doctorAggregates = await (
+            from appointment in _dbContext.Appointments.AsNoTracking()
+            where appointment.ClinicId == resolved.ClinicId
+                && appointment.AppointmentDateUtc >= resolved.RangeStartUtc
+                && appointment.AppointmentDateUtc < resolved.RangeEndUtcExclusive
+            group appointment by appointment.DoctorStaffMemberId
+            into g
+            select new
+            {
+                DoctorStaffMemberId = g.Key,
+                TotalAppointments = g.Count(),
+                CompletedCount = g.Count(a => a.Status == AppointmentStatus.Completed),
+                CancelledCount = g.Count(a =>
+                    a.Status == AppointmentStatus.CancelledByClinic
+                    || a.Status == AppointmentStatus.CancelledByPatient),
+                NoShowCount = g.Count(a => a.Status == AppointmentStatus.NoShow),
+            }).ToListAsync(cancellationToken);
 
-        var doctorIds = appointments.Select(a => a.DoctorStaffMemberId).Distinct().ToList();
+        var doctorIds = doctorAggregates.Select(x => x.DoctorStaffMemberId).ToList();
         var doctorNames = await _dbContext.StaffMembers.AsNoTracking()
             .Where(s => doctorIds.Contains(s.Id))
             .Select(s => new { s.Id, s.DisplayName, s.FirstName, s.LastName })
@@ -126,17 +138,17 @@ public sealed class ClinicReportsService : IClinicReportsService
                 return string.IsNullOrWhiteSpace(combined) ? "Unknown doctor" : combined;
             });
 
-        var doctors = appointments
-            .GroupBy(a => a.DoctorStaffMemberId)
+        var doctors = doctorAggregates
             .Select(g => new ClinicDoctorAppointmentRow
             {
-                DoctorStaffMemberId = g.Key,
-                DoctorDisplayName = nameMap.TryGetValue(g.Key, out var name) ? name : "Unknown doctor",
-                TotalAppointments = g.Count(),
-                CompletedCount = g.Count(a => a.Status == AppointmentStatus.Completed),
-                CancelledCount = g.Count(a =>
-                    a.Status is AppointmentStatus.CancelledByClinic or AppointmentStatus.CancelledByPatient),
-                NoShowCount = g.Count(a => a.Status == AppointmentStatus.NoShow),
+                DoctorStaffMemberId = g.DoctorStaffMemberId,
+                DoctorDisplayName = nameMap.TryGetValue(g.DoctorStaffMemberId, out var name)
+                    ? name
+                    : "Unknown doctor",
+                TotalAppointments = g.TotalAppointments,
+                CompletedCount = g.CompletedCount,
+                CancelledCount = g.CancelledCount,
+                NoShowCount = g.NoShowCount,
             })
             .OrderByDescending(x => x.TotalAppointments)
             .ThenBy(x => x.DoctorDisplayName, StringComparer.OrdinalIgnoreCase)
@@ -157,17 +169,20 @@ public sealed class ClinicReportsService : IClinicReportsService
     {
         var resolved = await ResolveAsync(query, bypass, cancellationToken);
 
-        var enrollments = await _dbContext.ClinicPatients.AsNoTracking()
-            .Where(cp => cp.ClinicId == resolved.ClinicId)
-            .Select(cp => new { cp.Status, cp.RegisteredAtUtc })
-            .ToListAsync(cancellationToken);
+        var clinicPatients = _dbContext.ClinicPatients.AsNoTracking()
+            .Where(cp => cp.ClinicId == resolved.ClinicId);
 
-        var active = enrollments.Count(e => e.Status == ClinicPatientStatus.Active);
-        var inactive = enrollments.Count(e => e.Status == ClinicPatientStatus.Inactive);
-        var rangeStart = resolved.RangeStartUtc;
-        var rangeEnd = resolved.RangeEndUtcExclusive;
-        var newInRange = enrollments.Count(e =>
-            e.RegisteredAtUtc >= rangeStart && e.RegisteredAtUtc < rangeEnd);
+        var active = await clinicPatients.CountAsync(
+            e => e.Status == ClinicPatientStatus.Active,
+            cancellationToken);
+        var inactive = await clinicPatients.CountAsync(
+            e => e.Status == ClinicPatientStatus.Inactive,
+            cancellationToken);
+        var total = await clinicPatients.CountAsync(cancellationToken);
+        var newInRange = await clinicPatients.CountAsync(
+            e => e.RegisteredAtUtc >= resolved.RangeStartUtc
+                && e.RegisteredAtUtc < resolved.RangeEndUtcExclusive,
+            cancellationToken);
 
         AuditSucceeded("report_patients", resolved, "patients");
         return new ClinicPatientEnrollmentReportResponse
@@ -175,7 +190,7 @@ public sealed class ClinicReportsService : IClinicReportsService
             Context = resolved.Context,
             ActiveEnrollmentCount = active,
             InactiveEnrollmentCount = inactive,
-            TotalClinicPatients = enrollments.Count,
+            TotalClinicPatients = total,
             NewEnrollmentsInRange = newInRange,
         };
     }
@@ -377,6 +392,26 @@ public sealed class ClinicReportsService : IClinicReportsService
 
         return (from, to);
     }
+
+    private async Task<List<(AppointmentStatus Status, int Count)>> LoadStatusCountsAsync(
+        ResolvedClinicReport resolved,
+        CancellationToken cancellationToken)
+    {
+        var rows = await _dbContext.Appointments.AsNoTracking()
+            .Where(a => a.ClinicId == resolved.ClinicId
+                && a.AppointmentDateUtc >= resolved.RangeStartUtc
+                && a.AppointmentDateUtc < resolved.RangeEndUtcExclusive)
+            .GroupBy(a => a.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        return rows.Select(x => (x.Status, x.Count)).ToList();
+    }
+
+    private static int CountStatus(
+        IReadOnlyList<(AppointmentStatus Status, int Count)> statusCounts,
+        AppointmentStatus status) =>
+        statusCounts.FirstOrDefault(x => x.Status == status).Count;
 
     private async Task<List<AppointmentRow>> LoadAppointmentsAsync(
         ResolvedClinicReport resolved,

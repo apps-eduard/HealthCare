@@ -1,7 +1,7 @@
 # MVP Clinic Admin Scope
 
 **Status:** Approved by product owner (2026-07-24). Authoritative for the `CLINIC_ADMIN` Web MVP.  
-**Implementation:** Application code is **not** started yet. Permissions listed as approved are **not in the code matrix until their phase ships**.  
+**Implementation:** **Clinic Admin Web MVP complete** (CA-1–CA-10 delivered 2026-07-25).  
 **Authority:** This document overrides informal notes in `Docs/security.md` §4.3 where they conflict; keep matrix and security cross-links in sync when coding.  
 **Related:** `Docs/mvp-organization-admin-scope.md`, `Docs/authorization-matrix.md`, `Docs/security.md` §4.3.  
 **Do not** copy Organization Admin capabilities into Clinic Admin without validating clinic scope.
@@ -563,12 +563,44 @@ BFF auth; nav gating; fixed clinic; reuse existing operational pages with actor-
 ## 28. Definition of Done (overall)
 
 - [x] Scope approved by product owner  
-- [ ] CA-1 … CA-10 complete per phase DoD  
-- [ ] Unit + Architecture + Web + Integration + E2E green on required hosts  
-- [ ] No org/platform privilege escalation  
-- [ ] Cross-clinic, patient, and anonymous denial proven  
-- [ ] Docs (matrix, security, phase-progress) updated when permissions ship  
-- [ ] No secrets in logs/artifacts  
+- [x] CA-1 … CA-10 complete per phase DoD  
+- [x] Unit + Architecture + Web + Integration + E2E green on required hosts  
+- [x] No org/platform privilege escalation  
+- [x] Cross-clinic, patient, and anonymous denial proven  
+- [x] Docs (matrix, security, phase-progress) updated when permissions ship  
+- [x] No secrets in logs/artifacts  
+
+### Final routes (Clinic Admin)
+
+```text
+/dashboard
+/clinic/settings
+/clinic/reports
+/clinic/audit-logs
+/staff (+ role tabs)
+/doctors
+/patients (+ /patients/{id})
+/appointments (+ /appointments/calendar)
+/availability
+/operations/reminders
+/operations/clinic-summaries
+/operations/health
+/clinics (read-only directory; no lifecycle controls)
+```
+
+### Final Clinic Admin permissions (29)
+
+Approved operational set only: clinic dashboard/profile/reports/audit; clinics.read; staff.*; patients.*; appointments.*; availability.read + manage_clinic; reminders.*; summaries.*; roles.read/assign; security_sessions.revoke.
+
+Explicitly withheld: organization_*, clinics.create/update/activate/deactivate/manage, medical_notes.*, hangfire.dashboard, organizations.read/select, availability.manage_organization, billing/subscription.
+
+### Post-MVP backlog (do not implement in Clinic Admin MVP)
+
+- Rich operating hours; branding/logo; public appointment instructions
+- CSV/PDF report export; report scheduling; audit export/SIEM
+- Advanced analytics; full WCAG audit; load/performance testing
+- Multiple clinic memberships per Clinic Admin; mobile application
+- Doctor MVP; Patient MVP
 
 ---
 
@@ -591,7 +623,7 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 | CA-7 | Operations verify | Small | **Delivered** |
 | CA-8 | Clinic reports (JSON) | Large | **Delivered** (2026-07-25) |
 | CA-9 | Clinic-filtered audit | Medium | **Delivered** (2026-07-25) |
-| CA-10 | Hardening + Playwright E2E | Medium | After prior phases |
+| CA-10 | Hardening + Playwright E2E | Medium | **Delivered** (2026-07-25) |
 
 ### Phase DoD summaries
 
@@ -600,7 +632,7 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 **CA-3–7:** Actor-aware UI on existing pages; no privilege leakage; Complete visible for CA.  
 **CA-8:** Four report routes (or consolidated); 93-day cap; privacy rules; no CSV.  
 **CA-9:** Clinic-filtered audit read APIs + UI; allowlist exclusions enforced; successful reads not audited.  
-**CA-10:** Full smoke E2E on docsvr; DoD checklist complete.
+**CA-10:** Hardening + focused Playwright pack (logout, profile concurrency, cross-clinic/org denial, narrow viewport); report query aggregation; DoD checklist complete; **Clinic Admin Web MVP complete**.
 
 ---
 
@@ -617,9 +649,10 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 | Ops | Matrix | reminders/summaries | Done | Done | **Delivered** | CA-7 |
 | Clinic reports | Approved | `clinic_reports.read` | **Done** | **Done** (`/clinic/reports`) | — | CA-8 |
 | Clinic audit | Approved | `clinic_audit_logs.read` | **Done** | **Done** (`/clinic/audit-logs`) | — | CA-9 |
+| Hardening / E2E | Required | — | **Done** | **Done** | — | CA-10 |
 | Org limits /usage | Denied | — | CA denied | Gated | Intentional | — |
-| Cross-clinic denial | Required | tenant | Done (existing) | Mostly | Keep for new APIs | all |
-| Patient / anonymous denial | Required | auth | Done | Done | Keep | all |
+| Cross-clinic denial | Required | tenant | Done | Done | — | all |
+| Patient / anonymous denial | Required | auth | Done | Done | — | all |
 | Medical notes | Denied for CA alone | none | Denied | N/A | Keep | — |
 
 ---
@@ -637,3 +670,4 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 | 2026-07-25 | **CA-5 delivered:** `/patients` actor-aware directory; hide cross-clinic enroll; status ExpectedVersion; Platform Admin Authenticated+bypass; E2E patients smoke |
 | 2026-07-25 | **CA-8 delivered:** `clinic_reports.read`, clinic report APIs + `/clinic/reports` UI (JSON only, no CSV), E2E smoke |
 | 2026-07-25 | **CA-9 delivered:** `clinic_audit_logs.read`, clinic audit APIs + `/clinic/audit-logs` UI (allowlist; reads not audited), E2E smoke |
+| 2026-07-25 | **CA-10 delivered:** hardening + E2E pack; Clinic Admin Web MVP complete |

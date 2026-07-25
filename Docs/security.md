@@ -121,9 +121,9 @@ Not automatically allowed:
 - Read medical notes unless granted a clinical permission.
 
 Authoritative Clinic Admin Web MVP scope:  
-`Docs/mvp-clinic-admin-scope.md` (**approved** 2026-07-24).
+`Docs/mvp-clinic-admin-scope.md` (**approved** 2026-07-24; **Clinic Admin Web MVP complete** — CA-1–CA-10).
 
-**Implementation note (2026-07-24):** staff, patients, appointments, availability, and operations for the membership clinic are implemented under existing permissions. **CA-1 delivered:** `clinic_dashboard.read` + `GET /api/v1/clinic/dashboard` + Clinic Dashboard UI. **CA-2 delivered:** `clinic_profile.read` / `clinic_profile.update` + `GET`/`PATCH /api/v1/clinic/settings` + Clinic Profile UI (`/clinic/settings`). **CA-8 delivered:** `clinic_reports.read` + `GET /api/v1/clinic/reports/{appointments|doctors|patients|reminders}` + Clinic Reports UI (`/clinic/reports`, JSON only, no CSV). **CA-9 delivered:** `clinic_audit_logs.read` + `GET /api/v1/clinic/audit-logs` (+ `{eventId}`, `by-correlation`) + Clinic Audit UI (`/clinic/audit-logs`); allowlisted operational actions only; successful audit reads are not themselves audited (same policy as organization audit). Clinic Admin must not receive organization-wide dashboard, reports, unfiltered audit, usage/limits, security-console, or medical-note permissions by admin role alone.
+**Implementation note (2026-07-25):** staff, patients, appointments, availability, and operations for the membership clinic are implemented under existing permissions. **CA-1–CA-9 delivered** (dashboard, profile, staff/doctors/patients/appointments/ops actor-aware UI, clinic reports JSON, clinic-filtered audit allowlist). **CA-10 delivered:** hardening (report SQL aggregates, dashboard Problem Details mapping, permission-boundary regression) + Playwright pack (logout, profile concurrency, cross-clinic/org denial, narrow viewport). Clinic Admin must not receive organization-wide dashboard, reports, unfiltered audit, usage/limits, security-console, or medical-note permissions by admin role alone.
 
 ### 4.4 DOCTOR
 

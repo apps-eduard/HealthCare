@@ -89,3 +89,8 @@ E2E tests share one host fixture and use an xUnit collection with `DisableParall
 - Clinic Admin CA-7: login → Operations Health/Reminders → clinic-scoped data → retry failed reminder → Pending after reload; no clinic picker / Hangfire / org settings (`ClinicAdminOperationsSmokeTests`)
 - Clinic Admin CA-8: login → Clinic Reports → appointment/doctor/operations aggregates; no clinic picker / export / org settings (`ClinicAdminReportsSmokeTests`)
 - Clinic Admin CA-9: login → update clinic profile → Clinic Audit Logs → `clinic_profile_update` / safe summary Details; no picker / export / metadata / org settings (`ClinicAdminAuditSmokeTests`)
+- Clinic Admin CA-10 hardening (`ClinicAdminHardeningSmokeTests`):
+  - login → logout → protected `/clinic/settings` redirects to login
+  - clinic profile two-context concurrency → Reload guidance (no raw exception UI)
+  - org routes (`/organization/settings`, `/reports`, `/audit-logs`, `/usage`, `/security`) denied; foreign `clinicId` API queries denied; no Platform/medical-note controls
+  - narrow viewport (390×844) → toggle nav + Clinic Profile form usable
