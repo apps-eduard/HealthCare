@@ -39,8 +39,9 @@ public sealed class DoctorAvailabilityController : ControllerBase
 
     /// <summary>
     /// Staff-scoped doctors for a validated clinic id (Org Admin: any clinic in trusted org).
+    /// Authenticated (not StaffUser): PLATFORM_ADMIN may lack membership and uses explicit bypass in the service.
     /// </summary>
-    [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    [Authorize(Policy = AuthorizationPolicies.Authenticated)]
     [AuthorizeAnyPermission(
         Permissions.Availability.Read,
         Permissions.Availability.ManageClinic,
