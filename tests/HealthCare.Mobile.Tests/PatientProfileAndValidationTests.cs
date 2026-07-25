@@ -1,4 +1,6 @@
 using FluentAssertions;
+using HealthCare.Contracts.Appointments;
+using HealthCare.Contracts.Common;
 using HealthCare.Contracts.Identity;
 using HealthCare.Contracts.Patients;
 using HealthCare.Mobile.Core.Api;
@@ -230,5 +232,33 @@ public sealed class PatientProfileAndValidationTests
             UpdatePatientProfileRequest request,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(UpdateResult);
+
+        public Task<ApiResult<PagedResponse<PatientClinicListItemResponse>>> SearchClinicsAsync(
+            PatientClinicSearchRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
+
+        public Task<ApiResult<PatientClinicDetailResponse>> GetClinicAsync(
+            string clinicCode,
+            CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
+
+        public Task<ApiResult<ClinicPatientEnrollmentResponse>> RegisterWithClinicAsync(
+            RegisterPatientWithClinicRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
+
+        public Task<ApiResult<IReadOnlyList<ClinicDoctorResponse>>> ListDoctorsAsync(
+            string clinicCode,
+            CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
+
+        public Task<ApiResult<IReadOnlyList<AvailableSlotResponse>>> GetAvailableSlotsAsync(
+            string clinicCode,
+            Guid staffMemberId,
+            DateOnly date,
+            int? durationMinutes = null,
+            CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
     }
 }

@@ -1,8 +1,11 @@
 using FluentAssertions;
+using HealthCare.Contracts.Appointments;
+using HealthCare.Contracts.Common;
 using HealthCare.Contracts.Identity;
 using HealthCare.Contracts.Patients;
 using HealthCare.Mobile.Core.Api;
 using HealthCare.Mobile.Core.Authentication;
+using HealthCare.Mobile.Core.Discovery;
 using HealthCare.Mobile.Tests.Fakes;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -226,8 +229,32 @@ public sealed class PatientAuthenticationServiceTests
         result.Value!.RequiresEmailConfirmation.Should().BeTrue();
     }
 
+    [Fact]
+    public async Task SignOutAsync_Clears_Discovery_Selection()
+    {
+        var session = CreateSession();
+        var discovery = new DiscoveryStateService();
+        discovery.SelectClinic("clinic-a", "Clinic A");
+        var api = new FakeApiClient(session) { LogoutShouldClear = true };
+        var sut = new PatientAuthenticationService(
+            api,
+            session,
+            new FakeRefresher(_ => Task.FromResult(true)),
+            discovery,
+            NullLogger<PatientAuthenticationService>.Instance);
+
+        await sut.SignOutAsync();
+
+        discovery.Current.ClinicCode.Should().BeNull();
+    }
+
     private static PatientAuthenticationService CreateSut(FakeApiClient api, IAuthSessionService session) =>
-        new(api, session, new FakeRefresher(_ => Task.FromResult(true)), NullLogger<PatientAuthenticationService>.Instance);
+        new(
+            api,
+            session,
+            new FakeRefresher(_ => Task.FromResult(true)),
+            new DiscoveryStateService(),
+            NullLogger<PatientAuthenticationService>.Instance);
 
     private static AuthSessionService CreateSession() =>
         new(new InMemorySecureTokenStore(), NullLogger<AuthSessionService>.Instance);
@@ -328,6 +355,34 @@ public sealed class PatientAuthenticationServiceTests
 
         public Task<ApiResult<PatientProfileResponse>> UpdatePatientProfileAsync(
             UpdatePatientProfileRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
+
+        public Task<ApiResult<PagedResponse<PatientClinicListItemResponse>>> SearchClinicsAsync(
+            PatientClinicSearchRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
+
+        public Task<ApiResult<PatientClinicDetailResponse>> GetClinicAsync(
+            string clinicCode,
+            CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
+
+        public Task<ApiResult<ClinicPatientEnrollmentResponse>> RegisterWithClinicAsync(
+            RegisterPatientWithClinicRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
+
+        public Task<ApiResult<IReadOnlyList<ClinicDoctorResponse>>> ListDoctorsAsync(
+            string clinicCode,
+            CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
+
+        public Task<ApiResult<IReadOnlyList<AvailableSlotResponse>>> GetAvailableSlotsAsync(
+            string clinicCode,
+            Guid staffMemberId,
+            DateOnly date,
+            int? durationMinutes = null,
             CancellationToken cancellationToken = default) =>
             throw new NotImplementedException();
     }

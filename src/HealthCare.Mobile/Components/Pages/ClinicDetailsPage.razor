@@ -1,0 +1,124 @@
+@page "/clinics/{ClinicCode}"
+@inject IPatientDiscoveryService Discovery
+@inject IDiscoveryStateService Selection
+@inject NavigationManager Nav
+@inject ILogger<ClinicDetailsPage> Logger
+
+@if (_loading)
+{
+    <LoadingState Message="Loading clinic…" />
+}
+else if (_problem is not null)
+{
+    @if (_problem.Kind is ApiErrorKind.Network or ApiErrorKind.Timeout)
+    {
+        <OfflineState Message="@_problem.UserMessage" OnRetry="LoadAsync" />
+    }
+    else if (_problem.Kind == ApiErrorKind.Unauthorized)
+    {
+        <SessionExpiredState SignInHref="@PatientRoutes.SignIn" />
+    }
+    else
+    {
+        <ErrorState Title="Clinic unavailable" Message="@_problem.UserMessage" OnRetry="LoadAsync" />
+    }
+}
+else if (_clinic is not null)
+{
+    <h1>@_clinic.Name</h1>
+    <dl class="meta">
+        <dt>Clinic code</dt>
+        <dd>@_clinic.ClinicCode</dd>
+        <dt>City</dt>
+        <dd>@(string.IsNullOrWhiteSpace(_clinic.City) ? "—" : _clinic.City)</dd>
+        <dt>Specialty</dt>
+        <dd>@(string.IsNullOrWhiteSpace(_clinic.Specialty) ? "—" : _clinic.Specialty)</dd>
+        <dt>Address</dt>
+        <dd>@(string.IsNullOrWhiteSpace(_clinic.Address) ? "—" : _clinic.Address)</dd>
+        <dt>Phone</dt>
+        <dd>@(string.IsNullOrWhiteSpace(_clinic.PhoneNumber) ? "—" : _clinic.PhoneNumber)</dd>
+        <dt>Email</dt>
+        <dd>@(string.IsNullOrWhiteSpace(_clinic.Email) ? "—" : _clinic.Email)</dd>
+        <dt>Timezone</dt>
+        <dd>@(string.IsNullOrWhiteSpace(_clinic.TimeZoneId) ? "—" : _clinic.TimeZoneId)</dd>
+        <dt>Enrollment</dt>
+        <dd>@(_clinic.IsEnrolled ? (_clinic.EnrollmentStatus ?? "Enrolled") : "Not enrolled")</dd>
+    </dl>
+
+    @if (!string.IsNullOrWhiteSpace(_clinic.Description))
+    {
+        <p class="lede">@_clinic.Description</p>
+    }
+
+    <div class="actions">
+        <a class="btn" href="@PatientRoutes.ClinicDoctors(_clinic.ClinicCode)">View Doctors</a>
+        @if (!_clinic.IsEnrolled)
+        {
+            <button type="button" class="btn btn-secondary" disabled="@_enrolling" @onclick="EnrollAsync">
+                @(_enrolling ? "Enrolling…" : "Enroll with this clinic")
+            </button>
+        }
+        <a class="btn btn-secondary" href="@PatientRoutes.Clinics">Back</a>
+    </div>
+
+    @if (_enrollProblem is not null)
+    {
+        <ErrorState Problem="@_enrollProblem" />
+    }
+}
+
+@code {
+    [Parameter]
+    public string ClinicCode { get; set; } = string.Empty;
+
+    private PatientClinicDetailResponse? _clinic;
+    private ApiProblem? _problem;
+    private ApiProblem? _enrollProblem;
+    private bool _loading = true;
+    private bool _enrolling;
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _problem = null;
+        _enrollProblem = null;
+        StateHasChanged();
+
+        var result = await Discovery.GetClinicAsync(ClinicCode);
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _problem = result.Error;
+            _clinic = null;
+            _loading = false;
+            return;
+        }
+
+        _clinic = result.Value;
+        Selection.SelectClinic(_clinic.ClinicCode, _clinic.Name);
+        _loading = false;
+        Logger.LogInformation("Clinic details loaded.");
+    }
+
+    private async Task EnrollAsync()
+    {
+        if (_enrolling || _clinic is null)
+        {
+            return;
+        }
+
+        _enrolling = true;
+        _enrollProblem = null;
+        var result = await Discovery.EnrollAsync(_clinic.ClinicCode);
+        if (!result.IsSuccess)
+        {
+            _enrollProblem = result.Error;
+            _enrolling = false;
+            return;
+        }
+
+        await LoadAsync();
+        _enrolling = false;
+    }
+}

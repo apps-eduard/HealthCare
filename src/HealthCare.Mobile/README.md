@@ -2,7 +2,7 @@
 
 Android-first **.NET MAUI Blazor Hybrid** app for the Patient Mobile MVP.
 
-**Status:** **PM-2 + PM-3 delivered.** PM-4 (clinic/Doctor discovery) through PM-8 are **not** started.
+**Status:** **PM-2 + PM-3 + PM-4 delivered.** PM-5 (booking) through PM-8 are **not** started.
 
 Authoritative product scope: [`Docs/mvp-patient-scope.md`](../../Docs/mvp-patient-scope.md).
 
@@ -68,13 +68,48 @@ Shared contracts only: `HealthCare.Contracts`. The mobile app does **not** refer
 
 ### Home
 
-- Minimal Patient home with display name, profile prompt, and **coming soon** placeholders for Clinics / My Appointments (PM-4+)
+- Minimal Patient home with display name, profile prompt, Clinics entry, and **coming soon** for My Appointments (PM-6)
 
 ### Navigation guards
 
-- Authenticated: `/home`, `/profile`, `/profile/edit`, placeholder clinics/appointments
+- Authenticated: `/home`, `/profile`, `/profile/edit`, `/clinics` (+ details/doctors/availability/enroll), `/discovery/booking-next`, placeholder appointments
 - Guest-only: sign-in, register, registration-complete, confirm-email (redirect to home when Patient-ready)
 - `/connectivity` remains a diagnostic page
+
+## PM-4 clinic and Doctor discovery
+
+### Backend
+
+| Route | Purpose |
+|-------|---------|
+| `GET /api/v1/patients/me/clinics` | Authenticated Patient directory (`search`, `specialty`, `page`, `pageSize`; max page size 50) |
+| `GET /api/v1/patients/me/clinics/{clinicCode}` | Patient-safe clinic details |
+| `POST /api/v1/patients/me/clinics/register` | Clinic-code enrollment (alternate path) |
+| `GET /api/v1/clinics/{clinicCode}/doctors` | Doctors for active clinic (existing) |
+| `GET /api/v1/clinics/{clinicCode}/doctors/{staffMemberId}/available-slots` | Available slots (existing) |
+
+Staff directory `GET /api/v1/staff-management/clinics` remains inaccessible to Patients.
+
+Search: trimmed, case-insensitive contains on name/city/address text; optional specialty contains on `Clinic.Specialty` string; active org + active clinic only; order by name then Id.
+
+### Mobile screens
+
+| Route | Screen |
+|-------|--------|
+| `/clinics` | Directory with search, specialty filter, paging, enrollment indicator |
+| `/clinics/enroll` | Clinic-code enrollment |
+| `/clinics/{code}` | Clinic details + enroll action |
+| `/clinics/{code}/doctors` | Doctor list |
+| `/clinics/{code}/doctors/{id}/availability` | Date + slots; select slot (not reserved) |
+| `/discovery/booking-next` | PM-5 placeholder — no booking API call |
+
+### Timezone
+
+Prefer API clinic-local slot strings + `TimeZoneId`. Fallback: device-local conversion of UTC labeled “(device local)”.
+
+### Discovery state
+
+`IDiscoveryStateService` holds selected clinic/Doctor/date/slot in memory. Cleared when clinic/Doctor changes and on logout. Not a reservation.
 
 ## Configuration
 
@@ -115,5 +150,8 @@ Start the API, then deploy/run on an emulator or device. Seeded Patient accounts
 
 - Deep-link App Links for confirmation emails are not registered (manual token / browser confirm + return to app)
 - Emulator runtime smoke may be unavailable in CI; Android **build** is required
-- Clinics, booking, appointments, Google/OTP, notifications: PM-4…PM-8
-- No Blazor bUnit package in-repo; PM-3 UI logic is covered via Core services + form validators
+- Booking, My Appointments, Google/OTP, notifications: PM-5…PM-8
+- No specialty catalog (clinic specialty string only); no maps/ratings/public photo subsystem
+- `ClinicDoctorResponse` still includes `StaffMemberId` / `ClinicId` for API navigation; IDs are not shown in UI
+- No Blazor bUnit package in-repo; discovery UI logic covered via Core services + route/state tests
+- Android runtime smoke: not verified unless emulator executed

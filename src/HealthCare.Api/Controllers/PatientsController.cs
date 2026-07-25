@@ -1,6 +1,7 @@
 using HealthCare.Api.Authorization;
 using HealthCare.Application.Authorization;
 using HealthCare.Application.Patients;
+using HealthCare.Contracts.Common;
 using HealthCare.Contracts.Patients;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,13 +14,16 @@ public sealed class PatientsController : ControllerBase
 {
     private readonly IPatientService _patientService;
     private readonly IPatientClinicRegistrationService _clinicRegistration;
+    private readonly IPatientClinicDirectoryService _clinicDirectory;
 
     public PatientsController(
         IPatientService patientService,
-        IPatientClinicRegistrationService clinicRegistration)
+        IPatientClinicRegistrationService clinicRegistration,
+        IPatientClinicDirectoryService clinicDirectory)
     {
         _patientService = patientService;
         _clinicRegistration = clinicRegistration;
+        _clinicDirectory = clinicDirectory;
     }
 
     [Authorize(Policy = AuthorizationPolicies.PatientSelfScope)]
@@ -48,6 +52,36 @@ public sealed class PatientsController : ControllerBase
     {
         var profile = await _patientService.UpdateCurrentPatientProfileAsync(request, cancellationToken);
         return Ok(profile);
+    }
+
+    [Authorize(Policy = AuthorizationPolicies.PatientSelfScope)]
+    [AuthorizePermission(Permissions.Clinics.Read)]
+    [HttpGet("me/clinics")]
+    [ProducesResponseType(typeof(PagedResponse<PatientClinicListItemResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<PagedResponse<PatientClinicListItemResponse>>> SearchClinics(
+        [FromQuery] PatientClinicSearchRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _clinicDirectory.SearchAsync(request, cancellationToken);
+        return Ok(result);
+    }
+
+    [Authorize(Policy = AuthorizationPolicies.PatientSelfScope)]
+    [AuthorizePermission(Permissions.Clinics.Read)]
+    [HttpGet("me/clinics/{clinicCode}")]
+    [ProducesResponseType(typeof(PatientClinicDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<PatientClinicDetailResponse>> GetClinic(
+        string clinicCode,
+        CancellationToken cancellationToken)
+    {
+        var result = await _clinicDirectory.GetByClinicCodeAsync(clinicCode, cancellationToken);
+        return Ok(result);
     }
 
     [Authorize(Policy = AuthorizationPolicies.PatientSelfScope)]

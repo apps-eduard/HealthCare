@@ -1,0 +1,40 @@
+@page "/discovery/booking-next"
+@inject IDiscoveryStateService Selection
+
+<h1>Booking next</h1>
+<p class="lede">
+    Appointment creation is planned for PM-5. Your selection is kept in memory only and is
+    <strong>not</strong> a reservation.
+</p>
+
+@if (Selection.Current.ClinicCode is { } clinic)
+{
+    <dl class="meta">
+        <dt>Clinic</dt>
+        <dd>@(Selection.Current.ClinicName ?? clinic)</dd>
+        <dt>Doctor</dt>
+        <dd>@(Selection.Current.DoctorDisplayName ?? "—")</dd>
+        <dt>Date</dt>
+        <dd>@(Selection.Current.SlotDate?.ToString("yyyy-MM-dd") ?? "—")</dd>
+        <dt>Slot</dt>
+        <dd>
+            @if (Selection.Current.SelectedSlot is { } slot)
+            {
+                @SlotDisplay.FormatRange(slot)
+            }
+            else
+            {
+                <text>—</text>
+            }
+        </dd>
+    </dl>
+}
+else
+{
+    <EmptyState Message="No discovery selection yet. Browse clinics to choose a slot." />
+}
+
+<div class="actions">
+    <a class="btn" href="@PatientRoutes.Clinics">Back to clinics</a>
+    <a class="btn btn-secondary" href="@PatientRoutes.Home">Home</a>
+</div>

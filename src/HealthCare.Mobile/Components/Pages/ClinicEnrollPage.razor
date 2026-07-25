@@ -1,0 +1,76 @@
+@page "/clinics/enroll"
+@inject IPatientDiscoveryService Discovery
+@inject NavigationManager Nav
+@inject ILogger<ClinicEnrollPage> Logger
+
+<h1>Clinic code</h1>
+<p class="lede">Enter a public clinic code if you were given one. This is an alternate path to browsing the directory.</p>
+
+@if (_fieldError is not null)
+{
+    <FormValidationSummary Errors="new[] { _fieldError }" />
+}
+
+@if (_problem is not null)
+{
+    <ErrorState Problem="@_problem" />
+}
+
+@if (_success is not null)
+{
+    <div class="state-panel state-ok" role="status">
+        <h2>@(_success.AlreadyEnrolled ? "Already enrolled" : "Enrolled")</h2>
+        <p>You can open the clinic and view Doctors.</p>
+        <a class="btn" href="@PatientRoutes.ClinicDetails(_code)">Open clinic</a>
+    </div>
+}
+
+<form @onsubmit="SubmitAsync" @onsubmit:preventDefault>
+    <div class="field">
+        <label for="clinicCode">Clinic code</label>
+        <InputText id="clinicCode" @bind-Value="_code" autocomplete="off" />
+    </div>
+    <button class="btn" type="submit" disabled="@_busy">@(_busy ? "Registering…" : "Register")</button>
+</form>
+
+<p class="hint"><a href="@PatientRoutes.Clinics">Back to clinics</a></p>
+
+@code {
+    private string _code = string.Empty;
+    private bool _busy;
+    private string? _fieldError;
+    private ApiProblem? _problem;
+    private ClinicPatientEnrollmentResponse? _success;
+
+    private async Task SubmitAsync()
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _fieldError = null;
+        _problem = null;
+        _success = null;
+        var normalized = _code.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            _fieldError = "Clinic code is required.";
+            return;
+        }
+
+        _busy = true;
+        Logger.LogInformation("Clinic-code enrollment submitted.");
+        var result = await Discovery.EnrollAsync(normalized);
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _problem = result.Error ?? new ApiProblem { Kind = ApiErrorKind.NotFound, Title = "Unavailable" };
+            _busy = false;
+            return;
+        }
+
+        _success = result.Value;
+        _code = normalized;
+        _busy = false;
+    }
+}

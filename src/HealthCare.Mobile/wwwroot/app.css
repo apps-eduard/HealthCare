@@ -171,10 +171,60 @@ html, body {
     margin-bottom: 1.25rem;
 }
 
-.resend-form {
-    margin-top: 1.5rem;
-    padding-top: 1rem;
-    border-top: 1px solid #e2e8f0;
+.clinic-list, .slot-list {
+    list-style: none;
+    padding: 0;
+    margin: 1rem 0;
+    display: grid;
+    gap: 0.6rem;
+}
+
+.clinic-row-btn {
+    width: 100%;
+    text-align: left;
+    border: 1px solid #e2e8f0;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 0.75rem;
+    padding: 0.85rem 1rem;
+    cursor: pointer;
+}
+
+.clinic-name {
+    display: block;
+    font-weight: 600;
+}
+
+.clinic-meta {
+    display: block;
+    color: #64748b;
+    font-size: 0.9rem;
+    margin-top: 0.2rem;
+}
+
+.badge {
+    display: inline-block;
+    margin-top: 0.4rem;
+    font-size: 0.75rem;
+    color: #0f766e;
+    border: 1px solid #99f6e4;
+    border-radius: 0.35rem;
+    padding: 0.1rem 0.4rem;
+}
+
+.search-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: flex-end;
+    margin-bottom: 0.75rem;
+}
+
+.search-row .grow {
+    flex: 1 1 12rem;
+}
+
+.slot-list li {
+    margin: 0;
 }
 
 textarea {

@@ -1,5 +1,6 @@
 using HealthCare.Contracts.Identity;
 using HealthCare.Mobile.Core.Api;
+using HealthCare.Mobile.Core.Discovery;
 using Microsoft.Extensions.Logging;
 
 namespace HealthCare.Mobile.Core.Authentication;
@@ -9,17 +10,20 @@ public sealed class PatientAuthenticationService : IPatientAuthenticationService
     private readonly IHealthCareApiClient _api;
     private readonly IAuthSessionService _session;
     private readonly ITokenRefresher _refresher;
+    private readonly IDiscoveryStateService _discovery;
     private readonly ILogger<PatientAuthenticationService> _logger;
 
     public PatientAuthenticationService(
         IHealthCareApiClient api,
         IAuthSessionService session,
         ITokenRefresher refresher,
+        IDiscoveryStateService discovery,
         ILogger<PatientAuthenticationService> logger)
     {
         _api = api;
         _session = session;
         _refresher = refresher;
+        _discovery = discovery;
         _logger = logger;
     }
 
@@ -100,6 +104,7 @@ public sealed class PatientAuthenticationService : IPatientAuthenticationService
     {
         _logger.LogInformation("Patient sign-out requested.");
         await _api.LogoutAsync(cancellationToken);
+        _discovery.Clear();
     }
 
     public async Task<SessionRestoreResult> RestoreSessionAsync(CancellationToken cancellationToken = default)

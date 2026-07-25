@@ -1,0 +1,120 @@
+@page "/clinics/{ClinicCode}/doctors/{StaffMemberId:guid}/availability"
+@inject IPatientDiscoveryService Discovery
+@inject IDiscoveryStateService Selection
+@inject NavigationManager Nav
+@inject ILogger<DoctorAvailabilityPage> Logger
+
+<h1>Availability</h1>
+<p class="lede">
+    @(Selection.Current.DoctorDisplayName ?? "Doctor") · clinic <strong>@ClinicCode</strong>.
+    Times use the clinic timezone from the API when provided.
+</p>
+
+<div class="field">
+    <label for="slotDate">Date</label>
+    <InputDate id="slotDate" @bind-Value="_dateValue" @bind-Value:after="LoadSlotsAsync" />
+</div>
+
+@if (_busy)
+{
+    <LoadingState Message="Loading slots…" />
+}
+else if (_problem is not null)
+{
+    @if (_problem.Kind is ApiErrorKind.Network or ApiErrorKind.Timeout)
+    {
+        <OfflineState Message="@_problem.UserMessage" OnRetry="LoadSlotsAsync" />
+    }
+    else if (_problem.Kind == ApiErrorKind.Unauthorized)
+    {
+        <SessionExpiredState SignInHref="@PatientRoutes.SignIn" />
+    }
+    else
+    {
+        <ErrorState Problem="@_problem" OnRetry="LoadSlotsAsync" />
+    }
+}
+else if (_slots.Count == 0)
+{
+    <EmptyState Message="No available slots on this date." />
+}
+else
+{
+    <ul class="slot-list" aria-label="Available slots">
+        @foreach (var slot in _slots)
+        {
+            var selected = Selection.Current.SelectedSlot is { } current
+                && current.StartUtc == slot.StartUtc
+                && current.EndUtc == slot.EndUtc;
+            <li>
+                <button type="button"
+                        class="@(selected ? "btn" : "btn btn-secondary")"
+                        @onclick="() => SelectSlot(slot)">
+                    @SlotDisplay.FormatRange(slot)
+                </button>
+            </li>
+        }
+    </ul>
+}
+
+@if (Selection.Current.HasSlot)
+{
+    <div class="state-panel" role="status">
+        <h2>Slot selected</h2>
+        <p>
+            @SlotDisplay.FormatRange(Selection.Current.SelectedSlot!)
+            — not reserved until booking succeeds in the next milestone.
+        </p>
+        <a class="btn" href="@PatientRoutes.BookingPlaceholder">Continue to booking (next step)</a>
+    </div>
+}
+
+<p class="hint"><a href="@PatientRoutes.ClinicDoctors(ClinicCode)">Back to Doctors</a></p>
+
+@code {
+    [Parameter]
+    public string ClinicCode { get; set; } = string.Empty;
+
+    [Parameter]
+    public Guid StaffMemberId { get; set; }
+
+    private DateTime _dateValue = DateTime.Today;
+    private readonly List<AvailableSlotResponse> _slots = [];
+    private bool _busy;
+    private ApiProblem? _problem;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Selection.SelectClinic(ClinicCode, Selection.Current.ClinicName);
+        Selection.SelectDoctor(StaffMemberId, Selection.Current.DoctorDisplayName);
+        await LoadSlotsAsync();
+    }
+
+    private async Task LoadSlotsAsync()
+    {
+        _busy = true;
+        _problem = null;
+        _slots.Clear();
+        Selection.ClearSlot();
+        StateHasChanged();
+
+        var date = DateOnly.FromDateTime(_dateValue.Date);
+        var result = await Discovery.GetSlotsAsync(ClinicCode, StaffMemberId, date);
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _problem = result.Error;
+            _busy = false;
+            return;
+        }
+
+        _slots.AddRange(result.Value);
+        _busy = false;
+        Logger.LogInformation("Availability slots loaded.");
+    }
+
+    private void SelectSlot(AvailableSlotResponse slot)
+    {
+        var date = DateOnly.FromDateTime(_dateValue.Date);
+        Selection.SelectSlot(date, slot);
+    }
+}

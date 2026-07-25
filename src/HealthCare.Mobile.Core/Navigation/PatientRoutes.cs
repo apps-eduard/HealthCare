@@ -12,17 +12,30 @@ public static class PatientRoutes
     public const string Profile = "/profile";
     public const string ProfileEdit = "/profile/edit";
     public const string Clinics = "/clinics";
+    public const string ClinicEnroll = "/clinics/enroll";
     public const string Appointments = "/appointments";
     public const string Connectivity = "/connectivity";
+    public const string BookingPlaceholder = "/discovery/booking-next";
+
+    public static string ClinicDetails(string clinicCode) =>
+        $"{Clinics}/{Uri.EscapeDataString(clinicCode)}";
+
+    public static string ClinicDoctors(string clinicCode) =>
+        $"{Clinics}/{Uri.EscapeDataString(clinicCode)}/doctors";
+
+    public static string DoctorAvailability(string clinicCode, Guid staffMemberId) =>
+        $"{Clinics}/{Uri.EscapeDataString(clinicCode)}/doctors/{staffMemberId:D}/availability";
 
     public static bool RequiresAuthentication(string relativePath)
     {
         var path = Normalize(relativePath);
-        return path is Home
-            or Profile
-            or ProfileEdit
-            or Clinics
-            or Appointments;
+        if (path is Home or Profile or ProfileEdit or Appointments or BookingPlaceholder)
+        {
+            return true;
+        }
+
+        return path == Clinics
+               || path.StartsWith(Clinics + "/", StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool IsGuestOnly(string relativePath)

@@ -1,12 +1,12 @@
 # MVP Patient Scope
 
 **Status:** **Approved** by product owner (2026-07-25). Authoritative for the **Patient Mobile MVP**.  
-**Implementation:** **PM-0 + PM-1 + PM-2 + PM-3 delivered** (2026-07-25). PM-4…PM-8 not started.  
+**Implementation:** **PM-0 + PM-1 + PM-2 + PM-3 + PM-4 delivered** (2026-07-25). PM-5…PM-8 not started.  
 **Authority:** This document overrides informal Patient notes in `Docs/security.md` §4.7 / §5.1, `Docs/architecture.md` §10.1 / §12.2, and `Docs/development-plan.md` Phase 11 where they conflict. Keep matrix and security cross-links in sync when coding.  
 **Related:** `Docs/mvp-organization-admin-scope.md`, `Docs/mvp-clinic-admin-scope.md`, `Docs/mvp-doctor-scope.md`, `Docs/authorization-matrix.md`, `Docs/security.md` §4.7 / patient self-scope.  
 **Do not** copy staff Web capabilities into the Patient app.  
 **Do not** rebuild existing Patient APIs that already match this contract.  
-**Do not** begin PM-4 (clinic/Doctor discovery) until scheduled.
+**Do not** begin PM-5 (appointment booking) until scheduled.
 
 Verified baseline when approved (2026-07-25):
 
@@ -191,7 +191,18 @@ Rules:
 
 ### Gap
 
-Authenticated patient clinic browse/search API **missing** → **PM-4** (with contract review in PM-1).
+Authenticated patient clinic browse/search API **delivered in PM-4**:
+
+- `GET /api/v1/patients/me/clinics` — paged search (`search`, `specialty`, `page`, `pageSize`)
+- `GET /api/v1/patients/me/clinics/{clinicCode}` — Patient-safe clinic details
+- Staff route `GET /api/v1/staff-management/clinics` remains staff-only
+
+### Timezone display (PM-4)
+
+- Backend UTC remains authoritative for slot instants (`StartUtc` / `EndUtc`)
+- Mobile prefers API clinic-local strings (`StartLocal` / `EndLocal`) plus `TimeZoneId` when present
+- Fallback: convert `StartUtc`/`EndUtc` to device local and label “(device local)”
+- Slot selection is **not** a reservation; booking is PM-5
 
 ---
 
@@ -445,7 +456,7 @@ Do not treat permission-catalog-only tests as sufficient for Patient product DoD
 | **PM-1** | Patient contract and backend gap hardening | Medium | **Delivered** (2026-07-25) |
 | **PM-2** | Patient mobile foundation (MAUI) | Medium | **Delivered** (2026-07-25) |
 | **PM-3** | Mobile authentication and profile | Medium | **Delivered** (2026-07-25) |
-| **PM-4** | Clinic and Doctor discovery | Medium | Not started |
+| **PM-4** | Clinic and Doctor discovery | Medium | **Delivered** (2026-07-25) |
 | **PM-5** | Appointment booking (mobile) | Medium | Not started |
 | **PM-6** | My Appointments, cancel, reschedule | Medium | Not started |
 | **PM-7** | Patient security and negative matrix | Medium | Not started |
@@ -483,10 +494,13 @@ Do not treat permission-catalog-only tests as sufficient for Patient product DoD
 
 ### PM-4 — Clinic and Doctor discovery
 
-- Authenticated clinic browse/search API if still missing  
-- Clinic-code enrollment  
-- Doctor list + display profile + slots  
-- Mobile discovery screens  
+**Delivered (2026-07-25).**
+
+- Authenticated Patient clinic browse/search + details APIs (`PatientClinicListItemResponse` / `PatientClinicDetailResponse`)
+- Mobile clinic directory, details, clinic-code enrollment, Doctor list, availability, PM-5 booking placeholder
+- Reuses `GET /api/v1/clinics/{clinicCode}/doctors` and available-slots; no appointment creation
+- Specialty filter uses existing `Clinic.Specialty` string only (no specialty catalog)
+- No maps, ratings, clinical data, or staff DTOs on Patient browse
 
 ### PM-5 — Appointment booking
 
@@ -523,7 +537,8 @@ Do not treat permission-catalog-only tests as sufficient for Patient product DoD
 - [x] PM-1 backend gap hardening complete  
 - [x] PM-2 mobile foundation complete  
 - [x] PM-3 authentication and profile complete  
-- [ ] PM-4 … PM-8 complete  
+- [x] PM-4 clinic and Doctor discovery complete  
+- [ ] PM-5 … PM-8 complete  
 - [x] Backend gaps closed for PM-1 (404 concealment, 2-hour cutoff, DTO review)  
 - [ ] Android MAUI app supports full Patient MVP flow  
 - [ ] Patient security matrix green  
@@ -582,10 +597,10 @@ PM-0 alone does **not** complete the Patient MVP. PM-1 does **not** complete mob
 | Login | Shared `POST /auth/login` | Email/password MVP | Google/OTP deferred | **PM-3 delivered** |
 | Account linkage | Unique UserId; linker; strip unlinked | Keep | None material | Verified PM-1 / enforced mobile PM-3 |
 | Profile | `GET/PATCH /patients/me` | Keep fields + concurrency | None | **PM-3 delivered** |
-| Clinic-code enrollment | `POST /patients/me/clinics/register` | Keep alternate path | None | PM-4 mobile |
-| Clinic browse | Missing (staff directory denies Patient) | Authenticated browse/search | **API missing** | PM-4 |
-| Doctor discovery | Doctors by clinic code | Keep patient-safe list | None material | PM-4 |
-| Availability | Available-slots API | Keep | None material | PM-4 |
+| Clinic-code enrollment | `POST /patients/me/clinics/register` | Keep alternate path | None | **PM-4 delivered** |
+| Clinic browse | `GET /patients/me/clinics` (+ detail by code) | Authenticated browse/search | Closed PM-4 | **PM-4 delivered** |
+| Doctor discovery | Doctors by clinic code | Keep patient-safe list | None material | **PM-4 delivered** |
+| Availability | Available-slots API | Keep | None material | **PM-4 delivered** |
 | Booking | Create → `Requested` | Keep; no auto-confirm | None (status) | PM-5 mobile |
 | Appointment list/detail | Me list + get by id (own) | Keep | DTO review done PM-1 | PM-6 |
 | Cancellation | Own + **2h cutoff** | Delivered | Mobile UX | PM-6 |
@@ -593,7 +608,7 @@ PM-0 alone does **not** complete the Patient MVP. PM-1 does **not** complete mob
 | Clinical visibility | Notes staff-only | Remain denied | None (intentional) | — |
 | Notifications | Hangfire infra / NoOp prod | API refresh only | Not a Patient feature yet | Deferred |
 | Cross-patient profile | **404** | **404** | Closed PM-1 | — |
-| Mobile application | Auth + profile on MAUI Android (`HealthCare.Mobile`) | Discovery/booking UX | Clinics/appointments | PM-4…PM-6 |
+| Mobile application | Auth + profile + discovery on MAUI Android | Booking/appointments UX | Appointments | PM-5…PM-6 |
 | Patient E2E | Denial/seed only | Full Patient pack | **Missing** | PM-8 |
 
 ---

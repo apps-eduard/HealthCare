@@ -1,0 +1,91 @@
+@page "/clinics/{ClinicCode}/doctors"
+@inject IPatientDiscoveryService Discovery
+@inject IDiscoveryStateService Selection
+@inject NavigationManager Nav
+@inject ILogger<ClinicDoctorsPage> Logger
+
+<h1>Doctors</h1>
+<p class="lede">Doctors for clinic <strong>@ClinicCode</strong>.</p>
+
+@if (_busy)
+{
+    <LoadingState Message="Loading Doctors…" />
+}
+else if (_problem is not null)
+{
+    @if (_problem.Kind is ApiErrorKind.Network or ApiErrorKind.Timeout)
+    {
+        <OfflineState Message="@_problem.UserMessage" OnRetry="LoadAsync" />
+    }
+    else if (_problem.Kind == ApiErrorKind.Unauthorized)
+    {
+        <SessionExpiredState SignInHref="@PatientRoutes.SignIn" />
+    }
+    else
+    {
+        <ErrorState Problem="@_problem" OnRetry="LoadAsync" />
+    }
+}
+else if (_doctors.Count == 0)
+{
+    <EmptyState Message="No Doctors are available for this clinic." />
+}
+else
+{
+    <ul class="clinic-list" aria-label="Doctors">
+        @foreach (var doctor in _doctors)
+        {
+            <li class="clinic-row">
+                <button type="button" class="clinic-row-btn" @onclick="() => OpenAvailability(doctor)">
+                    <span class="clinic-name">@doctor.DisplayName</span>
+                    <span class="clinic-meta">
+                        @(string.IsNullOrWhiteSpace(doctor.Specialty) ? "—" : doctor.Specialty)
+                        · @(doctor.AcceptsBookings ? "Accepts bookings" : "No open availability")
+                    </span>
+                </button>
+            </li>
+        }
+    </ul>
+}
+
+<p class="hint"><a href="@PatientRoutes.ClinicDetails(ClinicCode)">Back to clinic</a></p>
+
+@code {
+    [Parameter]
+    public string ClinicCode { get; set; } = string.Empty;
+
+    private readonly List<ClinicDoctorResponse> _doctors = [];
+    private bool _busy = true;
+    private ApiProblem? _problem;
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _busy = true;
+        _problem = null;
+        _doctors.Clear();
+        StateHasChanged();
+
+        Selection.SelectClinic(ClinicCode, Selection.Current.ClinicName);
+        Selection.ClearDoctorAndSlot();
+
+        var result = await Discovery.ListDoctorsAsync(ClinicCode);
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _problem = result.Error;
+            _busy = false;
+            return;
+        }
+
+        _doctors.AddRange(result.Value);
+        _busy = false;
+        Logger.LogInformation("Doctor list loaded.");
+    }
+
+    private void OpenAvailability(ClinicDoctorResponse doctor)
+    {
+        Selection.SelectDoctor(doctor.StaffMemberId, doctor.DisplayName);
+        Nav.NavigateTo(PatientRoutes.DoctorAvailability(ClinicCode, doctor.StaffMemberId));
+    }
+}

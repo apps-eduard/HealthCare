@@ -179,7 +179,7 @@ Authoritative Product MVP: **`Docs/mvp-patient-scope.md`** (**approved** 2026-07
 Allowed (Patient Mobile MVP):
 
 - Manage their own profile (approved demographic/contact fields).
-- Discover clinics via clinic-code enrollment **and** authenticated clinic browse/search (browse API remains an approved gap until PM-4).
+- Discover clinics via clinic-code enrollment **and** authenticated clinic browse/search (`GET /api/v1/patients/me/clinics`, PM-4 delivered).
 - View Doctors and available slots for active clinics (patient-safe fields only).
 - Book appointments for themselves (initial status **`Requested`**; not auto-confirmed).
 - View, cancel, and reschedule **their own** appointments under approved rules (**2-hour** cancel/reschedule cutoff — **PM-1 delivered**).
@@ -568,6 +568,7 @@ When added, require:
 - Clear sensitive local state on logout.
 - Do not trust JWT claims alone for Patient identity — call the API (`/auth/me`, patient endpoints).
 - PM-3: never log passwords, tokens, registration bodies, or full profile payloads; map auth error codes to safe UI messages.
+- PM-4: Patient clinic directory uses dedicated Patient DTOs (not staff directory); inactive/unknown clinic details → 404; do not log clinic codes unnecessarily; slot selection is not a reservation.
 
 ---
 

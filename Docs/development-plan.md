@@ -260,7 +260,7 @@ Implement organization and clinic management.
 - Add migrations.
 - Add organization administration endpoints.
 - Add clinic administration endpoints.
-- Add clinic directory endpoints (staff directory exists; **authenticated Patient browse/search** is an approved Patient MVP gap — see `Docs/mvp-patient-scope.md` PM-4).
+- Add clinic directory endpoints (staff directory exists; **authenticated Patient browse/search** delivered in PM-4 — see `Docs/mvp-patient-scope.md`).
 - Add specialty and city filters (clinic optional `Specialty` / `City` strings; no specialty subsystem).
 - Add clinic active/inactive status.
 
@@ -280,8 +280,10 @@ POST /api/v1/patients/me/clinics/register   (clinic code)
 GET  /api/v1/clinics/{clinicCode}/doctors
 GET  /api/v1/clinics/{clinicCode}/doctors/{staffMemberId}/available-slots
 
-# Approved Patient MVP gap (PM-4): authenticated clinic browse/search
-# (exact route to be designed in PM-1/PM-4; not anonymous public unless later approved)
+# Patient clinic browse (PM-4 delivered):
+# GET /api/v1/patients/me/clinics
+# GET /api/v1/patients/me/clinics/{clinicCode}
+# (authenticated linked Patient; not anonymous public)
 ```
 
 ### Tests
@@ -559,17 +561,17 @@ Authoritative product contract: **`Docs/mvp-patient-scope.md`** (PM-0 approved 2
 
 Deliver Patient Mobile via milestones **PM-1…PM-8** (do not treat Phase 11 as a single unstructured drop).
 
-**Progress:** PM-1 (backend hardening), **PM-2 (MAUI foundation)**, and **PM-3 (auth + profile)** delivered. PM-4…PM-8 not started.
+**Progress:** PM-1…**PM-4** delivered (hardening, MAUI foundation, auth/profile, clinic/Doctor discovery). PM-5…PM-8 not started.
 
 ### Objectives
 
-Build the Android-first patient experience on existing Patient APIs; close approved backend gaps first (PM-1), ship the mobile foundation (PM-2), then authentication and profile (PM-3).
+Build the Android-first patient experience on existing Patient APIs; close approved backend gaps first (PM-1), ship the mobile foundation (PM-2), authentication and profile (PM-3), then clinic/Doctor discovery (PM-4).
 
 ### Screens (by milestone)
 
 - PM-2: shell, secure tokens, typed client (**delivered**)
 - PM-3: register / confirm-email / login / logout / profile (**delivered**)
-- PM-4: clinic browse + code enroll / doctors / slots
+- PM-4: clinic browse + code enroll / doctors / slots (**delivered**)
 - PM-5: book appointment (`Requested`)
 - PM-6: my appointments / cancel / reschedule (2-hour cutoff)
 - PM-7 / PM-8: security matrix + E2E

@@ -1,2 +1,169 @@
 @page "/clinics"
-<PlaceholderState Title="Clinics" Message="Clinic browse and enrollment are planned for PM-4." />
+@inject IPatientDiscoveryService Discovery
+@inject IDiscoveryStateService Selection
+@inject NavigationManager Nav
+@inject ILogger<ClinicsPage> Logger
+
+<h1>Clinics</h1>
+<p class="lede">Browse active clinics. Search by name, city, or address. Specialty filter uses the clinic specialty string.</p>
+
+<form class="search-row" @onsubmit="SearchAsync" @onsubmit:preventDefault>
+    <div class="field grow">
+        <label for="clinicSearch">Search</label>
+        <InputText id="clinicSearch" @bind-Value="_search" placeholder="Name or city" />
+    </div>
+    <div class="field">
+        <label for="specialty">Specialty</label>
+        <InputText id="specialty" @bind-Value="_specialty" placeholder="Optional" />
+    </div>
+    <button class="btn" type="submit" disabled="@_busy">Search</button>
+</form>
+
+<div class="actions">
+    <a class="btn btn-secondary" href="@PatientRoutes.ClinicEnroll">Enter clinic code</a>
+</div>
+
+@if (_busy && _items.Count == 0)
+{
+    <LoadingState Message="Loading clinics…" />
+}
+else if (_problem is not null && _items.Count == 0)
+{
+    @if (_problem.Kind is ApiErrorKind.Network or ApiErrorKind.Timeout)
+    {
+        <OfflineState Message="@_problem.UserMessage" OnRetry="SearchAsync" />
+    }
+    else if (_problem.Kind == ApiErrorKind.Unauthorized)
+    {
+        <SessionExpiredState SignInHref="@PatientRoutes.SignIn" />
+    }
+    else
+    {
+        <ErrorState Problem="@_problem" OnRetry="SearchAsync" />
+    }
+}
+else if (!_busy && _items.Count == 0)
+{
+    <EmptyState Message="No clinics match your search." />
+}
+else
+{
+    <ul class="clinic-list" aria-label="Clinics">
+        @foreach (var clinic in _items)
+        {
+            <li class="clinic-row">
+                <button type="button" class="clinic-row-btn" @onclick="() => OpenClinic(clinic)">
+                    <span class="clinic-name">@clinic.Name</span>
+                    <span class="clinic-meta">
+                        @(string.IsNullOrWhiteSpace(clinic.City) ? "—" : clinic.City)
+                        @if (!string.IsNullOrWhiteSpace(clinic.Specialty))
+                        {
+                            <text> · @clinic.Specialty</text>
+                        }
+                    </span>
+                    @if (clinic.IsEnrolled)
+                    {
+                        <span class="badge">Enrolled</span>
+                    }
+                </button>
+            </li>
+        }
+    </ul>
+
+    @if (_page < _totalPages)
+    {
+        <button type="button" class="btn btn-secondary" disabled="@_busy" @onclick="LoadMoreAsync">
+            @(_busy ? "Loading…" : "Load more")
+        </button>
+    }
+}
+
+@code {
+    private string _search = string.Empty;
+    private string _specialty = string.Empty;
+    private readonly List<PatientClinicListItemResponse> _items = [];
+    private int _page = 1;
+    private int _totalPages = 1;
+    private int _searchVersion;
+    private bool _busy;
+    private ApiProblem? _problem;
+    private CancellationTokenSource? _cts;
+
+    protected override async Task OnInitializedAsync() => await SearchAsync();
+
+    private async Task SearchAsync()
+    {
+        _page = 1;
+        _items.Clear();
+        await LoadPageAsync(reset: true);
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        _page++;
+        await LoadPageAsync(reset: false);
+    }
+
+    private async Task LoadPageAsync(bool reset)
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        var token = _cts.Token;
+        var version = ++_searchVersion;
+
+        _busy = true;
+        _problem = null;
+        StateHasChanged();
+
+        var result = await Discovery.SearchClinicsAsync(
+            new PatientClinicSearchRequest
+            {
+                Search = string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(),
+                Specialty = string.IsNullOrWhiteSpace(_specialty) ? null : _specialty.Trim(),
+                Page = _page,
+                PageSize = 20,
+            },
+            token);
+
+        if (version != _searchVersion)
+        {
+            return;
+        }
+
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _problem = result.Error;
+            if (reset)
+            {
+                _items.Clear();
+            }
+
+            _busy = false;
+            return;
+        }
+
+        if (reset)
+        {
+            _items.Clear();
+        }
+
+        foreach (var item in result.Value.Items)
+        {
+            if (_items.All(x => !string.Equals(x.ClinicCode, item.ClinicCode, StringComparison.OrdinalIgnoreCase)))
+            {
+                _items.Add(item);
+            }
+        }
+
+        _totalPages = Math.Max(1, result.Value.TotalPages);
+        _busy = false;
+        Logger.LogInformation("Clinic directory page loaded. Page={Page}", _page);
+    }
+
+    private void OpenClinic(PatientClinicListItemResponse clinic)
+    {
+        Selection.SelectClinic(clinic.ClinicCode, clinic.Name);
+        Nav.NavigateTo(PatientRoutes.ClinicDetails(clinic.ClinicCode));
+    }
+}

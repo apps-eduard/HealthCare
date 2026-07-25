@@ -1,8 +1,12 @@
+using HealthCare.Contracts.Appointments;
+using HealthCare.Contracts.Common;
 using HealthCare.Contracts.Identity;
 using HealthCare.Contracts.Patients;
 using HealthCare.Mobile.Core.Authentication;
 using Microsoft.Extensions.Logging;
+using System.Globalization;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -34,6 +38,29 @@ public interface IHealthCareApiClient
 
     Task<ApiResult<PatientProfileResponse>> UpdatePatientProfileAsync(
         UpdatePatientProfileRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResult<PagedResponse<PatientClinicListItemResponse>>> SearchClinicsAsync(
+        PatientClinicSearchRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResult<PatientClinicDetailResponse>> GetClinicAsync(
+        string clinicCode,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResult<ClinicPatientEnrollmentResponse>> RegisterWithClinicAsync(
+        RegisterPatientWithClinicRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResult<IReadOnlyList<ClinicDoctorResponse>>> ListDoctorsAsync(
+        string clinicCode,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResult<IReadOnlyList<AvailableSlotResponse>>> GetAvailableSlotsAsync(
+        string clinicCode,
+        Guid staffMemberId,
+        DateOnly date,
+        int? durationMinutes = null,
         CancellationToken cancellationToken = default);
 }
 
@@ -214,6 +241,96 @@ public sealed class HealthCareApiClient : IHealthCareApiClient
             _logger.LogInformation(ex, "Profile update exception.");
             return ApiResult<PatientProfileResponse>.Failure(ApiProblemMapper.FromException(ex));
         }
+    }
+
+    public Task<ApiResult<PagedResponse<PatientClinicListItemResponse>>> SearchClinicsAsync(
+        PatientClinicSearchRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var path = BuildClinicSearchPath(request);
+        return SendAuthenticatedAsync<PagedResponse<PatientClinicListItemResponse>>(
+            HttpMethod.Get,
+            path,
+            null,
+            cancellationToken);
+    }
+
+    public Task<ApiResult<PatientClinicDetailResponse>> GetClinicAsync(
+        string clinicCode,
+        CancellationToken cancellationToken = default)
+    {
+        var code = Uri.EscapeDataString(clinicCode.Trim());
+        return SendAuthenticatedAsync<PatientClinicDetailResponse>(
+            HttpMethod.Get,
+            $"api/v1/patients/me/clinics/{code}",
+            null,
+            cancellationToken);
+    }
+
+    public Task<ApiResult<ClinicPatientEnrollmentResponse>> RegisterWithClinicAsync(
+        RegisterPatientWithClinicRequest request,
+        CancellationToken cancellationToken = default) =>
+        SendAuthenticatedAsync<ClinicPatientEnrollmentResponse>(
+            HttpMethod.Post,
+            "api/v1/patients/me/clinics/register",
+            request,
+            cancellationToken);
+
+    public Task<ApiResult<IReadOnlyList<ClinicDoctorResponse>>> ListDoctorsAsync(
+        string clinicCode,
+        CancellationToken cancellationToken = default)
+    {
+        var code = Uri.EscapeDataString(clinicCode.Trim());
+        return SendAuthenticatedAsync<IReadOnlyList<ClinicDoctorResponse>>(
+            HttpMethod.Get,
+            $"api/v1/clinics/{code}/doctors",
+            null,
+            cancellationToken);
+    }
+
+    public Task<ApiResult<IReadOnlyList<AvailableSlotResponse>>> GetAvailableSlotsAsync(
+        string clinicCode,
+        Guid staffMemberId,
+        DateOnly date,
+        int? durationMinutes = null,
+        CancellationToken cancellationToken = default)
+    {
+        var code = Uri.EscapeDataString(clinicCode.Trim());
+        var path = new StringBuilder()
+            .Append("api/v1/clinics/")
+            .Append(code)
+            .Append("/doctors/")
+            .Append(staffMemberId.ToString("D"))
+            .Append("/available-slots?date=")
+            .Append(Uri.EscapeDataString(date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+        if (durationMinutes is int minutes)
+        {
+            path.Append("&durationMinutes=").Append(minutes);
+        }
+
+        return SendAuthenticatedAsync<IReadOnlyList<AvailableSlotResponse>>(
+            HttpMethod.Get,
+            path.ToString(),
+            null,
+            cancellationToken);
+    }
+
+    internal static string BuildClinicSearchPath(PatientClinicSearchRequest request)
+    {
+        var path = new StringBuilder("api/v1/patients/me/clinics?");
+        path.Append("page=").Append(request.Page < 1 ? 1 : request.Page);
+        path.Append("&pageSize=").Append(request.PageSize < 1 ? 20 : request.PageSize);
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            path.Append("&search=").Append(Uri.EscapeDataString(request.Search.Trim()));
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Specialty))
+        {
+            path.Append("&specialty=").Append(Uri.EscapeDataString(request.Specialty.Trim()));
+        }
+
+        return path.ToString();
     }
 
     private Task<ApiResult<T>> SendAnonymousAsync<T>(

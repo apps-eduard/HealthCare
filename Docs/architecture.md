@@ -642,17 +642,12 @@ Authoritative scope: **`Docs/mvp-patient-scope.md`**.
 
 **PM-3 (delivered):** Registration, email-confirmation UX (manual/browser; App Links deferred), login with `/auth/me` Patient-linkage validation, session restore, logout, profile view/edit with concurrency UX.
 
-The remaining patient app (PM-4…PM-6) should provide:
+**PM-4 (delivered):** Authenticated Patient clinic browse/search + details; clinic-code enrollment UI; Doctor list; available-slot browse and in-memory selection; PM-5 booking placeholder (no appointment create).
 
-- Email/password registration and login (**PM-3 delivered**; Google deferred)
-- Authenticated clinic discovery (name / city / optional specialty string)
-- Clinic-code enrollment (alternate)
-- Clinic details (patient-safe)
-- Available doctors and slots
-- Appointment booking (`Requested`)
-- My appointments (upcoming + past)
-- Appointment cancellation and rescheduling (2-hour cutoff)
-- Profile management (**PM-3 delivered**)
+The remaining patient app (PM-5…PM-6) should provide:
+
+- Appointment booking (`Requested`) with reason for visit (**PM-5**)
+- My appointments (upcoming + past), cancel and reschedule with 2-hour cutoff (**PM-6**)
 - Status via refreshed API data (no notification inbox in first release)
 
 Patient-visible clinical records grouped by clinic are **deferred**. Medical-note bodies remain staff-only.
