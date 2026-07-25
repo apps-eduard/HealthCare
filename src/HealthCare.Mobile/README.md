@@ -2,7 +2,7 @@
 
 Android-first **.NET MAUI Blazor Hybrid** app for the Patient Mobile MVP.
 
-**Status:** **PM-2 + PM-3 + PM-4 delivered.** PM-5 (booking) through PM-8 are **not** started.
+**Status:** **PM-2 + PM-3 + PM-4 + PM-5 delivered.** PM-6 (My Appointments) through PM-8 are **not** started.
 
 Authoritative product scope: [`Docs/mvp-patient-scope.md`](../../Docs/mvp-patient-scope.md).
 
@@ -101,7 +101,8 @@ Search: trimmed, case-insensitive contains on name/city/address text; optional s
 | `/clinics/{code}` | Clinic details + enroll action |
 | `/clinics/{code}/doctors` | Doctor list |
 | `/clinics/{code}/doctors/{id}/availability` | Date + slots; select slot (not reserved) |
-| `/discovery/booking-next` | PM-5 placeholder — no booking API call |
+| `/discovery/booking-review` | Booking review + submit (`Requested`) |
+| `/discovery/booking-success` | Success receipt (no resubmit) |
 
 ### Timezone
 
@@ -109,7 +110,26 @@ Prefer API clinic-local slot strings + `TimeZoneId`. Fallback: device-local conv
 
 ### Discovery state
 
-`IDiscoveryStateService` holds selected clinic/Doctor/date/slot in memory. Cleared when clinic/Doctor changes and on logout. Not a reservation.
+`IDiscoveryStateService` holds selected clinic/Doctor/date/slot in memory. Cleared when clinic/Doctor changes and on logout. Not a reservation until PM-5 submit succeeds.
+
+## PM-5 appointment booking
+
+### Flow
+
+1. Availability → Continue to booking review  
+2. Review clinic/Doctor/slot/timezone  
+3. Optional reason for visit (max 500)  
+4. `POST /api/v1/patients/me/appointments` with clinic code, Doctor id, `AppointmentDateUtc` = slot `StartUtc`, duration  
+5. Success screen: status **`Requested`**; clinic confirmation still required  
+
+### Rules
+
+- Enrollment required (checked before submit; backend authoritative)
+- Slot conflict (`appointment.slot_conflict` / 409): clear slot, return to availability
+- No application-level booking retry (timeout = uncertain outcome UX)
+- Busy/disabled submit prevents double-tap
+- Receipt store survives navigation without calling create again
+- Logout clears discovery + receipt
 
 ## Configuration
 
@@ -150,8 +170,8 @@ Start the API, then deploy/run on an emulator or device. Seeded Patient accounts
 
 - Deep-link App Links for confirmation emails are not registered (manual token / browser confirm + return to app)
 - Emulator runtime smoke may be unavailable in CI; Android **build** is required
-- Booking, My Appointments, Google/OTP, notifications: PM-5…PM-8
+- My Appointments, cancel/reschedule, Google/OTP, notifications: PM-6…PM-8
 - No specialty catalog (clinic specialty string only); no maps/ratings/public photo subsystem
 - `ClinicDoctorResponse` still includes `StaffMemberId` / `ClinicId` for API navigation; IDs are not shown in UI
-- No Blazor bUnit package in-repo; discovery UI logic covered via Core services + route/state tests
+- No Blazor bUnit package in-repo; booking UI logic covered via Core services + route/state tests
 - Android runtime smoke: not verified unless emulator executed

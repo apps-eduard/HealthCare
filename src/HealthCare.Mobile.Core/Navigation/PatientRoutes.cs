@@ -15,7 +15,11 @@ public static class PatientRoutes
     public const string ClinicEnroll = "/clinics/enroll";
     public const string Appointments = "/appointments";
     public const string Connectivity = "/connectivity";
-    public const string BookingPlaceholder = "/discovery/booking-next";
+    public const string BookingReview = "/discovery/booking-review";
+    public const string BookingSuccess = "/discovery/booking-success";
+
+    /// <summary>Legacy PM-4 route; redirects to booking review.</summary>
+    public const string BookingPlaceholder = BookingReview;
 
     public static string ClinicDetails(string clinicCode) =>
         $"{Clinics}/{Uri.EscapeDataString(clinicCode)}";
@@ -29,7 +33,12 @@ public static class PatientRoutes
     public static bool RequiresAuthentication(string relativePath)
     {
         var path = Normalize(relativePath);
-        if (path is Home or Profile or ProfileEdit or Appointments or BookingPlaceholder)
+        if (path is Home or Profile or ProfileEdit or Appointments)
+        {
+            return true;
+        }
+
+        if (path.StartsWith("/discovery/", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }

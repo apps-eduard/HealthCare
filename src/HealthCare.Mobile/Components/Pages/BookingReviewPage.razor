@@ -1,0 +1,232 @@
+@page "/discovery/booking-review"
+@page "/discovery/booking-next"
+@inject IPatientBookingService Booking
+@inject IPatientDiscoveryService Discovery
+@inject IDiscoveryStateService Selection
+@inject IBookingReceiptStore Receipts
+@inject NavigationManager Nav
+@inject ILogger<BookingReviewPage> Logger
+
+<h1>Review booking</h1>
+<p class="lede">
+    Confirm the details below. Selecting a slot does not reserve it until this request succeeds.
+    New appointments are submitted as <strong>Requested</strong> — the clinic must still confirm.
+</p>
+
+@if (!_ready)
+{
+    <EmptyState Message="@_incompleteMessage" />
+    <div class="actions">
+        <a class="btn" href="@(_recoverHref ?? PatientRoutes.Clinics)">Continue discovery</a>
+        <a class="btn btn-secondary" href="@PatientRoutes.Home">Home</a>
+    </div>
+}
+else
+{
+    <dl class="meta">
+        <dt>Clinic</dt>
+        <dd>@(Selection.Current.ClinicName ?? Selection.Current.ClinicCode)</dd>
+        <dt>Location</dt>
+        <dd>@(string.IsNullOrWhiteSpace(Selection.Current.ClinicCity) ? "—" : Selection.Current.ClinicCity)</dd>
+        <dt>Doctor</dt>
+        <dd>@(Selection.Current.DoctorDisplayName ?? "—")</dd>
+        <dt>Specialty</dt>
+        <dd>@(string.IsNullOrWhiteSpace(Selection.Current.DoctorSpecialty) ? "—" : Selection.Current.DoctorSpecialty)</dd>
+        <dt>Date</dt>
+        <dd>@(Selection.Current.SlotDate?.ToString("yyyy-MM-dd") ?? "—")</dd>
+        <dt>Time</dt>
+        <dd>@SlotDisplay.FormatRange(Selection.Current.SelectedSlot!)</dd>
+    </dl>
+
+    @if (_enrollmentRequired)
+    {
+        <div class="state-panel" role="alert">
+            <h2>Enrollment required</h2>
+            <p>You must enroll with this clinic before booking.</p>
+            <a class="btn" href="@PatientRoutes.ClinicEnroll">Enter clinic code</a>
+            <a class="btn btn-secondary" href="@PatientRoutes.ClinicDetails(Selection.Current.ClinicCode!)">Clinic details</a>
+        </div>
+    }
+
+    <form @onsubmit="SubmitAsync" @onsubmit:preventDefault>
+        <div class="field">
+            <label for="reason">Reason for visit (optional)</label>
+            <InputTextArea id="reason" @bind-Value="_reason" maxlength="@PatientBookingLimits.MaxReasonLength" />
+            <p class="field-hint">Up to @PatientBookingLimits.MaxReasonLength characters. Do not include passwords or clinical records.</p>
+            @if (_reasonError is not null)
+            {
+                <p class="validation-message">@_reasonError</p>
+            }
+        </div>
+
+        @if (_problem is not null)
+        {
+            @if (_problem.Kind is ApiErrorKind.Network)
+            {
+                <OfflineState Message="@_problem.UserMessage" />
+            }
+            else if (_problem.Kind == ApiErrorKind.Timeout)
+            {
+                <ErrorState
+                    Title="Request may still be processing"
+                    Message="We could not confirm the result. Do not submit again yet. Return home and check My Appointments later, or retry only if you are sure no appointment was created."
+                    OnRetry="AllowManualRetry" />
+            }
+            else if (_problem.Kind == ApiErrorKind.Unauthorized)
+            {
+                <SessionExpiredState SignInHref="@PatientRoutes.SignIn" />
+            }
+            else
+            {
+                <ErrorState Message="@_conflictMessage" />
+            }
+        }
+
+        <div class="actions">
+            <button class="btn" type="submit" disabled="@(_busy || _enrollmentRequired || _uncertainOutcome)">
+                @(_busy ? "Submitting…" : "Submit appointment request")
+            </button>
+            <a class="btn btn-secondary"
+               href="@PatientRoutes.DoctorAvailability(Selection.Current.ClinicCode!, Selection.Current.DoctorStaffMemberId!.Value)">
+                Change slot
+            </a>
+            <a class="btn btn-secondary" href="@PatientRoutes.Clinics">Back to clinics</a>
+        </div>
+    </form>
+}
+
+@code {
+    private string _reason = string.Empty;
+    private string? _reasonError;
+    private string? _incompleteMessage;
+    private string? _recoverHref;
+    private string? _conflictMessage;
+    private bool _ready;
+    private bool _busy;
+    private bool _enrollmentRequired;
+    private bool _uncertainOutcome;
+    private ApiProblem? _problem;
+    private CancellationTokenSource? _cts;
+
+    protected override async Task OnInitializedAsync() => await PrepareAsync();
+
+    private async Task PrepareAsync()
+    {
+        var selection = Selection.Current;
+        if (!Booking.IsSelectionReady(selection))
+        {
+            _ready = false;
+            if (string.IsNullOrWhiteSpace(selection.ClinicCode))
+            {
+                _incompleteMessage = "Your clinic selection expired. Browse clinics to continue.";
+                _recoverHref = PatientRoutes.Clinics;
+            }
+            else if (selection.DoctorStaffMemberId is null)
+            {
+                _incompleteMessage = "Choose a Doctor before booking.";
+                _recoverHref = PatientRoutes.ClinicDoctors(selection.ClinicCode);
+            }
+            else
+            {
+                _incompleteMessage = "Choose an available slot before booking.";
+                _recoverHref = PatientRoutes.DoctorAvailability(selection.ClinicCode, selection.DoctorStaffMemberId.Value);
+            }
+
+            return;
+        }
+
+        _ready = true;
+        var clinic = await Discovery.GetClinicAsync(selection.ClinicCode!);
+        if (clinic.IsSuccess && clinic.Value is not null)
+        {
+            Selection.UpdateClinicDetails(clinic.Value.Name, clinic.Value.City, clinic.Value.IsEnrolled);
+            _enrollmentRequired = !clinic.Value.IsEnrolled;
+        }
+        else if (selection.IsEnrolled == false)
+        {
+            _enrollmentRequired = true;
+        }
+    }
+
+    private void AllowManualRetry()
+    {
+        _uncertainOutcome = false;
+        _problem = null;
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_busy || _enrollmentRequired || _uncertainOutcome || !_ready)
+        {
+            return;
+        }
+
+        _reasonError = Booking.ValidateReason(_reason);
+        if (_reasonError is not null)
+        {
+            return;
+        }
+
+        _busy = true;
+        _problem = null;
+        _conflictMessage = null;
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        StateHasChanged();
+
+        try
+        {
+            var selection = Selection.Current;
+            var request = Booking.BuildRequest(selection, _reason);
+            var result = await Booking.SubmitAsync(request, _cts.Token);
+            if (!result.IsSuccess || result.Value is null)
+            {
+                _problem = result.Error ?? new ApiProblem { Kind = ApiErrorKind.Unknown, Title = "Booking failed" };
+                if (_problem.Kind == ApiErrorKind.Timeout)
+                {
+                    _uncertainOutcome = true;
+                    Logger.LogInformation("Booking submit timed out; outcome uncertain.");
+                }
+                else if (_problem.Kind == ApiErrorKind.Conflict
+                         || string.Equals(_problem.ErrorCode, AppointmentErrorCodes.SlotConflict, StringComparison.Ordinal)
+                         || string.Equals(_problem.ErrorCode, AppointmentErrorCodes.InvalidTime, StringComparison.Ordinal)
+                         || string.Equals(_problem.ErrorCode, AppointmentErrorCodes.ConcurrencyConflict, StringComparison.Ordinal))
+                {
+                    _conflictMessage = Booking.MapConflictMessage(_problem);
+                    Selection.ClearSlot();
+                    var doctorId = selection.DoctorStaffMemberId;
+                    var clinicCode = selection.ClinicCode;
+                    if (!string.IsNullOrWhiteSpace(clinicCode) && doctorId is Guid id)
+                    {
+                        Nav.NavigateTo(PatientRoutes.DoctorAvailability(clinicCode, id));
+                        return;
+                    }
+                }
+                else if (string.Equals(_problem.ErrorCode, AppointmentErrorCodes.NotEnrolled, StringComparison.Ordinal)
+                         || _problem.Kind == ApiErrorKind.Forbidden)
+                {
+                    _conflictMessage = Booking.MapConflictMessage(_problem);
+                    _enrollmentRequired = true;
+                }
+                else
+                {
+                    _conflictMessage = Booking.MapConflictMessage(_problem);
+                }
+
+                _busy = false;
+                return;
+            }
+
+            var receipt = Booking.ToReceipt(result.Value, selection, selection.SelectedSlot);
+            Receipts.Set(receipt);
+            Selection.Clear();
+            Logger.LogInformation("Patient appointment request created with Requested status.");
+            Nav.NavigateTo(PatientRoutes.BookingSuccess);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -569,6 +569,7 @@ When added, require:
 - Do not trust JWT claims alone for Patient identity — call the API (`/auth/me`, patient endpoints).
 - PM-3: never log passwords, tokens, registration bodies, or full profile payloads; map auth error codes to safe UI messages.
 - PM-4: Patient clinic directory uses dedicated Patient DTOs (not staff directory); inactive/unknown clinic details → 404; do not log clinic codes unnecessarily; slot selection is not a reservation.
+- PM-5: do not log reason-for-visit text; no application-level booking POST retry after timeout; booking creates `Requested` only.
 
 ---
 

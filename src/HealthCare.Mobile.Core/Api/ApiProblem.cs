@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using HealthCare.Contracts.Appointments;
 using HealthCare.Contracts.Identity;
 using HealthCare.Contracts.Patients;
 
@@ -51,6 +52,20 @@ public sealed class ApiProblem
                     AuthErrorCodes.RegistrationFailed => "Registration could not be completed. Please try again.",
                     PatientErrorCodes.ConcurrencyConflict =>
                         "Your profile was updated elsewhere. Reload the latest profile before saving again.",
+                    AppointmentErrorCodes.SlotConflict =>
+                        "That time is no longer available. Choose another slot.",
+                    AppointmentErrorCodes.NotEnrolled =>
+                        "You must enroll with this clinic before booking.",
+                    AppointmentErrorCodes.InactiveClinic =>
+                        "This clinic is not available for booking.",
+                    AppointmentErrorCodes.InactivePatient =>
+                        "Your Patient account cannot book appointments right now.",
+                    AppointmentErrorCodes.InvalidAssignedStaff =>
+                        "That Doctor is not available for booking.",
+                    AppointmentErrorCodes.InvalidTime =>
+                        "The selected time is no longer valid.",
+                    AppointmentErrorCodes.ConcurrencyConflict =>
+                        "Your selection is out of date. Choose a slot again.",
                     "patient.linkage_required" =>
                         Detail ?? "This account is not linked to a Patient profile and cannot use the Patient app.",
                     _ => null,

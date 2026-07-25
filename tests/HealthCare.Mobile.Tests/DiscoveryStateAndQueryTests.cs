@@ -210,5 +210,10 @@ public sealed class DiscoveryStateServiceTests
             int? durationMinutes = null,
             CancellationToken cancellationToken = default) =>
             throw new NotImplementedException();
+
+        public Task<ApiResult<AppointmentResponse>> CreatePatientAppointmentAsync(
+            CreatePatientAppointmentRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
     }
 }

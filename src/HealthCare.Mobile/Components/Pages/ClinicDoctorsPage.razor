@@ -85,7 +85,7 @@ else
 
     private void OpenAvailability(ClinicDoctorResponse doctor)
     {
-        Selection.SelectDoctor(doctor.StaffMemberId, doctor.DisplayName);
+        Selection.SelectDoctor(doctor.StaffMemberId, doctor.DisplayName, doctor.Specialty);
         Nav.NavigateTo(PatientRoutes.DoctorAvailability(ClinicCode, doctor.StaffMemberId));
     }
 }

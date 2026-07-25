@@ -1,0 +1,55 @@
+@page "/discovery/booking-success"
+@inject IBookingReceiptStore Receipts
+@inject NavigationManager Nav
+
+<h1>Appointment request submitted</h1>
+
+@if (Receipts.LastSuccess is null)
+{
+    <EmptyState Message="No booking confirmation is available. Start from Clinics if you need to book again." />
+    <div class="actions">
+        <a class="btn" href="@PatientRoutes.Home">Home</a>
+        <a class="btn btn-secondary" href="@PatientRoutes.Clinics">Clinics</a>
+    </div>
+}
+else
+{
+    var receipt = Receipts.LastSuccess;
+    <div class="state-panel state-ok" role="status">
+        <h2>Status: @receipt.Status</h2>
+        <p>
+            Your appointment request was submitted. The clinic must still confirm this appointment.
+            <strong>Requested</strong> does not mean confirmed.
+        </p>
+    </div>
+
+    <dl class="meta">
+        <dt>Clinic</dt>
+        <dd>@(receipt.ClinicName ?? receipt.ClinicCode ?? "—")</dd>
+        <dt>Doctor</dt>
+        <dd>@(receipt.DoctorDisplayName ?? "—")</dd>
+        <dt>When</dt>
+        <dd>
+            @if (receipt.SlotSnapshot is { } slot)
+            {
+                @SlotDisplay.FormatRange(slot)
+            }
+            else
+            {
+                @($"{receipt.AppointmentDateUtc:u} ({receipt.DurationMinutes} min)")
+                @if (!string.IsNullOrWhiteSpace(receipt.ClinicTimeZoneId))
+                {
+                    <text> · @receipt.ClinicTimeZoneId</text>
+                }
+            }
+        </dd>
+        <dt>Reason</dt>
+        <dd>@(string.IsNullOrWhiteSpace(receipt.Reason) ? "—" : receipt.Reason)</dd>
+    </dl>
+
+    <div class="actions">
+        <a class="btn" href="@PatientRoutes.Home">Return home</a>
+        <a class="btn btn-secondary" href="@PatientRoutes.Appointments">My Appointments (coming next)</a>
+        <a class="btn btn-secondary" href="@PatientRoutes.Clinics">Browse clinics</a>
+    </div>
+}

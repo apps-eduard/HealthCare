@@ -63,9 +63,9 @@ else
         <h2>Slot selected</h2>
         <p>
             @SlotDisplay.FormatRange(Selection.Current.SelectedSlot!)
-            — not reserved until booking succeeds in the next milestone.
+            — not reserved until booking submission succeeds.
         </p>
-        <a class="btn" href="@PatientRoutes.BookingPlaceholder">Continue to booking (next step)</a>
+        <a class="btn" href="@PatientRoutes.BookingReview">Continue to booking review</a>
     </div>
 }
 

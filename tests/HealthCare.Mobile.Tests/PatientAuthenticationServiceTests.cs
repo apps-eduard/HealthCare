@@ -5,6 +5,7 @@ using HealthCare.Contracts.Identity;
 using HealthCare.Contracts.Patients;
 using HealthCare.Mobile.Core.Api;
 using HealthCare.Mobile.Core.Authentication;
+using HealthCare.Mobile.Core.Booking;
 using HealthCare.Mobile.Core.Discovery;
 using HealthCare.Mobile.Tests.Fakes;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -241,6 +242,7 @@ public sealed class PatientAuthenticationServiceTests
             session,
             new FakeRefresher(_ => Task.FromResult(true)),
             discovery,
+            new BookingReceiptStore(),
             NullLogger<PatientAuthenticationService>.Instance);
 
         await sut.SignOutAsync();
@@ -254,6 +256,7 @@ public sealed class PatientAuthenticationServiceTests
             session,
             new FakeRefresher(_ => Task.FromResult(true)),
             new DiscoveryStateService(),
+            new BookingReceiptStore(),
             NullLogger<PatientAuthenticationService>.Instance);
 
     private static AuthSessionService CreateSession() =>
@@ -383,6 +386,11 @@ public sealed class PatientAuthenticationServiceTests
             Guid staffMemberId,
             DateOnly date,
             int? durationMinutes = null,
+            CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
+
+        public Task<ApiResult<AppointmentResponse>> CreatePatientAppointmentAsync(
+            CreatePatientAppointmentRequest request,
             CancellationToken cancellationToken = default) =>
             throw new NotImplementedException();
     }

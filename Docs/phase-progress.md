@@ -19,7 +19,7 @@
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Patient Mobile MVP **PM-4 complete** (clinic + Doctor discovery). Next: **PM-5** (appointment booking) when scheduled. Do not start PM-5 until explicitly scheduled.
+**Current focus:** Patient Mobile MVP **PM-5 complete** (appointment booking). Next: **PM-6** (My Appointments / cancel / reschedule) when scheduled. Do not start PM-6 until explicitly scheduled.
 
 ### All phases at a glance
 
@@ -37,7 +37,7 @@
 | 8 | Staff web application (Fluent UI) | Partial | `████████░░` 80% |
 | 9 | Medical notes | Partial | `████████░░` 85% |
 | 10 | Hangfire and notifications | Partial | `█████████░` 85% |
-| 11 | Patient mobile application | Partial | `████░░░░░░` 40% |
+| 11 | Patient mobile application | Partial | `█████░░░░░` 50% |
 | 12 | Audit and security hardening | Not started | `░░░░░░░░░░` 0% |
 | 13 | Docker and deployment | Not started | `░░░░░░░░░░` 0% |
 
@@ -947,21 +947,22 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 
 ## Phase 11 — Patient mobile application
 
-**Status:** Partial — **PM-0…PM-4 delivered**; booking/appointments not started  
+**Status:** Partial — **PM-0…PM-5 delivered**; My Appointments not started  
 **Authoritative scope:** `Docs/mvp-patient-scope.md`
 
-### Delivered (PM-1…PM-4)
+### Delivered (PM-1…PM-5)
 
 - Foreign patient profile concealment → `404`
 - Patient cancel/reschedule **2-hour** cutoff (`appointment.patient_mutation_cutoff`)
 - Patient appointment list omits staff display helpers
 - MAUI foundation + auth/profile (PM-2/PM-3)
 - Authenticated Patient clinic browse/search + discovery screens (PM-4)
+- Mobile appointment booking → `Requested` (PM-5)
 - Focused unit + HTTP integration coverage
 
-### Remaining (PM-5…PM-8)
+### Remaining (PM-6…PM-8)
 
-- PM-5…PM-6: Booking and my appointments UX
+- PM-6: My appointments / cancel / reschedule UX
 - PM-7…PM-8: Security matrix + Patient E2E
 
 Do not mark Phase 11 complete until PM-8 DoD is met.
@@ -1122,12 +1123,13 @@ Authoritative scope: **`Docs/mvp-doctor-scope.md`** (**approved** 2026-07-25). *
 | 2026-07-25 | — | **PM-2:** Patient MAUI Blazor Hybrid foundation — Android-first shell, typed client, secure storage |
 | 2026-07-25 | — | **PM-3:** Patient mobile auth + profile — register/confirm/login/session/logout/profile edit |
 | 2026-07-25 | — | **PM-4:** Patient clinic/Doctor discovery — browse/search API, enrollment UI, slots, booking placeholder |
+| 2026-07-25 | — | **PM-5:** Patient mobile appointment booking — review/submit → Requested |
 
 ### Patient Mobile MVP (approved scope)
 
-Authoritative scope: **`Docs/mvp-patient-scope.md`** (**approved** 2026-07-25). **Status: PM-0…PM-4 complete; PM-5…PM-8 not started.**
+Authoritative scope: **`Docs/mvp-patient-scope.md`** (**approved** 2026-07-25). **Status: PM-0…PM-5 complete; PM-6…PM-8 not started.**
 
-Patient-facing app: **.NET MAUI Blazor Hybrid** (Android first). No separate Patient Web app in the initial MVP. Existing Patient APIs retained; PM-1 closed 404 concealment + 2-hour cancel/reschedule cutoff + DTO review. PM-2 delivered app shell. PM-3 delivered registration, confirmation UX, login/session/logout, and profile view/edit. PM-4 delivered authenticated clinic browse/search, clinic-code enrollment UI, Doctor list, availability selection, and PM-5 booking placeholder (no appointment creation).
+Patient-facing app: **.NET MAUI Blazor Hybrid** (Android first). No separate Patient Web app in the initial MVP. Existing Patient APIs retained; PM-1 closed 404 concealment + 2-hour cancel/reschedule cutoff + DTO review. PM-2 delivered app shell. PM-3 delivered registration, confirmation UX, login/session/logout, and profile view/edit. PM-4 delivered authenticated clinic browse/search, clinic-code enrollment UI, Doctor list, availability selection. PM-5 delivered booking review/submit with status **`Requested`** (no auto-confirm; no My Appointments UI).
 
 | Phase | Theme | Complexity | Status |
 |-------|--------|------------|--------|
@@ -1136,14 +1138,14 @@ Patient-facing app: **.NET MAUI Blazor Hybrid** (Android first). No separate Pat
 | PM-2 | MAUI mobile foundation | Medium | **Delivered** (2026-07-25) |
 | PM-3 | Mobile auth + profile | Medium | **Delivered** (2026-07-25) |
 | PM-4 | Clinic browse + Doctor discovery | Medium | **Delivered** (2026-07-25) |
-| PM-5 | Appointment booking (mobile) | Medium | Not started |
+| PM-5 | Appointment booking (mobile) | Medium | **Delivered** (2026-07-25) |
 | PM-6 | My Appointments / cancel / reschedule | Medium | Not started |
 | PM-7 | Patient security negative matrix | Medium | Not started |
 | PM-8 | Patient mobile E2E | Medium | Not started |
 
-**Remaining gaps after PM-4:** booking/appointments mobile UX (PM-5–PM-6); Patient security matrix (PM-7); Patient E2E (PM-8). Confirmation App Links remain a documented PM-3 limitation.
+**Remaining gaps after PM-5:** My Appointments / cancel / reschedule (PM-6); Patient security matrix (PM-7); Patient E2E (PM-8). Confirmation App Links remain a documented PM-3 limitation.
 
-**Do not** treat PM-4 as booking delivery. **Do not** start PM-5 until scheduled.
+**Do not** treat PM-5 as My Appointments delivery. **Do not** start PM-6 until scheduled.
 
 ---
 

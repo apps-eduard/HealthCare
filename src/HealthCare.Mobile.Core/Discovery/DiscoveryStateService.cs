@@ -16,11 +16,25 @@ public sealed record DiscoverySelection
 
     public string? DoctorDisplayName { get; init; }
 
+    public string? DoctorSpecialty { get; init; }
+
+    public string? ClinicCity { get; init; }
+
+    public bool? IsEnrolled { get; init; }
+
     public DateOnly? SlotDate { get; init; }
 
     public AvailableSlotResponse? SelectedSlot { get; init; }
 
     public bool HasSlot => SelectedSlot is not null;
+
+    public bool IsReadyForBooking =>
+        !string.IsNullOrWhiteSpace(ClinicCode)
+        && DoctorStaffMemberId is Guid id
+        && id != Guid.Empty
+        && SelectedSlot is not null
+        && SelectedSlot.StartUtc != default
+        && SelectedSlot.EndUtc > SelectedSlot.StartUtc;
 }
 
 public interface IDiscoveryStateService
@@ -31,7 +45,9 @@ public interface IDiscoveryStateService
 
     void SelectClinic(string clinicCode, string? clinicName);
 
-    void SelectDoctor(Guid staffMemberId, string? displayName);
+    void UpdateClinicDetails(string? clinicName, string? city, bool? isEnrolled);
+
+    void SelectDoctor(Guid staffMemberId, string? displayName, string? specialty = null);
 
     void SelectSlot(DateOnly date, AvailableSlotResponse slot);
 
@@ -82,7 +98,22 @@ public sealed class DiscoveryStateService : IDiscoveryStateService
         Changed?.Invoke();
     }
 
-    public void SelectDoctor(Guid staffMemberId, string? displayName)
+    public void UpdateClinicDetails(string? clinicName, string? city, bool? isEnrolled)
+    {
+        lock (_gate)
+        {
+            _current = _current with
+            {
+                ClinicName = clinicName ?? _current.ClinicName,
+                ClinicCity = city ?? _current.ClinicCity,
+                IsEnrolled = isEnrolled ?? _current.IsEnrolled,
+            };
+        }
+
+        Changed?.Invoke();
+    }
+
+    public void SelectDoctor(Guid staffMemberId, string? displayName, string? specialty = null)
     {
         lock (_gate)
         {
@@ -92,13 +123,20 @@ public sealed class DiscoveryStateService : IDiscoveryStateService
                 {
                     ClinicCode = _current.ClinicCode,
                     ClinicName = _current.ClinicName,
+                    ClinicCity = _current.ClinicCity,
+                    IsEnrolled = _current.IsEnrolled,
                     DoctorStaffMemberId = staffMemberId,
                     DoctorDisplayName = displayName,
+                    DoctorSpecialty = specialty,
                 };
             }
             else
             {
-                _current = _current with { DoctorDisplayName = displayName ?? _current.DoctorDisplayName };
+                _current = _current with
+                {
+                    DoctorDisplayName = displayName ?? _current.DoctorDisplayName,
+                    DoctorSpecialty = specialty ?? _current.DoctorSpecialty,
+                };
             }
         }
 
@@ -128,6 +166,8 @@ public sealed class DiscoveryStateService : IDiscoveryStateService
             {
                 ClinicCode = _current.ClinicCode,
                 ClinicName = _current.ClinicName,
+                ClinicCity = _current.ClinicCity,
+                IsEnrolled = _current.IsEnrolled,
             };
         }
 

@@ -97,6 +97,7 @@ else if (_clinic is not null)
 
         _clinic = result.Value;
         Selection.SelectClinic(_clinic.ClinicCode, _clinic.Name);
+        Selection.UpdateClinicDetails(_clinic.Name, _clinic.City, _clinic.IsEnrolled);
         _loading = false;
         Logger.LogInformation("Clinic details loaded.");
     }

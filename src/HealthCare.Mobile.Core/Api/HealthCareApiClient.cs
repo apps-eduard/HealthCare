@@ -62,6 +62,10 @@ public interface IHealthCareApiClient
         DateOnly date,
         int? durationMinutes = null,
         CancellationToken cancellationToken = default);
+
+    Task<ApiResult<AppointmentResponse>> CreatePatientAppointmentAsync(
+        CreatePatientAppointmentRequest request,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class HealthStatusDto
@@ -314,6 +318,16 @@ public sealed class HealthCareApiClient : IHealthCareApiClient
             null,
             cancellationToken);
     }
+
+    public Task<ApiResult<AppointmentResponse>> CreatePatientAppointmentAsync(
+        CreatePatientAppointmentRequest request,
+        CancellationToken cancellationToken = default) =>
+        // No application-level retry. Pipeline may refresh once on 401 only.
+        SendAuthenticatedAsync<AppointmentResponse>(
+            HttpMethod.Post,
+            "api/v1/patients/me/appointments",
+            request,
+            cancellationToken);
 
     internal static string BuildClinicSearchPath(PatientClinicSearchRequest request)
     {
