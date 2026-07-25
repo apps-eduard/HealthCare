@@ -165,15 +165,33 @@ public sealed class AppointmentAvailabilityEndpointTests : IAsyncLifetime
             var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
             var clinicAId = await db.Clinics.Where(c => c.Slug == "dev-clinic-a").Select(c => c.Id).SingleAsync();
             var orgId = await db.Clinics.Where(c => c.Id == clinicAId).Select(c => c.OrganizationId).SingleAsync();
+            var peerUserId = Guid.NewGuid();
             peerStaffId = Guid.NewGuid();
+            var now = DateTimeOffset.UtcNow;
+            db.Users.Add(new ApplicationUser
+            {
+                Id = peerUserId,
+                Email = $"peer.doctor.{peerUserId:N}@healthcare.local",
+                NormalizedEmail = $"PEER.DOCTOR.{peerUserId:N}@HEALTHCARE.LOCAL",
+                UserName = $"peer.doctor.{peerUserId:N}@healthcare.local",
+                NormalizedUserName = $"PEER.DOCTOR.{peerUserId:N}@HEALTHCARE.LOCAL",
+                EmailConfirmed = true,
+                IsActive = true,
+                SecurityStamp = Guid.NewGuid().ToString("N"),
+                ConcurrencyStamp = Guid.NewGuid().ToString("N"),
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+            });
             db.StaffMembers.Add(new Domain.Staff.StaffMember
             {
                 Id = peerStaffId,
-                UserId = Guid.NewGuid(),
+                UserId = peerUserId,
                 OrganizationId = orgId,
                 ClinicId = clinicAId,
                 Role = AppRoles.Doctor,
                 IsActive = true,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
             });
             await db.SaveChangesAsync();
         }
