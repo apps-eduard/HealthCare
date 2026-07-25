@@ -121,7 +121,7 @@ public sealed class HangfireHostingEndpointTests : IAsyncLifetime
         _ = factory.CreateClient();
 
         using var scope = factory.Services.CreateScope();
-        var storage = Hangfire.JobStorage.Current;
+        var storage = scope.ServiceProvider.GetService<Hangfire.JobStorage>() ?? Hangfire.JobStorage.Current;
         using var connection = storage.GetConnection();
         var jobs = connection.GetRecurringJobs();
         var ids = jobs.Select(j => j.Id).ToList();
