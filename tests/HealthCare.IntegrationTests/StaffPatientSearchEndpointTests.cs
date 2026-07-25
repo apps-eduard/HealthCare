@@ -341,6 +341,148 @@ public sealed class StaffPatientSearchEndpointTests : IAsyncLifetime
         lookup.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
+    [Fact]
+    public async Task Clinic_Admin_Lists_Only_Own_Clinic_Patients()
+    {
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
+        var me = await _client!.GetFromJsonAsync<CurrentUserResponse>("/api/v1/auth/me");
+        var ownClinicId = me!.ClinicId!.Value;
+
+        var list = await _client!.GetFromJsonAsync<PagedResponse<StaffPatientSummaryResponse>>(
+            "/api/v1/staff/patients");
+        list.Should().NotBeNull();
+        list!.Items.Should().OnlyContain(i => i.ClinicId == ownClinicId);
+
+        using var scope = _factory!.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+        var otherClinicPatient = await db.ClinicPatients.AsNoTracking()
+            .Where(cp => cp.ClinicId != ownClinicId)
+            .Select(cp => cp.PatientId)
+            .FirstAsync();
+        list.Items.Should().NotContain(i => i.PatientId == otherClinicPatient);
+
+        var detail = await _client!.GetAsync($"/api/v1/staff/patients/{list.Items[0].PatientId}");
+        detail.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await detail.Content.ReadAsStringAsync();
+        body.ToLowerInvariant().Should().NotContain("medical_note");
+        body.ToLowerInvariant().Should().NotContain("diagnosis");
+        body.ToLowerInvariant().Should().NotContain("password");
+    }
+
+    [Fact]
+    public async Task Clinic_Admin_Enroll_Own_Clinic_Is_Idempotent_And_Cross_Clinic_Denied()
+    {
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
+        using var scope = _factory!.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+        var me = await _client!.GetFromJsonAsync<CurrentUserResponse>("/api/v1/auth/me");
+        var ownClinicId = me!.ClinicId!.Value;
+        var patientId = await db.ClinicPatients
+            .Where(cp => cp.ClinicId == ownClinicId && cp.LocalPatientNumber == "DEV-P-0001")
+            .Select(cp => cp.PatientId)
+            .SingleAsync();
+        var otherClinicId = await db.Clinics.Where(c => c.Id != ownClinicId).Select(c => c.Id).FirstAsync();
+
+        var duplicate = await _client!.PostAsync(
+            $"/api/v1/clinics/{ownClinicId:D}/patients/{patientId:D}/enroll",
+            null);
+        duplicate.StatusCode.Should().Be(HttpStatusCode.OK);
+        var enrolled = await duplicate.Content.ReadFromJsonAsync<ClinicPatientEnrollmentResponse>();
+        enrolled!.AlreadyEnrolled.Should().BeTrue();
+
+        var cross = await _client!.PostAsync(
+            $"/api/v1/clinics/{otherClinicId:D}/patients/{patientId:D}/enroll",
+            null);
+        cross.StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.NotFound);
+
+        var audit = await db.OrganizationAuditEvents.AsNoTracking()
+            .Where(e => e.Action.Contains("enroll") || e.Category == "patient")
+            .OrderByDescending(e => e.OccurredAtUtc)
+            .Take(10)
+            .ToListAsync();
+        if (audit.Count > 0)
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(audit);
+            json.ToLowerInvariant().Should().NotContain("password");
+            json.ToLowerInvariant().Should().NotContain("token");
+            json.ToLowerInvariant().Should().NotContain("medical");
+        }
+    }
+
+    [Fact]
+    public async Task Clinic_Admin_Status_Update_Creates_Safe_Audit()
+    {
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
+        using var scope = _factory!.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+        var patientId = await db.ClinicPatients
+            .Where(cp => cp.LocalPatientNumber == "DEV-P-0001")
+            .Select(cp => cp.PatientId)
+            .SingleAsync();
+
+        var detail = await _client!.GetFromJsonAsync<StaffPatientDetailResponse>($"/api/v1/staff/patients/{patientId}");
+        var response = await _client!.PatchAsJsonAsync(
+            $"/api/v1/staff/patients/{patientId}/clinic-profile",
+            new UpdateClinicPatientRequest { ExpectedVersion = detail!.Version, Status = "Inactive" });
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updated = await response.Content.ReadFromJsonAsync<StaffPatientDetailResponse>();
+
+        var audit = await db.OrganizationAuditEvents.AsNoTracking()
+            .Where(e => e.Action == "patient_clinic_status_changed" || e.ResourceId == patientId)
+            .OrderByDescending(e => e.OccurredAtUtc)
+            .Take(5)
+            .ToListAsync();
+        audit.Should().NotBeEmpty();
+        var json = System.Text.Json.JsonSerializer.Serialize(audit);
+        json.ToLowerInvariant().Should().NotContain("password");
+        json.ToLowerInvariant().Should().NotContain("token");
+        json.ToLowerInvariant().Should().NotContain("secret");
+
+        await _client!.PatchAsJsonAsync(
+            $"/api/v1/staff/patients/{patientId}/clinic-profile",
+            new UpdateClinicPatientRequest { ExpectedVersion = updated!.Version, Status = "Active" });
+    }
+
+    [Fact]
+    public async Task Invalid_Clinic_Status_Returns_400()
+    {
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
+        using var scope = _factory!.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+        var patientId = await db.ClinicPatients
+            .Where(cp => cp.LocalPatientNumber == "DEV-P-0001")
+            .Select(cp => cp.PatientId)
+            .SingleAsync();
+
+        var detail = await _client!.GetFromJsonAsync<StaffPatientDetailResponse>($"/api/v1/staff/patients/{patientId}");
+        var response = await _client!.PatchAsJsonAsync(
+            $"/api/v1/staff/patients/{patientId}/clinic-profile",
+            new UpdateClinicPatientRequest { ExpectedVersion = detail!.Version, Status = "Suspended" });
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var body = await response.Content.ReadAsStringAsync();
+        body.ToLowerInvariant().Should().NotContain("password");
+        body.ToLowerInvariant().Should().NotContain("stacktrace");
+    }
+
+    [Fact]
+    public async Task Platform_Admin_Without_Bypass_Denied_Patient_Search()
+    {
+        await AuthenticateAsync("admin@healthcare.local", "ChangeMe_Admin_1!");
+        using var scope = _factory!.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+        var clinicAId = await db.Clinics.Where(c => c.Slug == "dev-clinic-a").Select(c => c.Id).SingleAsync();
+
+        var denied = await _client!.GetAsync($"/api/v1/staff/patients?clinicId={clinicAId:D}");
+        denied.StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.Unauthorized);
+
+        var allowed = await _client!.GetAsync(
+            $"/api/v1/staff/patients?clinicId={clinicAId:D}&platformAdminBypass=true");
+        allowed.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await allowed.Content.ReadAsStringAsync();
+        body.ToLowerInvariant().Should().NotContain("medical_note");
+        body.ToLowerInvariant().Should().NotContain("password");
+    }
+
     private async Task AuthenticateAsync(string email, string password)
     {
         var login = await _client!.PostAsJsonAsync("/api/v1/auth/login", new LoginRequest

@@ -29,7 +29,7 @@ else if (!Permissions.Has(WebPermissions.PatientsSearch))
 else
 {
     <HcPageHeader Title="Patient Directory"
-                  Subtitle="Organization patient search and clinic enrollment">
+                  Subtitle="@PatientDirectoryPageCopy.Subtitle(Permissions)">
         <Breadcrumb>
             <Breadcrumb>
                 <BreadcrumbItem Href="/dashboard">Home</BreadcrumbItem>
@@ -91,7 +91,7 @@ else
                     </SelectOptions>
                 </Select>
             </div>
-            @if (Permissions.CanFilterByClinic)
+            @if (PatientDirectoryPermissionRules.ShowClinicPicker(Permissions))
             {
                 <ClinicPicker Value="_clinicId" ValueChanged="OnClinicFilterChanged" Label="Clinic filter"
                               HelperText="@(Permissions.IsPlatformAdmin ? "Required for PLATFORM_ADMIN" : "Leave empty for all clinics in your organization")"
@@ -100,9 +100,14 @@ else
                               PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
                               Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)" />
             }
-            else if (Permissions.Has(WebPermissions.ClinicsRead))
+            else if (_membershipClinicId is not null || !string.IsNullOrWhiteSpace(_clinicCaptionName))
             {
-                <ClinicPicker Label="Clinic" AllowClear="false" Required="false" Disabled="true" />
+                <div>
+                    <div class="hc-filter-label">Clinic</div>
+                    <div class="hc-caption" data-testid="patients-clinic-caption">
+                        @PatientDirectoryPageCopy.ClinicCaption(Permissions, _clinicCaptionName)
+                    </div>
+                </div>
             }
             <div>
                 <label class="hc-filter-label" for="patients-sort">Sort by</label>
@@ -143,7 +148,7 @@ else
     else
     {
         <div class="hc-table-wrap">
-            <table class="hc-table">
+            <table class="hc-table" aria-label="Clinic patients">
                 <thead>
                     <tr>
                         <th>Patient No.</th>
@@ -183,8 +188,7 @@ else
                                             Details
                                         </Button>
                                     }
-                                    @if (Permissions.Has(WebPermissions.PatientsUpdateClinicStatus)
-                                         && (Permissions.IsOrganizationAdmin || Permissions.IsPlatformAdmin))
+                                    @if (PatientDirectoryPermissionRules.CanEnrollAcrossClinics(Permissions))
                                     {
                                         <Button Type="@ButtonType.Link"
                                                 Class="hc-action-wide"
@@ -201,8 +205,7 @@ else
                                             {
                                                 <MenuItem OnClick="@(() => OpenDetailAsync(row))">Details</MenuItem>
                                             }
-                                            @if (Permissions.Has(WebPermissions.PatientsUpdateClinicStatus)
-                                                 && (Permissions.IsOrganizationAdmin || Permissions.IsPlatformAdmin))
+                                            @if (PatientDirectoryPermissionRules.CanEnrollAcrossClinics(Permissions))
                                             {
                                                 <MenuItem OnClick="@(() => OpenEnrollFromRowAsync(row))">Enroll in clinic</MenuItem>
                                             }
@@ -247,6 +250,8 @@ else
     private string? _clinicPatientStatus;
     private string? _patientActiveFilter;
     private Guid? _clinicId;
+    private Guid? _membershipClinicId;
+    private string? _clinicCaptionName;
     private string _sortBy = "registeredAtUtc";
     private string _sortDirection = "desc";
     private int _page = 1;
@@ -281,6 +286,12 @@ else
             {
                 _clinicId = ClinicContext.SelectedClinicId;
             }
+        }
+
+        if (!Permissions.CanFilterByClinic && Permissions.CurrentUser?.ClinicId is Guid membershipClinic)
+        {
+            _membershipClinicId = membershipClinic;
+            await ResolveClinicCaptionAsync(membershipClinic);
         }
 
         await LoadAsync();
@@ -544,6 +555,26 @@ else
             {
                 _loading = false;
             }
+        }
+    }
+
+    private async Task ResolveClinicCaptionAsync(Guid clinicId)
+    {
+        try
+        {
+            if (_clinicLabels.TryGetValue(clinicId, out var cached))
+            {
+                _clinicCaptionName = cached;
+                return;
+            }
+
+            var clinic = await ClinicsApi.GetByIdAsync(clinicId, Permissions.IsPlatformAdmin);
+            _clinicCaptionName = clinic.Name;
+            _clinicLabels[clinicId] = clinic.Name;
+        }
+        catch
+        {
+            _clinicCaptionName = null;
         }
     }
 

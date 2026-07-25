@@ -7,7 +7,8 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace HealthCare.Api.Controllers;
 
-[Authorize(Policy = AuthorizationPolicies.StaffUser)]
+// Authenticated (not StaffUser): PLATFORM_ADMIN may lack membership and uses explicit bypass in the service.
+[Authorize(Policy = AuthorizationPolicies.Authenticated)]
 [Route("api/v1/clinics")]
 public sealed class ClinicsController : ControllerBase
 {

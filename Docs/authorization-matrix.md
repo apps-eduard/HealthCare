@@ -192,7 +192,7 @@ Pages:
 - `/clinics` — organization clinic directory + management (`clinics.read` for list; create/update/activate/deactivate gated separately)
 - `/staff` — staff list/management (`staff.read` required); tabs `/staff/clinic-admins`, `/staff/doctors`, `/staff/nurses`, `/staff/receptionists`
 - `/doctors` — operational doctor directory (`staff.read` or `availability.read`); Clinic Admin clinic-scoped (no clinic picker); links to availability/appointments
-- `/patients` — patient directory + enrollment management (`patients.search` list; `patients.read` detail; `patients.update_clinic_status` for status/enroll)
+- `/patients` — patient directory + enrollment management (`patients.search` list; `patients.read` detail; `patients.update_clinic_status` for status/enroll). Clinic Admin: clinic-scoped, no clinic picker, no cross-clinic enroll UI. Staff patient APIs (`/api/v1/staff/patients`, clinic enroll) use `Authenticated` + service scope (PLATFORM_ADMIN requires `platformAdminBypass` + `clinicId`).
 - `/appointments` — appointment queue (`appointments.read`; mutations gated per action permission); optional `?doctorId=` filter
 - `/appointments/calendar` — day/week calendar (`appointments.read`)
 - `/availability` — doctor availability management; optional `?doctorId=` deep-link

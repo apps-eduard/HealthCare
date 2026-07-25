@@ -10,9 +10,10 @@ namespace HealthCare.Api.Controllers;
 
 /// <summary>
 /// Staff clinic-scoped patient search and clinic-profile administration.
+/// Authenticated (not StaffUser): PLATFORM_ADMIN may lack membership and uses explicit bypass in the service.
 /// Tenant rules are enforced in <see cref="IStaffPatientService"/>, not in this controller.
 /// </summary>
-[Authorize(Policy = AuthorizationPolicies.StaffUser)]
+[Authorize(Policy = AuthorizationPolicies.Authenticated)]
 [Route("api/v1/staff/patients")]
 public sealed class StaffPatientsController : ControllerBase
 {

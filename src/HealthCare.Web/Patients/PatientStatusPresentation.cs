@@ -105,27 +105,37 @@ public static class PatientProblemMessages
             return string.Join(" ", ex.ValidationErrors.SelectMany(kv => kv.Value));
         }
 
-        return ex.ErrorCode switch
+        return ex.StatusCode switch
         {
-            "patient.not_found" or "patient.not_found_or_denied" or "patient.access_denied" =>
-                "Patient was not found or you do not have access.",
-            "patient.concurrency_conflict" or "patient.clinic_patient_concurrency_conflict" =>
-                "This clinic patient record was updated by someone else. Reload and try again.",
-            "patient.invalid_search" =>
-                "The search filters are not valid. Adjust them and try again.",
-            "patient.clinic_inactive" =>
-                "The clinic is inactive and cannot accept enrollments.",
-            "patient.organization_inactive" =>
-                "The organization is inactive.",
-            "patient.clinic_code_invalid" =>
-                "The clinic is invalid for this enrollment.",
-            "authorization.permission_denied" =>
-                "You do not have permission to perform this action.",
-            "authz.clinic_access_denied" =>
-                "That clinic is outside your organization scope.",
-            "authz.patient_self_scope_denied" =>
-                "Patient self-scope accounts cannot use staff patient APIs.",
-            _ => ex.ToUserMessage(),
+            400 when string.IsNullOrWhiteSpace(ex.ErrorCode) =>
+                "The request was invalid. Check the fields and try again.",
+            401 => "Your session expired. Sign in again.",
+            403 when string.IsNullOrWhiteSpace(ex.ErrorCode) =>
+                "You do not have permission to manage patients for this clinic.",
+            404 when string.IsNullOrWhiteSpace(ex.ErrorCode) =>
+                "Patient was not found or is outside your clinic scope.",
+            _ => ex.ErrorCode switch
+            {
+                "patient.not_found" or "patient.not_found_or_denied" or "patient.access_denied" =>
+                    "Patient was not found or you do not have access.",
+                "patient.concurrency_conflict" or "patient.clinic_patient_concurrency_conflict" =>
+                    "This clinic patient record was updated by someone else. Reload and try again.",
+                "patient.invalid_search" =>
+                    "The search filters are not valid. Adjust them and try again.",
+                "patient.clinic_inactive" =>
+                    "The clinic is inactive and cannot accept enrollments.",
+                "patient.organization_inactive" =>
+                    "The organization is inactive.",
+                "patient.clinic_code_invalid" =>
+                    "The clinic is invalid for this enrollment.",
+                "authorization.permission_denied" =>
+                    "You do not have permission to perform this action.",
+                "authz.clinic_access_denied" =>
+                    "That clinic is outside your organization scope.",
+                "authz.patient_self_scope_denied" =>
+                    "Patient self-scope accounts cannot use staff patient APIs.",
+                _ => ex.ToUserMessage(),
+            },
         };
     }
 

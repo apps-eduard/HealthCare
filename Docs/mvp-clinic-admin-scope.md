@@ -384,6 +384,10 @@ List doctors for membership clinic; use for appointments/availability. Backend +
 
 Search/detail/status/enroll **own clinic** only. Hide cross-clinic enroll UI for Clinic Admin (CA-5). Backend + Web base **implemented**.
 
+### Status
+
+**CA-5 delivered:** `/patients` is clinic-scoped for Clinic Admin (fixed clinic caption, no clinic picker, no cross-clinic Enroll UI). Status updates use `ExpectedVersion` (`Active`/`Inactive` only). Cross-clinic enrollment remains Org/Platform Admin. Staff patient APIs use `Authenticated` + service-enforced scope so Platform Admin requires explicit `clinicId` + `platformAdminBypass` (no silent first-clinic). No medical-note controls.
+
 ---
 
 ## 13. Appointment management
@@ -564,7 +568,7 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 | CA-2 | Clinic profile settings | Medium | **Delivered** (2026-07-24) |
 | CA-3 | Staff UI hardening | Small | **Delivered** (2026-07-24) |
 | CA-4 | Doctor directory + availability verify | Small | **Delivered** (2026-07-25) |
-| CA-5 | Patients verify | Small | After CA-1 |
+| CA-5 | Patients verify | Small | **Delivered** (2026-07-25) |
 | CA-6 | Appointments verify (Complete for CA) | Small | After CA-1 |
 | CA-7 | Operations verify | Small | After CA-1 |
 | CA-8 | Clinic reports (JSON) | Large | Approved |
@@ -590,7 +594,7 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 | Clinic profile | Approved | `clinic_profile.*` | **Done** | **Done** (`/clinic/settings`) | — | CA-2 |
 | Staff ops | Matrix | existing staff.* | Done | **Done** (CA-3 actor-aware) | — | CA-3 |
 | Doctors / availability | Matrix | availability.* + staff.read | Done | **Done** (`/doctors` + `/availability`) | — | CA-4 |
-| Patients | Matrix | patients.* | Done | Done | Hide cross-clinic enroll | CA-5 |
+| Patients | Matrix | patients.* | Done | **Done** (CA-5 actor-aware) | — | CA-5 |
 | Appointments | Matrix | appointments.* | Done | Done | Complete for CA | CA-6 |
 | Ops | Matrix | reminders/summaries | Done | Done | Verify | CA-7 |
 | Clinic reports | Approved | `clinic_reports.read` | Missing | Missing | New | CA-8 |
@@ -612,3 +616,4 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 | 2026-07-24 | **CA-2 delivered:** `clinic_profile.read` / `clinic_profile.update`, `GET`/`PATCH /api/v1/clinic/settings`, Clinic Profile UI, E2E smoke |
 | 2026-07-24 | **CA-3 delivered:** Clinic Admin actor-aware `/staff` (no clinic picker/change-clinic; clinic role filter); E2E staff smoke |
 | 2026-07-25 | **CA-4 delivered:** `/doctors` directory + availability deep-link/actor polish; doctor DisplayName fix; Clinic Admin E2E doctors smoke |
+| 2026-07-25 | **CA-5 delivered:** `/patients` actor-aware directory; hide cross-clinic enroll; status ExpectedVersion; Platform Admin Authenticated+bypass; E2E patients smoke |

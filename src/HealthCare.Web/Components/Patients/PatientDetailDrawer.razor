@@ -126,7 +126,11 @@
                  && !string.IsNullOrWhiteSpace(_newStatus)
                  && _newStatus != _selectedEnrollment.ClinicPatientStatus)
             {
-                <Button Type="@ButtonType.Primary" Loading="_busy" Disabled="_busy" OnClick="ConfirmUpdateAsync">
+                <Button Type="@ButtonType.Primary"
+                        Loading="_busy"
+                        Disabled="_busy"
+                        OnClick="ConfirmUpdateAsync"
+                        AriaLabel="Update enrollment status">
                     Update status
                 </Button>
             }
@@ -158,9 +162,8 @@
         _patient is null ? "Patient details" : PatientDisplay.FullName(_patient);
 
     private bool CanEnroll =>
-        Permissions.Has(WebPermissions.PatientsUpdateClinicStatus)
-        && _patient is not null
-        && (Permissions.IsOrganizationAdmin || Permissions.IsPlatformAdmin);
+        PatientDirectoryPermissionRules.CanEnrollAcrossClinics(Permissions)
+        && _patient is not null;
 
     public async Task OpenAsync(Guid patientId, Guid? preferredClinicId = null, bool platformAdminBypass = false)
     {
@@ -321,7 +324,7 @@
 
     private async Task OpenEnrollAsync()
     {
-        if (_patient is null || !CanEnroll)
+        if (_patient is null || !PatientDirectoryPermissionRules.CanEnrollAcrossClinics(Permissions))
         {
             return;
         }
