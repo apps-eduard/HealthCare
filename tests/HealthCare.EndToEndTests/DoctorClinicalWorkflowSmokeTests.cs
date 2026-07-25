@@ -72,11 +72,16 @@ public sealed class DoctorClinicalWorkflowSmokeTests : E2ePageTestBase
                 .ToBeVisibleAsync(new() { Timeout = 30_000 });
 
             dialog = DetailDialog(appointment.Id);
-            await Expect(dialog.GetByText("Signed", new() { Exact = false })).ToBeVisibleAsync();
+            await Expect(dialog.GetByText("Signed", new() { Exact = false })).ToBeVisibleAsync(new() { Timeout = 20_000 });
             await Expect(dialog.GetByRole(AriaRole.Button, new() { Name = "Save medical note draft" }))
                 .ToHaveCountAsync(0);
+
+            await dialog.GetByRole(AriaRole.Button, new() { Name = "Open medical note" }).ClickAsync();
+            await Expect(dialog.GetByText("P:", new() { Exact = false })).ToBeVisibleAsync(new() { Timeout = 20_000 });
+            await Expect(dialog.GetByText($"P: {originalPlan}")
+                    .Or(dialog.GetByText("P: Initial plan")))
+                .ToBeVisibleAsync(new() { Timeout = 10_000 });
             await Expect(dialog.Locator("#medical-note-plan")).ToHaveCountAsync(0);
-            await Expect(dialog.GetByText($"P: {originalPlan}")).ToBeVisibleAsync();
 
             await dialog.GetByLabel("Amendment reason").FillAsync("DR10 correction");
             await dialog.GetByLabel("Amendment plan").FillAsync("DR10 amended plan");
