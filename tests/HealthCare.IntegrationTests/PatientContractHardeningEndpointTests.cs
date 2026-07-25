@@ -11,6 +11,7 @@ using HealthCare.Domain.Identity;
 using HealthCare.Infrastructure.Appointments;
 using HealthCare.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,11 +33,9 @@ public sealed class PatientContractHardeningEndpointTests : IAsyncLifetime
     private const string ClinicAdminEmail = "clinicadmin@healthcare.local";
     private const string ClinicAdminPassword = "ChangeMe_ClinicAdmin_1!";
 
-    private readonly MutableTimeProvider _clock = new(DateTimeOffset.Parse("2026-07-25T12:00:00Z"));
     private PostgreSqlContainer? _postgres;
     private WebApplicationFactory<Program>? _factory;
     private HttpClient? _client;
-    private Guid _patient2Id;
     private Guid _foreignOrgPatientId;
 
     public async Task InitializeAsync()
@@ -81,8 +80,6 @@ public sealed class PatientContractHardeningEndpointTests : IAsyncLifetime
                     services.RemoveAll(typeof(DbContextOptions<HealthCareDbContext>));
                     services.RemoveAll(typeof(HealthCareDbContext));
                     services.AddDbContext<HealthCareDbContext>(options => options.UseNpgsql(connectionString));
-                    services.RemoveAll(typeof(TimeProvider));
-                    services.AddSingleton<TimeProvider>(_clock);
                 });
             });
 
@@ -110,9 +107,8 @@ public sealed class PatientContractHardeningEndpointTests : IAsyncLifetime
     {
         await AuthenticateAsync(PatientEmail, PatientPassword);
         var doctorId = await GetClinicADoctorStaffIdAsync();
-        var start = _clock.GetUtcNow().AddDays(3);
-        var created = await CreatePatientAppointmentAsync(doctorId, start);
-        await SetAppointmentStartAsync(created.Id, _clock.GetUtcNow().Add(AppointmentService.PatientScheduleMutationCutoff));
+        var created = await CreatePatientAppointmentAsync(doctorId);
+        await SetAppointmentStartAsync(created.Id, DateTimeOffset.UtcNow.Add(AppointmentService.PatientScheduleMutationCutoff));
 
         var cancel = await _client!.PostAsJsonAsync($"/api/v1/appointments/{created.Id}/cancel", new
         {
@@ -128,8 +124,8 @@ public sealed class PatientContractHardeningEndpointTests : IAsyncLifetime
     {
         await AuthenticateAsync(PatientEmail, PatientPassword);
         var doctorId = await GetClinicADoctorStaffIdAsync();
-        var created = await CreatePatientAppointmentAsync(doctorId, _clock.GetUtcNow().AddDays(4));
-        await SetAppointmentStartAsync(created.Id, _clock.GetUtcNow().AddHours(1));
+        var created = await CreatePatientAppointmentAsync(doctorId);
+        await SetAppointmentStartAsync(created.Id, DateTimeOffset.UtcNow.AddHours(1));
 
         var cancel = await _client!.PostAsJsonAsync($"/api/v1/appointments/{created.Id}/cancel", new
         {
@@ -150,7 +146,7 @@ public sealed class PatientContractHardeningEndpointTests : IAsyncLifetime
     {
         await AuthenticateAsync(PatientEmail, PatientPassword);
         var doctorId = await GetClinicADoctorStaffIdAsync();
-        var created = await CreatePatientAppointmentAsync(doctorId, _clock.GetUtcNow().AddDays(5));
+        var created = await CreatePatientAppointmentAsync(doctorId);
 
         var ok = await _client!.PostAsJsonAsync($"/api/v1/appointments/{created.Id}/reschedule", new
         {
@@ -161,7 +157,7 @@ public sealed class PatientContractHardeningEndpointTests : IAsyncLifetime
         ok.StatusCode.Should().Be(HttpStatusCode.OK);
         var moved = await ok.Content.ReadFromJsonAsync<AppointmentResponse>();
 
-        await SetAppointmentStartAsync(moved!.Id, _clock.GetUtcNow().AddMinutes(45));
+        await SetAppointmentStartAsync(moved!.Id, DateTimeOffset.UtcNow.AddMinutes(45));
         var denied = await _client!.PostAsJsonAsync($"/api/v1/appointments/{moved.Id}/reschedule", new
         {
             appointmentDateUtc = AlignedSlotDaysAhead(7),
@@ -178,8 +174,8 @@ public sealed class PatientContractHardeningEndpointTests : IAsyncLifetime
     {
         await AuthenticateAsync(PatientEmail, PatientPassword);
         var doctorId = await GetClinicADoctorStaffIdAsync();
-        var created = await CreatePatientAppointmentAsync(doctorId, _clock.GetUtcNow().AddDays(8));
-        await SetAppointmentStartAsync(created.Id, _clock.GetUtcNow().Add(AppointmentService.PatientScheduleMutationCutoff));
+        var created = await CreatePatientAppointmentAsync(doctorId);
+        await SetAppointmentStartAsync(created.Id, DateTimeOffset.UtcNow.Add(AppointmentService.PatientScheduleMutationCutoff));
 
         var reschedule = await _client!.PostAsJsonAsync($"/api/v1/appointments/{created.Id}/reschedule", new
         {
@@ -195,7 +191,7 @@ public sealed class PatientContractHardeningEndpointTests : IAsyncLifetime
     {
         await AuthenticateAsync(PatientEmail, PatientPassword);
         var doctorId = await GetClinicADoctorStaffIdAsync();
-        var created = await CreatePatientAppointmentAsync(doctorId, _clock.GetUtcNow().AddDays(10));
+        var created = await CreatePatientAppointmentAsync(doctorId);
 
         await AuthenticateAsync(Patient2Email, Patient2Password);
         var cancel = await _client!.PostAsJsonAsync($"/api/v1/appointments/{created.Id}/cancel", new
@@ -210,12 +206,12 @@ public sealed class PatientContractHardeningEndpointTests : IAsyncLifetime
     {
         await AuthenticateAsync(PatientEmail, PatientPassword);
         var doctorId = await GetClinicADoctorStaffIdAsync();
-        var created = await CreatePatientAppointmentAsync(doctorId, _clock.GetUtcNow().AddDays(11));
+        var created = await CreatePatientAppointmentAsync(doctorId);
 
         await AuthenticateAsync(Patient2Email, Patient2Password);
         var reschedule = await _client!.PostAsJsonAsync($"/api/v1/appointments/{created.Id}/reschedule", new
         {
-            appointmentDateUtc = _clock.GetUtcNow().AddHours(-1),
+            appointmentDateUtc = DateTimeOffset.UtcNow.AddHours(-1),
             durationMinutes = 30,
             expectedVersion = 0,
         });
@@ -235,7 +231,7 @@ public sealed class PatientContractHardeningEndpointTests : IAsyncLifetime
     {
         await AuthenticateAsync(PatientEmail, PatientPassword);
         var doctorId = await GetClinicADoctorStaffIdAsync();
-        await CreatePatientAppointmentAsync(doctorId, _clock.GetUtcNow().AddDays(12));
+        await CreatePatientAppointmentAsync(doctorId);
 
         var list = await _client!.GetFromJsonAsync<PagedResponse<AppointmentResponse>>("/api/v1/patients/me/appointments");
         var item = list!.Items.Should().NotBeEmpty().And.Subject.First();
@@ -263,11 +259,12 @@ public sealed class PatientContractHardeningEndpointTests : IAsyncLifetime
     {
         using var scope = _factory!.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
-        var users = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<Domain.Identity.ApplicationUser>>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var now = DateTimeOffset.UtcNow;
 
         var clinicA = await db.Clinics.SingleAsync(c => c.Slug == "dev-clinic-a");
 
-        var user2 = new Domain.Identity.ApplicationUser
+        var user2 = new ApplicationUser
         {
             Id = Guid.NewGuid(),
             Email = Patient2Email,
@@ -294,10 +291,9 @@ public sealed class PatientContractHardeningEndpointTests : IAsyncLifetime
             PatientId = patient2.Id,
             LocalPatientNumber = "A-PM1-2",
             Status = Domain.Patients.ClinicPatientStatus.Active,
-            RegisteredAtUtc = _clock.GetUtcNow(),
-            UpdatedAtUtc = _clock.GetUtcNow(),
+            RegisteredAtUtc = now,
+            UpdatedAtUtc = now,
         });
-        _patient2Id = patient2.Id;
 
         var foreignOrg = Guid.NewGuid();
         var foreignClinic = Guid.NewGuid();
@@ -332,8 +328,8 @@ public sealed class PatientContractHardeningEndpointTests : IAsyncLifetime
             PatientId = foreignPatient.Id,
             LocalPatientNumber = "F-1",
             Status = Domain.Patients.ClinicPatientStatus.Active,
-            RegisteredAtUtc = _clock.GetUtcNow(),
-            UpdatedAtUtc = _clock.GetUtcNow(),
+            RegisteredAtUtc = now,
+            UpdatedAtUtc = now,
         });
         _foreignOrgPatientId = foreignPatient.Id;
         await db.SaveChangesAsync();
@@ -348,9 +344,8 @@ public sealed class PatientContractHardeningEndpointTests : IAsyncLifetime
         await db.SaveChangesAsync();
     }
 
-    private async Task<AppointmentResponse> CreatePatientAppointmentAsync(Guid doctorId, DateTimeOffset eventualStart)
+    private async Task<AppointmentResponse> CreatePatientAppointmentAsync(Guid doctorId)
     {
-        // Book a far aligned slot (availability), then overwrite start for cutoff scenarios.
         var bookAt = AlignedSlotDaysAhead(30 + Random.Shared.Next(1, 50));
         var response = await _client!.PostAsJsonAsync("/api/v1/patients/me/appointments", new
         {
@@ -361,18 +356,12 @@ public sealed class PatientContractHardeningEndpointTests : IAsyncLifetime
             reason = "PM-1",
         });
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var created = (await response.Content.ReadFromJsonAsync<AppointmentResponse>())!;
-        if (created.AppointmentDateUtc != eventualStart)
-        {
-            await SetAppointmentStartAsync(created.Id, eventualStart);
-        }
-
-        return created;
+        return (await response.Content.ReadFromJsonAsync<AppointmentResponse>())!;
     }
 
-    private DateTimeOffset AlignedSlotDaysAhead(int daysAhead)
+    private static DateTimeOffset AlignedSlotDaysAhead(int daysAhead)
     {
-        var localDate = DateOnly.FromDateTime(_clock.GetUtcNow().UtcDateTime.Date).AddDays(daysAhead);
+        var localDate = DateOnly.FromDateTime(DateTime.UtcNow.Date).AddDays(daysAhead);
         return new DateTimeOffset(localDate.ToDateTime(new TimeOnly(9, 0), DateTimeKind.Unspecified), TimeSpan.FromHours(3))
             .ToUniversalTime();
     }
@@ -399,16 +388,5 @@ public sealed class PatientContractHardeningEndpointTests : IAsyncLifetime
         var tokens = await loginResponse.Content.ReadFromJsonAsync<AuthTokenResponse>();
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", tokens!.AccessToken);
-    }
-
-    private sealed class MutableTimeProvider : TimeProvider
-    {
-        private DateTimeOffset _utcNow;
-
-        public MutableTimeProvider(DateTimeOffset utcNow) => _utcNow = utcNow;
-
-        public override DateTimeOffset GetUtcNow() => _utcNow;
-
-        public void SetUtcNow(DateTimeOffset utcNow) => _utcNow = utcNow;
     }
 }
