@@ -61,7 +61,8 @@ public sealed class Appointment
 }
 
 /// <summary>
-/// Minimal appointment status workflow. Invalid transitions throw; callers map to Problem Details.
+/// Appointment status workflow. Terminal states have no outbound transitions (no reopen).
+/// <c>InProgress</c> is modeled for future use; staff MVP APIs complete from CheckedIn directly.
 /// </summary>
 public static class AppointmentStatusTransitions
 {
@@ -100,8 +101,17 @@ public static class AppointmentStatusTransitions
     public static bool CanReschedule(AppointmentStatus status) =>
         status is AppointmentStatus.Requested or AppointmentStatus.Confirmed;
 
+    /// <summary>
+    /// Completion is allowed from CheckedIn or InProgress. Medical notes are not a prerequisite.
+    /// </summary>
+    public static bool CanComplete(AppointmentStatus status) =>
+        status is AppointmentStatus.CheckedIn or AppointmentStatus.InProgress;
+
     public static bool CanTransition(AppointmentStatus from, AppointmentStatus to) =>
         Allowed.Contains((from, to));
+
+    public static IReadOnlyCollection<AppointmentStatus> AllowedTargets(AppointmentStatus from) =>
+        Allowed.Where(pair => pair.From == from).Select(pair => pair.To).ToArray();
 
     public static void EnsureCanTransition(AppointmentStatus from, AppointmentStatus to)
     {

@@ -576,7 +576,7 @@ else
 
         var confirmed = await Modals.ConfirmAsync(
             ActionLabel(action),
-            $"Confirm {ActionLabel(action).ToLowerInvariant()} for this appointment?");
+            ConfirmMessage(action));
         if (!confirmed)
         {
             return;
@@ -584,6 +584,20 @@ else
 
         await MutateAsync(action);
     }
+
+    private string ConfirmMessage(AppointmentUiAction action) =>
+        action switch
+        {
+            AppointmentUiAction.Complete =>
+                "Complete this appointment? This cannot be undone. A medical note is not required.",
+            AppointmentUiAction.NoShow =>
+                "Mark this appointment as no-show? This cannot be undone.",
+            AppointmentUiAction.CheckIn =>
+                "Check in this appointment?",
+            AppointmentUiAction.Confirm =>
+                "Confirm this appointment?",
+            _ => $"Confirm {ActionLabel(action).ToLowerInvariant()} for this appointment?",
+        };
 
     private async Task MutateAsync(AppointmentUiAction action)
     {
@@ -607,12 +621,18 @@ else
             };
             _changed = true;
             Notify.Success($"{ActionLabel(action)} succeeded.");
+            if (MedicalNotePermissionRules.CanView(Permissions))
+            {
+                await LoadNotesAsync();
+            }
         }
-        catch (ApiProblemException ex) when (AppointmentProblemMessages.IsConcurrencyConflict(ex))
+        catch (ApiProblemException ex) when (AppointmentProblemMessages.RequiresReload(ex))
         {
             var reload = await Modals.ConfirmAsync(
                 "Appointment changed",
-                "This appointment was updated elsewhere. Reload the latest version?");
+                AppointmentProblemMessages.IsInvalidTransition(ex)
+                    ? "This status change is no longer valid. Reload the latest appointment state?"
+                    : "This appointment was updated elsewhere. Reload the latest version?");
             if (reload)
             {
                 await LoadAsync();

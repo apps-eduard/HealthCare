@@ -46,10 +46,12 @@ public static class AppointmentActionRules
             case "CheckedIn":
                 TryAdd(actions, AppointmentUiAction.Complete, permissions, WebPermissions.AppointmentsComplete);
                 TryAdd(actions, AppointmentUiAction.NoShow, permissions, WebPermissions.AppointmentsNoShow);
+                TryAdd(actions, AppointmentUiAction.Cancel, permissions, WebPermissions.AppointmentsCancel);
                 break;
 
             case "InProgress":
                 TryAdd(actions, AppointmentUiAction.Complete, permissions, WebPermissions.AppointmentsComplete);
+                TryAdd(actions, AppointmentUiAction.Cancel, permissions, WebPermissions.AppointmentsCancel);
                 break;
         }
 

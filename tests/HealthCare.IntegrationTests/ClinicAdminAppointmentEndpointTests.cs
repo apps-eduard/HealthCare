@@ -187,6 +187,43 @@ public sealed class ClinicAdminAppointmentEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Clinic_Admin_Repeated_Complete_Does_Not_Succeed_Twice()
+    {
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
+        var patientId = await GetSeedPatientIdAsync();
+        var doctorId = await GetClinicADoctorStaffIdAsync();
+        var create = await _client!.PostAsJsonAsync("/api/v1/staff/appointments", new
+        {
+            patientId,
+            doctorStaffMemberId = doctorId,
+            appointmentDateUtc = AlignedFutureSlotUtc(daysAhead: 8),
+            durationMinutes = 30,
+        });
+        var created = await create.Content.ReadFromJsonAsync<AppointmentResponse>();
+
+        var checkIn = await _client!.PostAsJsonAsync(
+            $"/api/v1/staff/appointments/{created!.Id}/check-in",
+            new AppointmentActionRequest { ExpectedVersion = created.Version });
+        var checkedIn = await checkIn.Content.ReadFromJsonAsync<AppointmentResponse>();
+
+        var complete = await _client!.PostAsJsonAsync(
+            $"/api/v1/staff/appointments/{checkedIn!.Id}/complete",
+            new AppointmentActionRequest { ExpectedVersion = checkedIn.Version });
+        complete.StatusCode.Should().Be(HttpStatusCode.OK);
+        var completed = await complete.Content.ReadFromJsonAsync<AppointmentResponse>();
+
+        var again = await _client!.PostAsJsonAsync(
+            $"/api/v1/staff/appointments/{completed!.Id}/complete",
+            new AppointmentActionRequest { ExpectedVersion = completed.Version });
+        again.StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        var stale = await _client!.PostAsJsonAsync(
+            $"/api/v1/staff/appointments/{completed.Id}/complete",
+            new AppointmentActionRequest { ExpectedVersion = checkedIn.Version });
+        stale.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
     public async Task Clinic_Admin_Invalid_Transition_And_Stale_Version()
     {
         await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);

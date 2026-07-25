@@ -697,7 +697,8 @@ internal sealed class AppointmentHarness : IAsyncDisposable
         Guid orgId,
         Guid clinicId,
         Guid staffMemberId,
-        string role)
+        string role,
+        IAuthorizationAuditLogger? audit = null)
     {
         var user = new FakeCurrentUser
         {
@@ -715,7 +716,7 @@ internal sealed class AppointmentHarness : IAsyncDisposable
         };
         return new AppointmentService(
             Db, user, staff, new FakeCurrentPatient(), new ClinicPublicLookup(Db), CreateSlots(),
-            CreateReminderScheduler(), new NoOpAuthorizationAuditLogger(), Time,
+            CreateReminderScheduler(), audit ?? new NoOpAuthorizationAuditLogger(), Time,
             NullLogger<AppointmentService>.Instance);
     }
 

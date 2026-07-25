@@ -251,6 +251,58 @@ public sealed class AppointmentSupportTests
         AppointmentActionRules.GetVisibleActions("CancelledByClinic", state).Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task CheckedIn_And_InProgress_Expose_Domain_Aligned_Actions()
+    {
+        var state = new PermissionState();
+        await state.SetFromUserAsync(UserWith(
+            WebPermissions.AppointmentsComplete,
+            WebPermissions.AppointmentsNoShow,
+            WebPermissions.AppointmentsCancel));
+
+        AppointmentActionRules.GetVisibleActions("CheckedIn", state)
+            .Should().BeEquivalentTo(
+            [
+                AppointmentUiAction.Complete,
+                AppointmentUiAction.NoShow,
+                AppointmentUiAction.Cancel,
+            ]);
+        AppointmentActionRules.GetVisibleActions("InProgress", state)
+            .Should().BeEquivalentTo(
+            [
+                AppointmentUiAction.Complete,
+                AppointmentUiAction.Cancel,
+            ]);
+        AppointmentActionRules.CanShow(AppointmentUiAction.Complete, "Confirmed", state).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Detail_Dialog_Uses_Safer_Complete_Confirm_And_Reload_On_Conflict()
+    {
+        var detail = File.ReadAllText(Path.Combine(
+            FindRepoRoot(), "src", "HealthCare.Web", "Components", "Appointments", "AppointmentDetailDialog.razor"));
+        detail.Should().Contain("A medical note is not required");
+        detail.Should().Contain("RequiresReload");
+        detail.Should().Contain("IsInvalidTransition");
+        detail.Should().NotContain("/medical-notes");
+    }
+
+    private static string FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "HealthCare.sln")))
+            {
+                return dir.FullName;
+            }
+
+            dir = dir.Parent;
+        }
+
+        throw new InvalidOperationException("Repository root not found.");
+    }
+
     private static CurrentUserResponse UserWith(params string[] permissions) =>
         new()
         {

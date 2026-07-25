@@ -60,4 +60,10 @@ public static class AppointmentProblemMessages
         || (ex.StatusCode == 409
             && (ex.Detail?.Contains("version", StringComparison.OrdinalIgnoreCase) == true
                 || ex.Title?.Contains("concurrency", StringComparison.OrdinalIgnoreCase) == true));
+
+    public static bool IsInvalidTransition(ApiProblemException ex) =>
+        string.Equals(ex.ErrorCode, "appointment.invalid_transition", StringComparison.Ordinal);
+
+    public static bool RequiresReload(ApiProblemException ex) =>
+        IsConcurrencyConflict(ex) || IsInvalidTransition(ex);
 }

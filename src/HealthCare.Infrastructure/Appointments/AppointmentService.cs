@@ -607,8 +607,22 @@ public sealed class AppointmentService : IAppointmentService
         string operation,
         CancellationToken cancellationToken)
     {
-        if (!AppointmentStatusTransitions.CanTransition(appointment.Status, target))
+        if (AppointmentStatusTransitions.IsTerminal(appointment.Status)
+            || !AppointmentStatusTransitions.CanTransition(appointment.Status, target))
         {
+            _logger.LogInformation(
+                "Appointment invalid transition. UserId={UserId} AppointmentId={AppointmentId} From={FromStatus} To={ToStatus} Operation={Operation}",
+                _currentUser.UserId,
+                appointment.Id,
+                appointment.Status,
+                target,
+                operation);
+            _audit.AppointmentOperation(
+                operation,
+                "invalid_transition",
+                appointment.OrganizationId,
+                appointment.ClinicId,
+                appointment.Id);
             throw AppointmentException.InvalidTransition();
         }
 
@@ -626,6 +640,12 @@ public sealed class AppointmentService : IAppointmentService
         }
         catch (DbUpdateConcurrencyException)
         {
+            _audit.AppointmentOperation(
+                operation,
+                "concurrency_conflict",
+                appointment.OrganizationId,
+                appointment.ClinicId,
+                appointment.Id);
             throw AppointmentException.ConcurrencyConflict();
         }
 
@@ -806,6 +826,18 @@ public sealed class AppointmentService : IAppointmentService
     {
         if (appointment.Version != expectedVersion)
         {
+            _logger.LogInformation(
+                "Appointment concurrency conflict. UserId={UserId} AppointmentId={AppointmentId} ExpectedVersion={ExpectedVersion} ActualVersion={ActualVersion}",
+                _currentUser.UserId,
+                appointment.Id,
+                expectedVersion,
+                appointment.Version);
+            _audit.AppointmentOperation(
+                "appointment_concurrency_conflict",
+                "concurrency_conflict",
+                appointment.OrganizationId,
+                appointment.ClinicId,
+                appointment.Id);
             throw AppointmentException.ConcurrencyConflict();
         }
     }

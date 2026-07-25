@@ -488,7 +488,7 @@ Covering-doctor / care-team; InProgress API; note-before-complete policy; specia
 | DR-4 | My appointment ownership and workflows | Medium | **Delivered** (2026-07-25) |
 | DR-5 | Appointment-linked patient access | Large | **Delivered** (2026-07-25) |
 | DR-6 | Medical notes ownership and lifecycle | Large | **Delivered** (2026-07-25) |
-| DR-7 | Clinical workflow and completion hardening | Medium | Not started |
+| DR-7 | Clinical workflow and completion hardening | Medium | **Delivered** (2026-07-25) |
 | DR-8 | Doctor reports | — | **Skipped by default** |
 | DR-9 | Cross-role security, audit, negative testing | Medium | Not started |
 | DR-10 | E2E hardening and Doctor MVP completion | Medium | Not started |
@@ -616,3 +616,4 @@ Covering-doctor / care-team; InProgress API; note-before-complete policy; specia
 | 2026-07-25 | **DR-4 delivered:** Doctor appointment ownership (list/view/mutate); removed `appointments.create` from DOCTOR; sibling peer denial; CA clinic-wide unchanged |
 | 2026-07-25 | **DR-5 delivered:** Model A patient access (appointment-linked search/detail); Patients nav restored for Doctor; peer-only/unrelated denial |
 | 2026-07-25 | **DR-6 delivered:** author + own-appointment medical notes; appointment-detail note UX; peer note denied (404); WebPermissions + typed client |
+| 2026-07-25 | **DR-7 delivered:** transition/completion hardening; completion without mandatory note; safer confirmations; denial audit; Cancel aligned for CheckedIn/InProgress |

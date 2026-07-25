@@ -142,6 +142,7 @@ Authoritative Doctor Web MVP scope: `Docs/mvp-doctor-scope.md` (**approved** 202
 - **DR-4 delivered:** Doctor appointment list/view/mutate ownership (`DoctorStaffMemberId`); `appointments.create` removed from DOCTOR; Create button hidden via permission matrix; sibling Doctor peer appointment denied (404); Clinic Admin remains clinic-wide.
 - **DR-5 delivered:** Model A staff patient search/detail; Patients nav shown for Doctor; unrelated/peer-only patients denied.
 - **DR-6 delivered:** author-only note list/read/amend; create only on own appointments; appointment-detail note UX; peer note access denied (404).
+- **DR-7 delivered:** invalid/terminal transitions audited and rejected (409); completion without mandatory note; ExpectedVersion concurrency; Doctor peer mutate → 404; Web actions aligned (incl. Cancel on CheckedIn/InProgress); safer Complete confirmation + reload on conflict/invalid transition.
 
 **Not allowed:**
 
