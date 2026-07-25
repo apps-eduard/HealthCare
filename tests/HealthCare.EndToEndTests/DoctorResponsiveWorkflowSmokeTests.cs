@@ -54,7 +54,7 @@ public sealed class DoctorResponsiveWorkflowSmokeTests : E2ePageTestBase
                 .ToBeVisibleAsync(new() { Timeout = 20_000 });
             await Expect(dialog.GetByRole(AriaRole.Button, new() { Name = "Complete" })).ToBeVisibleAsync();
             await Expect(dialog.GetByRole(AriaRole.Button, new() { Name = "Cancel" })).ToBeVisibleAsync();
-            await Expect(dialog.GetByRole(AriaRole.Button, new() { Name = "Close" })).ToBeVisibleAsync();
+            await Expect(dialog.Locator("button.ant-btn").Filter(new() { HasText = "Close" })).ToBeVisibleAsync();
 
             await dialog.GetByRole(AriaRole.Button, new() { Name = "Complete" }).ClickAsync();
             var completeConfirm = Page.Locator(".ant-modal").Filter(new() { HasText = "Complete" });

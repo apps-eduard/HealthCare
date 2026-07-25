@@ -41,13 +41,24 @@ public sealed class DoctorClinicalWorkflowSmokeTests : E2ePageTestBase
             await Expect(Page.GetByText("Draft note created.", new() { Exact = false }))
                 .ToBeVisibleAsync(new() { Timeout = 30_000 });
 
-            await Expect(dialog.GetByLabel("Plan")).ToBeVisibleAsync(new() { Timeout = 20_000 });
-            await dialog.GetByLabel("Plan").FillAsync(originalPlan);
-            await dialog.GetByRole(AriaRole.Button, new() { Name = "Save medical note draft" }).ClickAsync();
+            dialog = DetailDialog(appointment.Id);
+            var openNote = dialog.GetByRole(AriaRole.Button, new() { Name = "Open medical note" });
+            if (await openNote.CountAsync() > 0)
+            {
+                await openNote.First.ClickAsync();
+            }
+
+            await Expect(dialog.GetByPlaceholder("Plan")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+            await dialog.GetByPlaceholder("Plan").FillAsync(originalPlan);
+            await dialog.GetByRole(AriaRole.Button, new() { Name = "Save medical note draft" })
+                .Or(dialog.GetByRole(AriaRole.Button, new() { Name = "Save draft" }))
+                .ClickAsync();
             await Expect(Page.GetByText("Draft note saved.", new() { Exact = false }))
                 .ToBeVisibleAsync(new() { Timeout = 30_000 });
 
-            await dialog.GetByRole(AriaRole.Button, new() { Name = "Sign medical note" }).ClickAsync();
+            await dialog.GetByRole(AriaRole.Button, new() { Name = "Sign medical note" })
+                .Or(dialog.GetByRole(AriaRole.Button, new() { Name = "Sign" }))
+                .ClickAsync();
             var signConfirm = Page.Locator(".ant-modal").Filter(new() { HasText = "Sign note" });
             await Expect(signConfirm).ToBeVisibleAsync(new() { Timeout = 10_000 });
             await signConfirm.GetByRole(AriaRole.Button, new() { Name = "OK" }).ClickAsync();
@@ -58,12 +69,14 @@ public sealed class DoctorClinicalWorkflowSmokeTests : E2ePageTestBase
             await Expect(dialog.GetByText("Signed", new() { Exact = false })).ToBeVisibleAsync();
             await Expect(dialog.GetByRole(AriaRole.Button, new() { Name = "Save medical note draft" }))
                 .ToHaveCountAsync(0);
-            await Expect(dialog.GetByLabel("Plan")).ToHaveCountAsync(0);
+            await Expect(dialog.GetByPlaceholder("Plan")).ToHaveCountAsync(0);
             await Expect(dialog.GetByText($"P: {originalPlan}")).ToBeVisibleAsync();
 
-            await dialog.GetByLabel("Amendment reason").FillAsync("DR10 correction");
-            await dialog.GetByLabel("Amendment plan").FillAsync("DR10 amended plan");
-            await dialog.GetByRole(AriaRole.Button, new() { Name = "Amend medical note" }).ClickAsync();
+            await dialog.GetByPlaceholder("Amendment reason").FillAsync("DR10 correction");
+            await dialog.GetByPlaceholder("Updated plan (optional)").FillAsync("DR10 amended plan");
+            await dialog.GetByRole(AriaRole.Button, new() { Name = "Amend medical note" })
+                .Or(dialog.GetByRole(AriaRole.Button, new() { Name = "Amend" }))
+                .ClickAsync();
             await Expect(Page.GetByText("Amendment signed.", new() { Exact = false }))
                 .ToBeVisibleAsync(new() { Timeout = 30_000 });
 
