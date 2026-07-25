@@ -416,7 +416,7 @@ Reminders, summary runs/retry, operations health — clinic scoped.
 
 ### Status
 
-**CA-7 delivered:** Clinic Admin uses fixed clinic caption (no clinic picker); list/retry scoped to membership clinic; operations health shows clinic-scoped failure/pending counts and hides Hangfire infrastructure cards; controllers use `Authenticated` (Platform Admin explicit bypass + clinicId); no rebuild API (Completed summaries cannot be rebuilt); no Hangfire dashboard / clinic reports / clinic audit navigation.
+**CA-7 delivered:** Clinic Admin uses fixed clinic caption (no clinic picker); list/retry scoped to membership clinic; operations health shows clinic-scoped failure/pending counts and hides Hangfire infrastructure cards; controllers use `Authenticated` (Platform Admin explicit bypass + clinicId); no rebuild API (Completed summaries cannot be rebuilt); no Hangfire dashboard / clinic audit navigation.
 
 ---
 
@@ -426,13 +426,17 @@ Reminders, summary runs/retry, operations health — clinic scoped.
 
 `clinic_reports.read`
 
+### Status
+
+**CA-8 delivered:** `clinic_reports.read` granted to CLINIC_ADMIN + PLATFORM_ADMIN only; four read-only routes under `/api/v1/clinic/reports/*`; clinic-local 93-day range; aggregate JSON only (no CSV/PDF/export); Web `/clinic/reports`; Platform Admin requires explicit clinicId + bypass; Organization Admin keeps `/reports` organization reports.
+
 ### Approved report content
 
 1. Appointments by status  
 2. Appointment volume by date  
 3. Appointments by doctor  
 4. Cancellation and no-show summary  
-5. Patient enrollment summary  
+5. Patient enrollment summary (`NewEnrollmentsInRange` uses `ClinicPatient.RegisteredAtUtc` within clinic-local UTC window)  
 6. Reminder and operational-health summary  
 
 ### Rules
@@ -442,7 +446,7 @@ Reminders, summary runs/retry, operations health — clinic scoped.
 - **No** patient names, clinical content, billing, cross-clinic comparisons, organization totals  
 - **JSON UI only** for MVP; **CSV export deferred**  
 
-### Suggested routes (adjust to repo conventions; consolidated endpoint OK)
+### Routes
 
 ```text
 GET /api/v1/clinic/reports/appointments
@@ -579,7 +583,7 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 | CA-5 | Patients verify | Small | **Delivered** (2026-07-25) |
 | CA-6 | Appointments verify (Complete for CA) | Small | **Delivered** (2026-07-25) |
 | CA-7 | Operations verify | Small | **Delivered** |
-| CA-8 | Clinic reports (JSON) | Large | Approved |
+| CA-8 | Clinic reports (JSON) | Large | **Delivered** (2026-07-25) |
 | CA-9 | Clinic-filtered audit | Medium | Approved |
 | CA-10 | Hardening + Playwright E2E | Medium | After prior phases |
 
@@ -605,7 +609,7 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 | Patients | Matrix | patients.* | Done | **Done** (CA-5 actor-aware) | — | CA-5 |
 | Appointments | Matrix | appointments.* | Done | **Done** (CA-6 actor-aware + Complete) | — | CA-6 |
 | Ops | Matrix | reminders/summaries | Done | Done | **Delivered** | CA-7 |
-| Clinic reports | Approved | `clinic_reports.read` | Missing | Missing | New | CA-8 |
+| Clinic reports | Approved | `clinic_reports.read` | **Done** | **Done** (`/clinic/reports`) | — | CA-8 |
 | Clinic audit | Approved | `clinic_audit_logs.read` | Missing | Missing | New | CA-9 |
 | Org limits /usage | Denied | — | CA denied | Gated | Intentional | — |
 | Cross-clinic denial | Required | tenant | Done (existing) | Mostly | Keep for new APIs | all |
@@ -625,4 +629,4 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 | 2026-07-24 | **CA-3 delivered:** Clinic Admin actor-aware `/staff` (no clinic picker/change-clinic; clinic role filter); E2E staff smoke |
 | 2026-07-25 | **CA-4 delivered:** `/doctors` directory + availability deep-link/actor polish; doctor DisplayName fix; Clinic Admin E2E doctors smoke |
 | 2026-07-25 | **CA-5 delivered:** `/patients` actor-aware directory; hide cross-clinic enroll; status ExpectedVersion; Platform Admin Authenticated+bypass; E2E patients smoke |
-| 2026-07-25 | **CA-6 delivered:** `/appointments` actor-aware queue/calendar; Complete for Clinic Admin; no-show E2E; staff appointment Authenticated+bypass |
+| 2026-07-25 | **CA-8 delivered:** `clinic_reports.read`, clinic report APIs + `/clinic/reports` UI (JSON only, no CSV), E2E smoke |

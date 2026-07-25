@@ -259,7 +259,7 @@ public sealed class ClinicAdminSettingsUiTests
         layout.Should().Contain("Clinic Profile");
         layout.Should().Contain("ClinicSettingsPermissionRules.CanView");
         layout.Should().Contain("clinic-settings");
-        layout.Should().NotContain("/clinic/reports");
+        layout.Should().Contain("/clinic/reports");
         layout.Should().NotContain("/clinic/audit");
 
         program.Should().Contain("IClinicSettingsApiClient");

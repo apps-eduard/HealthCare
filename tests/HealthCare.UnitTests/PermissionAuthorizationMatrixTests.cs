@@ -143,7 +143,7 @@ public sealed class PermissionAuthorizationMatrixTests
         sut.HasPermission(Permissions.MedicalNotes.Read).Should().BeFalse();
         sut.HasPermission(Permissions.Organizations.ReportsRead).Should().BeFalse();
         sut.HasPermission(Permissions.Organizations.AuditLogsRead).Should().BeFalse();
-        sut.HasPermission("clinic_reports.read").Should().BeFalse();
+        sut.HasPermission(Permissions.Clinics.ReportsRead).Should().BeTrue();
         sut.HasPermission("clinic_audit_logs.read").Should().BeFalse();
     }
 

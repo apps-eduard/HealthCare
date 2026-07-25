@@ -329,7 +329,7 @@ internal sealed class ClinicDashHarness : IAsyncDisposable
             LocalPatientNumber = "P-" + Guid.NewGuid().ToString("N")[..8],
             Status = active ? ClinicPatientStatus.Active : ClinicPatientStatus.Inactive,
             Version = 0,
-            RegisteredAtUtc = DateTimeOffset.UtcNow,
+            RegisteredAtUtc = Clock.GetUtcNow(),
             UpdatedAtUtc = DateTimeOffset.UtcNow,
         });
         await Db.SaveChangesAsync();
@@ -363,7 +363,7 @@ internal sealed class ClinicDashHarness : IAsyncDisposable
             LocalPatientNumber = "P-" + Guid.NewGuid().ToString("N")[..8],
             Status = ClinicPatientStatus.Active,
             Version = 0,
-            RegisteredAtUtc = DateTimeOffset.UtcNow,
+            RegisteredAtUtc = Clock.GetUtcNow(),
             UpdatedAtUtc = DateTimeOffset.UtcNow,
         };
 
@@ -387,7 +387,7 @@ internal sealed class ClinicDashHarness : IAsyncDisposable
             Source = AppointmentSource.Staff,
             CreatedByUserId = doctor.UserId,
             Version = 0,
-            CreatedAtUtc = DateTimeOffset.UtcNow,
+            CreatedAtUtc = Clock.GetUtcNow(),
             UpdatedAtUtc = DateTimeOffset.UtcNow,
         });
         await Db.SaveChangesAsync();
@@ -447,6 +447,185 @@ internal sealed class ClinicDashHarness : IAsyncDisposable
             new ClinicTimeZoneConverter(NullLogger<ClinicTimeZoneConverter>.Instance),
             Clock,
             NullLogger<ClinicDashboardService>.Instance);
+    }
+
+    public ClinicReportsService CreateReportService((ApplicationUser User, Domain.Staff.StaffMember Staff) actor)
+    {
+        var currentUser = new FakeCurrentUser
+        {
+            IsAuthenticated = true,
+            UserId = actor.User.Id,
+            Email = actor.User.Email,
+            Roles = [actor.Staff.Role],
+            OrganizationId = actor.Staff.OrganizationId,
+            ClinicId = actor.Staff.ClinicId,
+            StaffMemberId = actor.Staff.Id,
+        };
+        var currentStaff = new FakeCurrentStaff
+        {
+            HasActiveMembership = true,
+            StaffMemberId = actor.Staff.Id,
+            OrganizationId = actor.Staff.OrganizationId,
+            ClinicId = actor.Staff.ClinicId,
+            Role = actor.Staff.Role,
+        };
+        return BuildReportService(currentUser, currentStaff);
+    }
+
+    public ClinicReportsService CreatePlatformReportService(ApplicationUser platformUser)
+    {
+        var currentUser = new FakeCurrentUser
+        {
+            IsAuthenticated = true,
+            UserId = platformUser.Id,
+            Email = platformUser.Email,
+            Roles = [AppRoles.PlatformAdmin],
+        };
+        var currentStaff = new FakeCurrentStaff { HasActiveMembership = false };
+        return BuildReportService(currentUser, currentStaff);
+    }
+
+    public ClinicReportsService BuildReportService(FakeCurrentUser currentUser, FakeCurrentStaff currentStaff)
+    {
+        var audit = new NoOpAuthorizationAuditLogger();
+        var permissions = new PermissionService(
+            currentUser,
+            currentStaff,
+            new FakeCurrentPatient(),
+            audit);
+
+        return new ClinicReportsService(
+            Db,
+            currentUser,
+            currentStaff,
+            permissions,
+            audit,
+            new ClinicTimeZoneConverter(NullLogger<ClinicTimeZoneConverter>.Instance),
+            Clock,
+            NullLogger<ClinicReportsService>.Instance);
+    }
+
+    public async Task SeedAppointmentOnLocalDateAsync(
+        Guid clinicId,
+        AppointmentStatus status,
+        DateOnly localDate,
+        Guid? doctorStaffMemberId = null)
+    {
+        Domain.Staff.StaffMember doctor;
+        if (doctorStaffMemberId is Guid id)
+        {
+            doctor = await Db.StaffMembers.SingleAsync(s => s.Id == id);
+        }
+        else
+        {
+            var existing = await Db.StaffMembers.AsNoTracking()
+                .FirstOrDefaultAsync(s => s.ClinicId == clinicId && s.Role == AppRoles.Doctor);
+            if (existing is null)
+            {
+                var seeded = await SeedStaffAsync(AppRoles.Doctor, clinicId, $"auto-doc-{Guid.NewGuid():N}@test.local");
+                doctor = seeded.Staff;
+            }
+            else
+            {
+                doctor = existing;
+            }
+        }
+
+        var patient = new Patient
+        {
+            Id = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            FirstName = "Appt",
+            LastName = "Patient",
+            IsActive = true,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            UpdatedAtUtc = DateTimeOffset.UtcNow,
+        };
+        var clinicPatient = new ClinicPatient
+        {
+            Id = Guid.NewGuid(),
+            ClinicId = clinicId,
+            PatientId = patient.Id,
+            LocalPatientNumber = "P-" + Guid.NewGuid().ToString("N")[..8],
+            Status = ClinicPatientStatus.Active,
+            Version = 0,
+            RegisteredAtUtc = Clock.GetUtcNow(),
+            UpdatedAtUtc = DateTimeOffset.UtcNow,
+        };
+
+        var converter = new ClinicTimeZoneConverter(NullLogger<ClinicTimeZoneConverter>.Instance);
+        var startUtc = converter.ToUtc(localDate, new TimeOnly(10, 0), "Asia/Riyadh");
+
+        Db.Patients.Add(patient);
+        Db.ClinicPatients.Add(clinicPatient);
+        Db.Appointments.Add(new Appointment
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = Org.Id,
+            ClinicId = clinicId,
+            PatientId = patient.Id,
+            ClinicPatientId = clinicPatient.Id,
+            DoctorStaffMemberId = doctor.Id,
+            AppointmentDateUtc = startUtc,
+            DurationMinutes = 30,
+            Status = status,
+            Source = AppointmentSource.Staff,
+            CreatedByUserId = doctor.UserId,
+            Version = 0,
+            CreatedAtUtc = Clock.GetUtcNow(),
+            UpdatedAtUtc = DateTimeOffset.UtcNow,
+        });
+        await Db.SaveChangesAsync();
+    }
+
+    public async Task SeedReminderForClinicAsync(
+        Guid clinicId,
+        AppointmentReminderStatus status,
+        DateTimeOffset scheduledAtUtc)
+    {
+        await SeedAppointmentAsync(clinicId, AppointmentStatus.Confirmed);
+        var appointment = await Db.Appointments
+            .Where(a => a.ClinicId == clinicId)
+            .OrderByDescending(a => a.CreatedAtUtc)
+            .FirstAsync();
+
+        Db.AppointmentReminders.Add(new AppointmentReminder
+        {
+            Id = Guid.NewGuid(),
+            AppointmentId = appointment.Id,
+            ReminderType = AppointmentReminderType.Upcoming,
+            ScheduledAtUtc = scheduledAtUtc,
+            Status = status,
+            AttemptCount = status == AppointmentReminderStatus.Failed ? 1 : 0,
+            IdempotencyKey = AppointmentReminder.BuildIdempotencyKey(appointment.Id, AppointmentReminderType.Upcoming)
+                + ":" + Guid.NewGuid().ToString("N")[..6],
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            UpdatedAtUtc = DateTimeOffset.UtcNow,
+        });
+        await Db.SaveChangesAsync();
+    }
+
+    public async Task SeedSummaryRunAsync(
+        Guid clinicId,
+        ClinicAppointmentSummaryRunStatus status,
+        DateOnly summaryDate)
+    {
+        Db.ClinicAppointmentSummaryRuns.Add(new ClinicAppointmentSummaryRun
+        {
+            Id = Guid.NewGuid(),
+            ClinicId = clinicId,
+            OrganizationId = Org.Id,
+            SummaryDate = summaryDate,
+            ScheduledAtUtc = Clock.GetUtcNow(),
+            Status = status,
+            AttemptCount = status == ClinicAppointmentSummaryRunStatus.Failed ? 1 : 0,
+            IdempotencyKey = ClinicAppointmentSummaryRun.BuildIdempotencyKey(clinicId, summaryDate)
+                + ":" + Guid.NewGuid().ToString("N")[..6],
+            AppointmentCount = 0,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            UpdatedAtUtc = DateTimeOffset.UtcNow,
+        });
+        await Db.SaveChangesAsync();
     }
 
     public async ValueTask DisposeAsync()

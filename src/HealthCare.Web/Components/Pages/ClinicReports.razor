@@ -1,0 +1,459 @@
+@page "/clinic/reports"
+@attribute [Authorize]
+@using HealthCare.Contracts.Clinics
+@using HealthCare.Web.ClinicReports
+@implements IDisposable
+@inject IClinicReportsApiClient ReportsApi
+@inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
+
+<PageTitle>Clinic Reports</PageTitle>
+
+@if (Permissions.IsPatientOnly)
+{
+    <Alert Type="@AlertType.Error" Message="Patient accounts cannot use staff clinic reports." ShowIcon="true" />
+}
+else if (!ClinicReportsPermissionRules.CanView(Permissions))
+{
+    <PermissionDeniedState Message="You do not have permission to view clinic reports." />
+}
+else
+{
+    <HcPageHeader Title="Clinic Reports"
+                  Subtitle="@ClinicReportsPageCopy.Subtitle(Permissions)">
+        <Breadcrumb>
+            <Breadcrumb>
+                <BreadcrumbItem Href="/dashboard">Home</BreadcrumbItem>
+                <BreadcrumbItem>Clinic</BreadcrumbItem>
+                <BreadcrumbItem>Reports</BreadcrumbItem>
+            </Breadcrumb>
+        </Breadcrumb>
+        <ChildContent>
+            <Space>
+                <Button Type="@ButtonType.Primary"
+                        OnClick="RunAsync"
+                        Loading="_loading"
+                        Disabled="@(!CanLoad)"
+                        AriaLabel="Run clinic reports">
+                    Run
+                </Button>
+                <Button OnClick="RunAsync"
+                        Disabled="@(!CanLoad || _loading)"
+                        AriaLabel="Refresh clinic reports">
+                    <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
+                </Button>
+            </Space>
+        </ChildContent>
+    </HcPageHeader>
+
+    @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasClinic)
+    {
+        <Alert Type="@AlertType.Info"
+               Message="Select a clinic in the platform banner (with explicit bypass) before loading clinic reports."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
+    }
+    else if (Permissions.IsPlatformAdmin && !PlatformTenant.ExplicitBypassEnabled)
+    {
+        <Alert Type="@AlertType.Warning"
+               Message="Enable explicit platform bypass and select a clinic before loading clinic reports."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
+    }
+    else
+    {
+        <div class="hc-card">
+            <div class="hc-filter-grid">
+                <div>
+                    <div class="hc-filter-label">Clinic</div>
+                    <div class="hc-caption" data-testid="clinic-reports-clinic-caption">
+                        @ClinicReportsPageCopy.ClinicCaption(Permissions, _clinicCaption)
+                    </div>
+                </div>
+                <div>
+                    <label class="hc-filter-label" for="clinic-report-from">From</label>
+                    <DatePicker Id="clinic-report-from" TValue="DateTime?" @bind-Value="_fromDate" Style="width:100%;"
+                                AriaLabel="Clinic report from date" />
+                </div>
+                <div>
+                    <label class="hc-filter-label" for="clinic-report-to">To</label>
+                    <DatePicker Id="clinic-report-to" TValue="DateTime?" @bind-Value="_toDate" Style="width:100%;"
+                                AriaLabel="Clinic report to date" />
+                </div>
+                <div>
+                    <span class="hc-caption">Max @ClinicReportsPageCopy.MaxInclusiveDays inclusive days · clinic timezone</span>
+                </div>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_rangeError))
+        {
+            <ErrorState Message="@_rangeError" />
+        }
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <ErrorState Message="@_error" />
+        }
+
+        @if (_loading && _appointments is null)
+        {
+            <PageLoading />
+        }
+        else if (_appointments is not null)
+        {
+            <div class="hc-caption" style="margin-bottom:0.75rem;" data-testid="clinic-reports-context">
+                @_appointments.Context.ClinicName · timezone @_appointments.Context.TimeZoneId
+                · @_appointments.Context.FromDate → @_appointments.Context.ToDate
+            </div>
+
+            <Tabs @bind-ActiveKey="_activeTab" AriaLabel="Clinic report sections">
+                <TabPane Key="@ClinicReportViewKeys.Appointments" Tab="Appointments">
+                    <AntDesign.Row Gutter="(16,16)" Style="margin-bottom:1rem;">
+                        <AntDesign.Col Xs="12" Md="6">
+                            <Card Size="CardSize.Small">
+                                <Statistic Title="Total appointments" Value="@_appointments.TotalAppointments" />
+                            </Card>
+                        </AntDesign.Col>
+                        <AntDesign.Col Xs="12" Md="6">
+                            <Card Size="CardSize.Small">
+                                <Statistic Title="Cancellation rate %" Value="@((double)_appointments.CancellationNoShow.CancellationRate)" />
+                            </Card>
+                        </AntDesign.Col>
+                        <AntDesign.Col Xs="12" Md="6">
+                            <Card Size="CardSize.Small">
+                                <Statistic Title="No-show rate %" Value="@((double)_appointments.CancellationNoShow.NoShowRate)" />
+                            </Card>
+                        </AntDesign.Col>
+                        <AntDesign.Col Xs="12" Md="6">
+                            <Card Size="CardSize.Small">
+                                <Statistic Title="No-shows" Value="@_appointments.CancellationNoShow.NoShowCount" />
+                            </Card>
+                        </AntDesign.Col>
+                    </AntDesign.Row>
+
+                    <h3>By status</h3>
+                    @if (_appointments.ByStatus.Count == 0)
+                    {
+                        <EmptyState Title="No appointments" Message="No appointments in this range." />
+                    }
+                    else
+                    {
+                        <div class="hc-table-wrap">
+                            <table class="hc-table" aria-label="Appointments by status">
+                                <thead>
+                                    <tr><th>Status</th><th>Count</th><th>% of total</th></tr>
+                                </thead>
+                                <tbody>
+                                @foreach (var row in _appointments.ByStatus)
+                                {
+                                    <tr>
+                                        <td>@row.Status</td>
+                                        <td>@row.Count</td>
+                                        <td>@row.PercentageOfTotal</td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+
+                    <h3 style="margin-top:1.5rem;">Daily volume</h3>
+                    <div class="hc-table-wrap">
+                        <table class="hc-table" aria-label="Appointment volume by date">
+                            <thead>
+                                <tr>
+                                    <th>Local date</th>
+                                    <th>Total</th>
+                                    <th>Completed</th>
+                                    <th>Cancelled</th>
+                                    <th>No-show</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            @foreach (var row in _appointments.VolumeByDate)
+                            {
+                                <tr>
+                                    <td>@row.LocalDate</td>
+                                    <td>@row.AppointmentCount</td>
+                                    <td>@row.CompletedCount</td>
+                                    <td>@row.CancelledCount</td>
+                                    <td>@row.NoShowCount</td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <h3 style="margin-top:1.5rem;">Cancellations</h3>
+                    <div class="hc-caption">
+                        Cancelled by clinic: @_appointments.CancellationNoShow.CancelledByClinicCount
+                        · Cancelled by patient: @_appointments.CancellationNoShow.CancelledByPatientCount
+                    </div>
+                </TabPane>
+
+                <TabPane Key="@ClinicReportViewKeys.Doctors" Tab="Doctors">
+                    @if (_doctors is null)
+                    {
+                        <PageLoading />
+                    }
+                    else if (_doctors.Doctors.Count == 0)
+                    {
+                        <EmptyState Title="No doctor activity" Message="No appointments by doctor in this range." />
+                    }
+                    else
+                    {
+                        <div class="hc-table-wrap">
+                            <table class="hc-table" aria-label="Appointments by doctor">
+                                <thead>
+                                    <tr>
+                                        <th>Doctor</th>
+                                        <th>Total</th>
+                                        <th>Completed</th>
+                                        <th>Cancelled</th>
+                                        <th>No-show</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                @foreach (var row in _doctors.Doctors)
+                                {
+                                    <tr>
+                                        <td>@row.DoctorDisplayName</td>
+                                        <td>@row.TotalAppointments</td>
+                                        <td>@row.CompletedCount</td>
+                                        <td>@row.CancelledCount</td>
+                                        <td>@row.NoShowCount</td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </TabPane>
+
+                <TabPane Key="@ClinicReportViewKeys.Patients" Tab="Patients">
+                    @if (_patients is null)
+                    {
+                        <PageLoading />
+                    }
+                    else
+                    {
+                        <AntDesign.Row Gutter="(16,16)">
+                            <AntDesign.Col Xs="12" Md="6">
+                                <Card Size="CardSize.Small">
+                                    <Statistic Title="Active enrollments" Value="@_patients.ActiveEnrollmentCount" />
+                                </Card>
+                            </AntDesign.Col>
+                            <AntDesign.Col Xs="12" Md="6">
+                                <Card Size="CardSize.Small">
+                                    <Statistic Title="Inactive enrollments" Value="@_patients.InactiveEnrollmentCount" />
+                                </Card>
+                            </AntDesign.Col>
+                            <AntDesign.Col Xs="12" Md="6">
+                                <Card Size="CardSize.Small">
+                                    <Statistic Title="Total clinic patients" Value="@_patients.TotalClinicPatients" />
+                                </Card>
+                            </AntDesign.Col>
+                            <AntDesign.Col Xs="12" Md="6">
+                                <Card Size="CardSize.Small">
+                                    <Statistic Title="New in range" Value="@_patients.NewEnrollmentsInRange" />
+                                </Card>
+                            </AntDesign.Col>
+                        </AntDesign.Row>
+                    }
+                </TabPane>
+
+                <TabPane Key="@ClinicReportViewKeys.Operations" Tab="Operations">
+                    @if (_operations is null)
+                    {
+                        <PageLoading />
+                    }
+                    else
+                    {
+                        <AntDesign.Row Gutter="(16,16)">
+                            <AntDesign.Col Xs="12" Md="8">
+                                <Card Size="CardSize.Small">
+                                    <Statistic Title="Pending reminders" Value="@_operations.PendingReminderCount" />
+                                </Card>
+                            </AntDesign.Col>
+                            <AntDesign.Col Xs="12" Md="8">
+                                <Card Size="CardSize.Small">
+                                    <Statistic Title="Sent reminders" Value="@_operations.SentReminderCount" />
+                                </Card>
+                            </AntDesign.Col>
+                            <AntDesign.Col Xs="12" Md="8">
+                                <Card Size="CardSize.Small">
+                                    <Statistic Title="Failed reminders" Value="@_operations.FailedReminderCount" />
+                                </Card>
+                            </AntDesign.Col>
+                            <AntDesign.Col Xs="12" Md="8">
+                                <Card Size="CardSize.Small">
+                                    <Statistic Title="Processing reminders" Value="@_operations.ProcessingReminderCount" />
+                                </Card>
+                            </AntDesign.Col>
+                            <AntDesign.Col Xs="12" Md="8">
+                                <Card Size="CardSize.Small">
+                                    <Statistic Title="Cancelled reminders" Value="@_operations.CancelledReminderCount" />
+                                </Card>
+                            </AntDesign.Col>
+                            <AntDesign.Col Xs="12" Md="8">
+                                <Card Size="CardSize.Small">
+                                    <Statistic Title="Failed summary runs" Value="@_operations.FailedSummaryRunCount" />
+                                </Card>
+                            </AntDesign.Col>
+                            <AntDesign.Col Xs="12" Md="8">
+                                <Card Size="CardSize.Small">
+                                    <Statistic Title="Pending summary runs" Value="@_operations.PendingSummaryRunCount" />
+                                </Card>
+                            </AntDesign.Col>
+                        </AntDesign.Row>
+                        @if (_operations.MissingActiveDoctorAvailability)
+                        {
+                            <Alert Type="@AlertType.Warning"
+                                   Message="Active doctors are present but no active availability windows are configured."
+                                   ShowIcon="true"
+                                   Style="margin-top:1rem;" />
+                        }
+                    }
+                </TabPane>
+            </Tabs>
+        }
+        else if (!_loading && string.IsNullOrWhiteSpace(_error) && string.IsNullOrWhiteSpace(_rangeError))
+        {
+            <EmptyState Title="Run a report"
+                        Message="Choose a date range and select Run to load clinic operational aggregates." />
+        }
+    }
+}
+
+@code {
+    private bool _loading;
+    private string? _error;
+    private string? _rangeError;
+    private string? _clinicCaption;
+    private string _activeTab = ClinicReportViewKeys.Appointments;
+    private DateTime? _fromDate = DateTime.UtcNow.Date.AddDays(-29);
+    private DateTime? _toDate = DateTime.UtcNow.Date;
+    private ClinicAppointmentReportResponse? _appointments;
+    private ClinicDoctorAppointmentsReportResponse? _doctors;
+    private ClinicPatientEnrollmentReportResponse? _patients;
+    private ClinicOperationsReportResponse? _operations;
+    private bool _subscribedPlatform;
+
+    private bool CanLoad =>
+        !Permissions.IsPlatformAdmin
+        || (PlatformTenant.HasClinic && PlatformTenant.ExplicitBypassEnabled);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Permissions.IsPatientOnly || !ClinicReportsPermissionRules.CanView(Permissions))
+        {
+            return;
+        }
+
+        if (Permissions.IsPlatformAdmin)
+        {
+            PlatformTenant.Changed += OnPlatformTenantChanged;
+            _subscribedPlatform = true;
+        }
+        else if (Permissions.CurrentUser?.ClinicId is Guid)
+        {
+            _clinicCaption = null;
+        }
+
+        if (CanLoad)
+        {
+            await RunAsync();
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_subscribedPlatform)
+        {
+            PlatformTenant.Changed -= OnPlatformTenantChanged;
+        }
+    }
+
+    private void OnPlatformTenantChanged() => InvokeAsync(async () =>
+    {
+        _appointments = null;
+        _doctors = null;
+        _patients = null;
+        _operations = null;
+        _error = null;
+        if (CanLoad)
+        {
+            await RunAsync();
+        }
+
+        StateHasChanged();
+    });
+
+    private async Task RunAsync()
+    {
+        _rangeError = ValidateRange();
+        if (_rangeError is not null || !CanLoad)
+        {
+            return;
+        }
+
+        _loading = true;
+        _error = null;
+        try
+        {
+            var query = BuildQuery();
+            var bypass = Permissions.IsPlatformAdmin;
+            _appointments = await ReportsApi.GetAppointmentsAsync(query, bypass);
+            _doctors = await ReportsApi.GetDoctorsAsync(query, bypass);
+            _patients = await ReportsApi.GetPatientsAsync(query, bypass);
+            _operations = await ReportsApi.GetRemindersAsync(query, bypass);
+            _clinicCaption = _appointments.Context.ClinicName;
+        }
+        catch (ApiProblemException ex)
+        {
+            _appointments = null;
+            _doctors = null;
+            _patients = null;
+            _operations = null;
+            _error = ClinicReportProblemMessages.ToUserMessage(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string? ValidateRange()
+    {
+        if (_fromDate is not DateTime from || _toDate is not DateTime to)
+        {
+            return "Choose both From and To dates.";
+        }
+
+        var fromDay = DateOnly.FromDateTime(from);
+        var toDay = DateOnly.FromDateTime(to);
+        if (fromDay > toDay)
+        {
+            return "From date must be on or before To date.";
+        }
+
+        if (toDay.DayNumber - fromDay.DayNumber + 1 > ClinicReportsPageCopy.MaxInclusiveDays)
+        {
+            return $"Date range cannot exceed {ClinicReportsPageCopy.MaxInclusiveDays} inclusive days.";
+        }
+
+        return null;
+    }
+
+    private ClinicReportQuery BuildQuery()
+    {
+        var from = DateOnly.FromDateTime(_fromDate!.Value).ToString("yyyy-MM-dd");
+        var to = DateOnly.FromDateTime(_toDate!.Value).ToString("yyyy-MM-dd");
+        return new ClinicReportQuery
+        {
+            ClinicId = Permissions.IsPlatformAdmin ? PlatformTenant.SelectedClinicId : null,
+            FromDate = from,
+            ToDate = to,
+        };
+    }
+}

@@ -202,6 +202,18 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
                 cancellationToken);
         }
 
+        if (exception is ClinicReportException clinicReportException)
+        {
+            return await WriteAuthProblemAsync(
+                httpContext,
+                clinicReportException.StatusCode,
+                clinicReportException.Title,
+                clinicReportException.ErrorCode,
+                correlationId,
+                "Clinic reports denied",
+                cancellationToken);
+        }
+
         if (exception is OrganizationReportException organizationReportException)
         {
             return await WriteAuthProblemAsync(

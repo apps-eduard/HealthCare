@@ -1,5 +1,7 @@
 @inherits LayoutComponentBase
 @implements IDisposable
+@using HealthCare.Web.ClinicReports
+@using HealthCare.Web.ClinicSettings
 @inject IPermissionState Permissions
 @inject NavigationManager Navigation
 @inject IJSRuntime Js
@@ -143,7 +145,8 @@
                     </ChildContent>
                 </SubMenu>
             }
-            @if (ClinicSettingsPermissionRules.CanView(Permissions))
+            @if (ClinicSettingsPermissionRules.CanView(Permissions)
+                 || ClinicReportsPermissionRules.CanView(Permissions))
             {
                 <SubMenu Key="clinic">
                     <TitleTemplate>
@@ -151,9 +154,18 @@
                         <span>Clinic</span>
                     </TitleTemplate>
                     <ChildContent>
-                        <MenuItem Key="clinic-settings" RouterLink="/clinic/settings" RouterMatch="NavLinkMatch.Prefix">
-                            <span>Clinic Profile</span>
-                        </MenuItem>
+                        @if (ClinicSettingsPermissionRules.CanView(Permissions))
+                        {
+                            <MenuItem Key="clinic-settings" RouterLink="/clinic/settings" RouterMatch="NavLinkMatch.Prefix">
+                                <span>Clinic Profile</span>
+                            </MenuItem>
+                        }
+                        @if (ClinicReportsPermissionRules.CanView(Permissions))
+                        {
+                            <MenuItem Key="clinic-reports" RouterLink="/clinic/reports" RouterMatch="NavLinkMatch.Prefix">
+                                <span>Reports</span>
+                            </MenuItem>
+                        }
                     </ChildContent>
                 </SubMenu>
             }
@@ -301,6 +313,7 @@
                 var p when p.StartsWith("/audit-logs", StringComparison.Ordinal) => "audit-logs",
                 var p when p.StartsWith("/usage", StringComparison.Ordinal) => "usage",
                 var p when p.StartsWith("/organization/settings", StringComparison.Ordinal) => "org-settings",
+                var p when p.StartsWith("/clinic/reports", StringComparison.Ordinal) => "clinic-reports",
                 var p when p.StartsWith("/clinic/settings", StringComparison.Ordinal) => "clinic-settings",
                 var p when p.StartsWith("/clinics", StringComparison.Ordinal) => "clinics",
                 var p when p.StartsWith("/staff", StringComparison.Ordinal) => "staff",
