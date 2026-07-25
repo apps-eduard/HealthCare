@@ -13,6 +13,7 @@
 @inject IUserNotificationService Notify
 @inject IClinicDirectoryApiClient ClinicsApi
 @inject IClinicDirectoryCache ClinicCache
+@inject NavigationManager Navigation
 
 <PageTitle>Doctor Availability</PageTitle>
 
@@ -425,15 +426,44 @@ else
 
     private async Task ApplyInitialDoctorAsync()
     {
-        if (_selfOnly || InitialDoctorId is not Guid preferred)
+        if (_selfOnly)
         {
             return;
         }
 
-        if (_doctors.Any(d => d.StaffMemberId == preferred))
+        var preferred = InitialDoctorId ?? TryReadDoctorIdFromUri();
+        if (preferred is not Guid doctorId)
         {
-            await OnDoctorChanged(preferred);
+            return;
         }
+
+        if (_doctors.Any(d => d.StaffMemberId == doctorId))
+        {
+            await OnDoctorChanged(doctorId);
+        }
+    }
+
+    private Guid? TryReadDoctorIdFromUri()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var query = uri.Query.TrimStart('?');
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return null;
+        }
+
+        foreach (var part in query.Split('&', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var kv = part.Split('=', 2);
+            if (kv.Length == 2
+                && string.Equals(kv[0], "doctorId", StringComparison.OrdinalIgnoreCase)
+                && Guid.TryParse(Uri.UnescapeDataString(kv[1]), out var id))
+            {
+                return id;
+            }
+        }
+
+        return null;
     }
 
     public void Dispose()

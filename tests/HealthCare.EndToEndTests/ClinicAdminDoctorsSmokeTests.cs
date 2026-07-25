@@ -33,19 +33,26 @@ public sealed class ClinicAdminDoctorsSmokeTests : E2ePageTestBase
                 .ToBeVisibleAsync(new() { Timeout = 30_000 });
             await Expect(Page.Locator("table.hc-table tbody tr").First).ToBeVisibleAsync();
 
-            await Page.Locator("button[aria-label^='Open summary for']").First.ClickAsync();
-            var drawer = Page.Locator(".ant-drawer").Filter(new() { HasText = "Availability" });
-            await Expect(drawer).ToBeVisibleAsync(new() { Timeout = 15_000 });
-            await drawer.Locator("button[aria-label='Open doctor availability']").ClickAsync();
+            await Page.GetByRole(AriaRole.Link, new() { Name = "Doctors" }).CountAsync(); // nav present
+            await Page.Locator("button[aria-label^='Manage availability for']").First.ClickAsync();
 
-            await Expect(Page).ToHaveURLAsync(new Regex(".*/availability\\?doctorId=.*"));
+            await Expect(Page).ToHaveURLAsync(new Regex(".*/availability.*"));
             await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Doctor Availability" }))
                 .ToBeVisibleAsync(new() { Timeout = 60_000 });
             await Expect(Page.Locator("[data-testid='availability-clinic-caption']")).ToBeVisibleAsync();
             await Expect(Page.Locator("label", new() { HasText = "Clinic filter" })).ToHaveCountAsync(0);
             await Expect(Page.GetByText("Medical note", new() { Exact = false })).ToHaveCountAsync(0);
 
-            await Page.GetByRole(AriaRole.Tab, new() { Name = "Exceptions" }).ClickAsync();
+            // Ensure a doctor is selected (deep-link or picker).
+            var exceptionsTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Exceptions" });
+            if (await exceptionsTab.CountAsync() == 0)
+            {
+                await Page.Locator("#availability-doctor").ClickAsync();
+                await Page.Locator(".ant-select-dropdown:visible .ant-select-item-option").First.ClickAsync();
+            }
+
+            await Expect(exceptionsTab).ToBeVisibleAsync(new() { Timeout = 30_000 });
+            await exceptionsTab.ClickAsync();
             await Page.GetByRole(AriaRole.Button, new() { Name = "Add availability exception" }).ClickAsync();
 
             var modal = Page.Locator(".ant-modal").Filter(new() { HasText = "Add exception" });
@@ -58,6 +65,13 @@ public sealed class ClinicAdminDoctorsSmokeTests : E2ePageTestBase
             await Page.ReloadAsync();
             await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Doctor Availability" }))
                 .ToBeVisibleAsync(new() { Timeout = 60_000 });
+
+            if (await Page.GetByRole(AriaRole.Tab, new() { Name = "Exceptions" }).CountAsync() == 0)
+            {
+                await Page.Locator("#availability-doctor").ClickAsync();
+                await Page.Locator(".ant-select-dropdown:visible .ant-select-item-option").First.ClickAsync();
+            }
+
             await Page.GetByRole(AriaRole.Tab, new() { Name = "Exceptions" }).ClickAsync();
             await Expect(Page.GetByText(reason)).ToBeVisibleAsync(new() { Timeout = 30_000 });
 

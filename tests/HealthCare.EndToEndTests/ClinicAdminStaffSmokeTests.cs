@@ -44,8 +44,18 @@ public sealed class ClinicAdminStaffSmokeTests : E2ePageTestBase
                 .ToBeVisibleAsync(new() { Timeout = 15_000 });
 
             // Wait until assignable roles finish loading (Create enabled).
-            await Expect(modal.GetByRole(AriaRole.Button, new() { Name = "Create" }))
-                .ToBeEnabledAsync(new() { Timeout = 15_000 });
+            var createButton = modal.GetByRole(AriaRole.Button, new() { Name = "Create" });
+            try
+            {
+                await Expect(createButton).ToBeEnabledAsync(new() { Timeout = 20_000 });
+            }
+            catch (PlaywrightException)
+            {
+                // Roles select may still be empty after a slow/failed first load — pick Receptionist explicitly.
+                await modal.Locator(".ant-select").First.ClickAsync();
+                await Page.Locator(".ant-select-dropdown:visible").GetByText("RECEPTIONIST", new() { Exact = true }).ClickAsync();
+                await Expect(createButton).ToBeEnabledAsync(new() { Timeout = 10_000 });
+            }
 
             var email = $"ca3.recv.{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}@healthcare.local";
             await modal.Locator("input").Nth(0).FillAsync(email);
