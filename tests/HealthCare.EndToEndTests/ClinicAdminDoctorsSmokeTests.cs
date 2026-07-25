@@ -43,6 +43,14 @@ public sealed class ClinicAdminDoctorsSmokeTests : E2ePageTestBase
             await Expect(Page.Locator("label", new() { HasText = "Clinic filter" })).ToHaveCountAsync(0);
 
             var exceptionsTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Exceptions" });
+            if (!await exceptionsTab.IsVisibleAsync())
+            {
+                await Page.GetByLabel("Select doctor").ClickAsync();
+                await Expect(Page.Locator(".ant-select-dropdown:visible .ant-select-item-option").First)
+                    .ToBeVisibleAsync(new() { Timeout = 20_000 });
+                await Page.Locator(".ant-select-dropdown:visible .ant-select-item-option").First.ClickAsync();
+            }
+
             await Expect(exceptionsTab).ToBeVisibleAsync(new() { Timeout = 45_000 });
             await exceptionsTab.ClickAsync();
             await Page.GetByRole(AriaRole.Button, new() { Name = "Add availability exception" }).ClickAsync();
@@ -58,9 +66,18 @@ public sealed class ClinicAdminDoctorsSmokeTests : E2ePageTestBase
             await Page.GotoAsync(availabilityUrl);
             await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Doctor Availability" }))
                 .ToBeVisibleAsync(new() { Timeout = 60_000 });
-            await Expect(Page.GetByRole(AriaRole.Tab, new() { Name = "Exceptions" }))
-                .ToBeVisibleAsync(new() { Timeout = 45_000 });
-            await Page.GetByRole(AriaRole.Tab, new() { Name = "Exceptions" }).ClickAsync();
+
+            exceptionsTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Exceptions" });
+            if (!await exceptionsTab.IsVisibleAsync())
+            {
+                await Page.GetByLabel("Select doctor").ClickAsync();
+                await Expect(Page.Locator(".ant-select-dropdown:visible .ant-select-item-option").First)
+                    .ToBeVisibleAsync(new() { Timeout = 20_000 });
+                await Page.Locator(".ant-select-dropdown:visible .ant-select-item-option").First.ClickAsync();
+            }
+
+            await Expect(exceptionsTab).ToBeVisibleAsync(new() { Timeout = 45_000 });
+            await exceptionsTab.ClickAsync();
             await Expect(Page.GetByText(reason)).ToBeVisibleAsync(new() { Timeout = 30_000 });
 
             await Expect(Page.Locator("label", new() { HasText = "Clinic filter" })).ToHaveCountAsync(0);

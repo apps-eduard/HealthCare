@@ -358,6 +358,8 @@ else
     private DateTime? _rangeTo = DateTime.Today.AddDays(6);
     private int _previewDuration = 30;
 
+    private Guid? _appliedDoctorQuery;
+
     [SupplyParameterFromQuery(Name = "doctorId")]
     public Guid? InitialDoctorId { get; set; }
 
@@ -424,6 +426,20 @@ else
         }
     }
 
+    protected override async Task OnParametersSetAsync()
+    {
+        // Query parameters are reliable here for interactive navigations (/availability?doctorId=...).
+        if (_selfOnly
+            || Permissions.IsPatientOnly
+            || !AvailabilityPermissionRules.CanView(Permissions)
+            || _clinicId is null)
+        {
+            return;
+        }
+
+        await ApplyInitialDoctorAsync();
+    }
+
     private async Task ApplyInitialDoctorAsync()
     {
         if (_selfOnly)
@@ -432,11 +448,18 @@ else
         }
 
         var preferred = InitialDoctorId ?? TryReadDoctorIdFromUri();
-        if (preferred is Guid doctorId)
+        if (preferred is not Guid doctorId)
         {
-            // Apply even if the picker list is still empty — availability APIs are keyed by doctor id.
-            await OnDoctorChanged(doctorId);
+            return;
         }
+
+        if (_appliedDoctorQuery == doctorId && _doctorId == doctorId)
+        {
+            return;
+        }
+
+        _appliedDoctorQuery = doctorId;
+        await OnDoctorChanged(doctorId);
     }
 
     private Guid? TryReadDoctorIdFromUri()
