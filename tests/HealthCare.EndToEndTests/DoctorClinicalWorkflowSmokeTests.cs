@@ -42,14 +42,11 @@ public sealed class DoctorClinicalWorkflowSmokeTests : E2ePageTestBase
                 .ToBeVisibleAsync(new() { Timeout = 30_000 });
 
             dialog = DetailDialog(appointment.Id);
-            var planField = dialog.Locator("#medical-note-plan");
-            if (await planField.CountAsync() == 0)
-            {
-                await dialog.GetByRole(AriaRole.Button, new() { Name = "Open medical note" }).ClickAsync();
-            }
-
-            await Expect(dialog.Locator("#medical-note-plan")).ToBeVisibleAsync(new() { Timeout = 20_000 });
-            await dialog.Locator("#medical-note-plan").FillAsync(originalPlan);
+            var openNote = dialog.GetByRole(AriaRole.Button, new() { Name = "Open medical note" });
+            await Expect(openNote).ToBeEnabledAsync(new() { Timeout = 30_000 });
+            await openNote.ClickAsync();
+            await Expect(dialog.GetByLabel("Plan")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+            await dialog.GetByLabel("Plan").FillAsync(originalPlan);
             await dialog.GetByRole(AriaRole.Button, new() { Name = "Save medical note draft" })
                 .Or(dialog.GetByRole(AriaRole.Button, new() { Name = "Save draft" }))
                 .ClickAsync();
@@ -73,8 +70,8 @@ public sealed class DoctorClinicalWorkflowSmokeTests : E2ePageTestBase
             await Expect(dialog.Locator("#medical-note-plan")).ToHaveCountAsync(0);
             await Expect(dialog.GetByText($"P: {originalPlan}")).ToBeVisibleAsync();
 
-            await dialog.Locator("#medical-note-amend-reason").FillAsync("DR10 correction");
-            await dialog.Locator("#medical-note-amend-plan").FillAsync("DR10 amended plan");
+            await dialog.GetByLabel("Amendment reason").FillAsync("DR10 correction");
+            await dialog.GetByLabel("Amendment plan").FillAsync("DR10 amended plan");
             var amendButton = dialog.GetByRole(AriaRole.Button, new() { Name = "Amend medical note" })
                 .Or(dialog.GetByRole(AriaRole.Button, new() { Name = "Amend" }));
             await Expect(amendButton).ToBeEnabledAsync(new() { Timeout = 30_000 });
