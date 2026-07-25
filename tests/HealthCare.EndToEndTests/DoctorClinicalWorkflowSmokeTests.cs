@@ -53,8 +53,16 @@ public sealed class DoctorClinicalWorkflowSmokeTests : E2ePageTestBase
             await Expect(Page.GetByText("Draft note saved.", new() { Exact = false }))
                 .ToBeVisibleAsync(new() { Timeout = 30_000 });
 
+            dialog = DetailDialog(appointment.Id);
             var signButton = dialog.GetByRole(AriaRole.Button, new() { Name = "Sign medical note" })
                 .Or(dialog.GetByRole(AriaRole.Button, new() { Name = "Sign" }));
+            if (await signButton.CountAsync() == 0)
+            {
+                await dialog.GetByRole(AriaRole.Button, new() { Name = "Open medical note" }).ClickAsync();
+                signButton = dialog.GetByRole(AriaRole.Button, new() { Name = "Sign medical note" })
+                    .Or(dialog.GetByRole(AriaRole.Button, new() { Name = "Sign" }));
+            }
+
             await Expect(signButton).ToBeEnabledAsync(new() { Timeout = 30_000 });
             await signButton.ClickAsync();
             var signConfirm = Page.Locator(".ant-modal").Filter(new() { HasText = "Sign note" });
