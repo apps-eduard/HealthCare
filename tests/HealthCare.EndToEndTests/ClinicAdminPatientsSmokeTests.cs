@@ -78,6 +78,13 @@ public sealed class ClinicAdminPatientsSmokeTests : E2ePageTestBase
     {
         var confirm = Page.Locator(".ant-modal").Filter(new() { HasText = "Update clinic enrollment" });
         await Expect(confirm).ToBeVisibleAsync(new() { Timeout = 10_000 });
-        await confirm.GetByRole(AriaRole.Button, new() { Name = "Yes" }).ClickAsync();
+        // Ant Design ConfirmService may render OK/Cancel even for YesNo.
+        var primary = confirm.GetByRole(AriaRole.Button, new() { Name = "OK" });
+        if (await primary.CountAsync() == 0)
+        {
+            primary = confirm.GetByRole(AriaRole.Button, new() { Name = "Yes" });
+        }
+
+        await primary.ClickAsync();
     }
 }
