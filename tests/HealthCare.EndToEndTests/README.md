@@ -92,4 +92,4 @@ E2E tests share one host fixture and use an xUnit collection with `DisableParall
 - Clinic Admin CA-10 hardening (`ClinicAdminHardeningSmokeTests`)
 - Doctor DR-1: login → Doctor Dashboard → org settings denied → logout (`DoctorDashboardSmokeTests`)
 - Doctor DR-2: login → My Profile → update display name → reload persistence; identity fields read-only; admin nav absent (`DoctorProfileSmokeTests`)
-- Doctor DR-3: login → My Availability self-lock → queue/calendar self defaults; Patients/Staff absent (`DoctorAvailabilitySmokeTests`)
+- Doctor DR-3/DR-5: login → My Availability self-lock → queue/calendar self defaults; Patients directory (Model A); Staff absent (`DoctorAvailabilitySmokeTests`)

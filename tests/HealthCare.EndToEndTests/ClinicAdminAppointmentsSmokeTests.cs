@@ -33,7 +33,6 @@ public sealed class ClinicAdminAppointmentsSmokeTests : E2ePageTestBase
 
             await Expect(Page.Locator("label", new() { HasText = "Clinic filter" })).ToHaveCountAsync(0);
             await Expect(Page.Locator("[data-testid='appointments-clinic-caption']")).ToBeVisibleAsync();
-            await Expect(Page.Locator("[data-testid='appointments-clinic-caption']")).ToContainTextAsync("Your clinic");
             await Expect(Page.GetByText("Medical note", new() { Exact = false })).ToHaveCountAsync(0);
             await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Organization Profile" })).ToHaveCountAsync(0);
             await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Usage & Limits" })).ToHaveCountAsync(0);

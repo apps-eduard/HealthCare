@@ -34,7 +34,7 @@ public sealed class DoctorProfileSmokeTests : E2ePageTestBase
 
             await Expect(Page.GetByRole(AriaRole.Link, new() { Name = "Staff Management" })).ToHaveCountAsync(0);
             await Expect(Page.GetByRole(AriaRole.Link, new() { Name = "Clinic Profile" })).ToHaveCountAsync(0);
-            await Expect(Page.GetByRole(AriaRole.Link, new() { Name = "Patients" })).ToHaveCountAsync(0);
+            await Expect(Page.GetByRole(AriaRole.Link, new() { Name = "Patients" })).ToBeVisibleAsync();
             await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Organization Profile" })).ToHaveCountAsync(0);
             await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Select organization" })).ToHaveCountAsync(0);
             await Expect(Page.GetByText("Medical Notes", new() { Exact = false })).ToHaveCountAsync(0);
