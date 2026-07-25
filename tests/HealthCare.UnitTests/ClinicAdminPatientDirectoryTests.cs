@@ -198,6 +198,21 @@ public sealed class ClinicAdminPatientDirectoryTests
     }
 
     [Fact]
+    public async Task Invalid_Clinic_Status_Is_Rejected()
+    {
+        await using var harness = await StaffPatientHarness.CreateAsync();
+        var data = await harness.SeedTwoClinicsAsync();
+        var admin = await SeedClinicAdminAsync(harness, data);
+        var sut = harness.CreateService(
+            admin.UserId, AppRoles.ClinicAdmin, data.Org1Id, data.ClinicAId, admin.StaffId);
+
+        var act = () => sut.UpdateClinicProfileAsync(
+            data.PatientInAId,
+            new UpdateClinicPatientRequest { ExpectedVersion = 0, Status = "Suspended" });
+        await act.Should().ThrowAsync<ClinicPatientUpdateException>();
+    }
+
+    [Fact]
     public void Invalid_Clinic_Status_Is_Rejected_By_Validator()
     {
         var validator = new UpdateClinicPatientRequestValidator();

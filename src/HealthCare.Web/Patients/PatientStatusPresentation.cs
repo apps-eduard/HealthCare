@@ -122,6 +122,8 @@ public static class PatientProblemMessages
                     "This clinic patient record was updated by someone else. Reload and try again.",
                 "patient.invalid_search" =>
                     "The search filters are not valid. Adjust them and try again.",
+                "patient.invalid_clinic_patient_status" =>
+                    "Enrollment status must be Active or Inactive.",
                 "patient.clinic_inactive" =>
                     "The clinic is inactive and cannot accept enrollments.",
                 "patient.organization_inactive" =>

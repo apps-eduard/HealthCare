@@ -106,6 +106,18 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
                 cancellationToken);
         }
 
+        if (exception is ClinicPatientUpdateException clinicPatientUpdateException)
+        {
+            return await WriteAuthProblemAsync(
+                httpContext,
+                clinicPatientUpdateException.StatusCode,
+                clinicPatientUpdateException.Title,
+                clinicPatientUpdateException.ErrorCode,
+                correlationId,
+                "Clinic patient update rejected",
+                cancellationToken);
+        }
+
         if (exception is StaffManagementException staffException)
         {
             return await WriteAuthProblemAsync(

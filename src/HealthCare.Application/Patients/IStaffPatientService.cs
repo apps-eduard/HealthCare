@@ -48,3 +48,23 @@ public sealed class ClinicPatientConcurrencyException : Exception
 
     public int StatusCode { get; }
 }
+
+public sealed class ClinicPatientUpdateException : Exception
+{
+    public ClinicPatientUpdateException(string errorCode, string title, int statusCode = 400)
+        : base(title)
+    {
+        ErrorCode = errorCode;
+        Title = title;
+        StatusCode = statusCode;
+    }
+
+    public string ErrorCode { get; }
+
+    public string Title { get; }
+
+    public int StatusCode { get; }
+
+    public static ClinicPatientUpdateException InvalidStatus() =>
+        new(PatientErrorCodes.InvalidClinicPatientStatus, "Status must be Active or Inactive.", 400);
+}

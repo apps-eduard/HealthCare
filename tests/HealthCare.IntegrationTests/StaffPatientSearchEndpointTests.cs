@@ -352,14 +352,7 @@ public sealed class StaffPatientSearchEndpointTests : IAsyncLifetime
             "/api/v1/staff/patients");
         list.Should().NotBeNull();
         list!.Items.Should().OnlyContain(i => i.ClinicId == ownClinicId);
-
-        using var scope = _factory!.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
-        var otherClinicPatient = await db.ClinicPatients.AsNoTracking()
-            .Where(cp => cp.ClinicId != ownClinicId)
-            .Select(cp => cp.PatientId)
-            .FirstAsync();
-        list.Items.Should().NotContain(i => i.PatientId == otherClinicPatient);
+        list.Items.Should().NotContain(i => i.LocalPatientNumber == "DEV-P-B-0001");
 
         var detail = await _client!.GetAsync($"/api/v1/staff/patients/{list.Items[0].PatientId}");
         detail.StatusCode.Should().Be(HttpStatusCode.OK);

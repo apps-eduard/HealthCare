@@ -277,7 +277,7 @@ public sealed class StaffPatientService : IStaffPatientService
 
         if (!Enum.TryParse<ClinicPatientStatus>(request.Status, ignoreCase: true, out var newStatus))
         {
-            throw AuthorizationException.Forbidden();
+            throw ClinicPatientUpdateException.InvalidStatus();
         }
 
         clinicPatient.Status = newStatus;
