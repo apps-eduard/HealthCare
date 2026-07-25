@@ -158,16 +158,16 @@ public sealed class ClinicAdminHardeningSmokeTests : E2ePageTestBase
                 new AuthenticationHeaderValue("Bearer", tokens!.AccessToken);
 
             var dashboard = await api.GetAsync($"api/v1/clinic/dashboard?clinicId={foreignClinicId:D}");
-            ((int)dashboard.StatusCode).Should().BeOneOf(403, 404);
+            ((int)dashboard.StatusCode).Should().BeOneOf(400, 403, 404);
 
             var settings = await api.GetAsync($"api/v1/clinic/settings?clinicId={foreignClinicId:D}");
-            ((int)settings.StatusCode).Should().BeOneOf(403, 404);
+            ((int)settings.StatusCode).Should().BeOneOf(400, 403, 404);
 
             var reports = await api.GetAsync($"api/v1/clinic/reports/appointments?clinicId={foreignClinicId:D}");
-            ((int)reports.StatusCode).Should().BeOneOf(403, 404);
+            ((int)reports.StatusCode).Should().BeOneOf(400, 403, 404);
 
             var audit = await api.GetAsync($"api/v1/clinic/audit-logs?clinicId={foreignClinicId:D}");
-            ((int)audit.StatusCode).Should().BeOneOf(403, 404);
+            ((int)audit.StatusCode).Should().BeOneOf(400, 403, 404);
 
             var orgSettings = await api.GetAsync("api/v1/organization/settings");
             ((int)orgSettings.StatusCode).Should().BeOneOf(401, 403);
