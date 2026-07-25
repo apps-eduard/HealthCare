@@ -117,7 +117,7 @@ public sealed class StaffPatientSearchEndpointTests : IAsyncLifetime
     [Fact]
     public async Task Clinic_A_Staff_Sees_Clinic_A_Patients_Only()
     {
-        await AuthenticateAsync(StaffAEmail, StaffAPassword);
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
         var response = await _client!.GetAsync("/api/v1/staff/patients");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -132,7 +132,7 @@ public sealed class StaffPatientSearchEndpointTests : IAsyncLifetime
     [Fact]
     public async Task Clinic_A_Staff_Cannot_See_Clinic_B_Local_Number()
     {
-        await AuthenticateAsync(StaffAEmail, StaffAPassword);
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
         var response = await _client!.GetAsync("/api/v1/staff/patients");
         var body = await response.Content.ReadFromJsonAsync<PagedResponse<StaffPatientSummaryResponse>>();
         body!.Items.Select(i => i.LocalPatientNumber).Should().NotContain("DEV-P-B-0001");
@@ -152,7 +152,7 @@ public sealed class StaffPatientSearchEndpointTests : IAsyncLifetime
     [Fact]
     public async Task Client_ClinicId_Cannot_Bypass_Clinic_Scope()
     {
-        await AuthenticateAsync(StaffAEmail, StaffAPassword);
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
         using var scope = _factory!.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
         var clinicBId = await db.Clinics.Where(c => c.Slug == "dev-clinic-b").Select(c => c.Id).SingleAsync();
@@ -166,7 +166,7 @@ public sealed class StaffPatientSearchEndpointTests : IAsyncLifetime
     [Fact]
     public async Task Client_OrganizationId_Query_Is_Ignored()
     {
-        await AuthenticateAsync(StaffAEmail, StaffAPassword);
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
         var response = await _client!.GetAsync($"/api/v1/staff/patients?organizationId={Guid.NewGuid()}");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<PagedResponse<StaffPatientSummaryResponse>>();
@@ -177,7 +177,7 @@ public sealed class StaffPatientSearchEndpointTests : IAsyncLifetime
     [Fact]
     public async Task Pagination_Metadata_Is_Correct()
     {
-        await AuthenticateAsync(StaffAEmail, StaffAPassword);
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
         var response = await _client!.GetAsync("/api/v1/staff/patients?page=1&pageSize=1");
         var body = await response.Content.ReadFromJsonAsync<PagedResponse<StaffPatientSummaryResponse>>();
         body!.Page.Should().Be(1);
@@ -190,10 +190,176 @@ public sealed class StaffPatientSearchEndpointTests : IAsyncLifetime
     [Fact]
     public async Task Search_Filters_Return_Expected_Results()
     {
-        await AuthenticateAsync(StaffAEmail, StaffAPassword);
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
         var response = await _client!.GetAsync("/api/v1/staff/patients?search=Dev&localPatientNumber=DEV-P-0001");
         var body = await response.Content.ReadFromJsonAsync<PagedResponse<StaffPatientSummaryResponse>>();
         body!.Items.Should().ContainSingle(i => i.LocalPatientNumber == "DEV-P-0001");
+    }
+
+    [Fact]
+    public async Task Doctor_Sees_Only_Appointment_Linked_Patients()
+    {
+        Guid linkedPatientId;
+        Guid unrelatedPatientId;
+        Guid doctorStaffId;
+        using (var scope = _factory!.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+            var clinic = await db.Clinics.SingleAsync(c => c.Slug == "dev-clinic-a");
+            doctorStaffId = await db.StaffMembers
+                .Where(s => s.ClinicId == clinic.Id && s.Role == Domain.Identity.AppRoles.Doctor)
+                .Select(s => s.Id)
+                .SingleAsync();
+            linkedPatientId = await db.ClinicPatients
+                .Where(cp => cp.LocalPatientNumber == "DEV-P-0001")
+                .Select(cp => cp.PatientId)
+                .SingleAsync();
+            var linkedClinicPatientId = await db.ClinicPatients
+                .Where(cp => cp.LocalPatientNumber == "DEV-P-0001")
+                .Select(cp => cp.Id)
+                .SingleAsync();
+
+            unrelatedPatientId = Guid.NewGuid();
+            db.Patients.Add(new Domain.Patients.Patient
+            {
+                Id = unrelatedPatientId,
+                FirstName = "Unrelated",
+                LastName = "Patient",
+                IsActive = true,
+            });
+            db.ClinicPatients.Add(new Domain.Patients.ClinicPatient
+            {
+                Id = Guid.NewGuid(),
+                ClinicId = clinic.Id,
+                PatientId = unrelatedPatientId,
+                LocalPatientNumber = "DEV-P-UNRELATED",
+                Status = Domain.Patients.ClinicPatientStatus.Active,
+                RegisteredAtUtc = DateTimeOffset.UtcNow,
+                UpdatedAtUtc = DateTimeOffset.UtcNow,
+            });
+            db.Appointments.Add(new Domain.Appointments.Appointment
+            {
+                Id = Guid.NewGuid(),
+                OrganizationId = clinic.OrganizationId,
+                ClinicId = clinic.Id,
+                PatientId = linkedPatientId,
+                ClinicPatientId = linkedClinicPatientId,
+                DoctorStaffMemberId = doctorStaffId,
+                AppointmentDateUtc = DateTimeOffset.UtcNow.AddDays(-2),
+                DurationMinutes = 30,
+                Status = Domain.Appointments.AppointmentStatus.Completed,
+                Source = Domain.Appointments.AppointmentSource.Staff,
+                CreatedByUserId = doctorStaffId,
+                Version = 0,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+                UpdatedAtUtc = DateTimeOffset.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await AuthenticateAsync(StaffAEmail, StaffAPassword);
+        var list = await _client!.GetAsync("/api/v1/staff/patients");
+        list.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await list.Content.ReadFromJsonAsync<PagedResponse<StaffPatientSummaryResponse>>();
+        body!.Items.Should().Contain(i => i.PatientId == linkedPatientId);
+        body.Items.Should().NotContain(i => i.PatientId == unrelatedPatientId);
+
+        var linked = await _client!.GetAsync($"/api/v1/staff/patients/{linkedPatientId}");
+        linked.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var unrelated = await _client!.GetAsync($"/api/v1/staff/patients/{unrelatedPatientId}");
+        unrelated.StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.NotFound);
+        var json = await unrelated.Content.ReadAsStringAsync();
+        json.Should().NotContain("Unrelated");
+        json.Should().NotContain("DEV-P-UNRELATED");
+    }
+
+    [Fact]
+    public async Task Doctor_Cannot_Access_Peer_Only_Patient()
+    {
+        Guid peerOnlyPatientId;
+        using (var scope = _factory!.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+            var clinic = await db.Clinics.SingleAsync(c => c.Slug == "dev-clinic-a");
+            var peerUserId = Guid.NewGuid();
+            var peerStaffId = Guid.NewGuid();
+            var now = DateTimeOffset.UtcNow;
+            db.Users.Add(new Domain.Identity.ApplicationUser
+            {
+                Id = peerUserId,
+                Email = $"peer.patient.{peerUserId:N}@healthcare.local",
+                NormalizedEmail = $"PEER.PATIENT.{peerUserId:N}@HEALTHCARE.LOCAL",
+                UserName = $"peer.patient.{peerUserId:N}@healthcare.local",
+                NormalizedUserName = $"PEER.PATIENT.{peerUserId:N}@HEALTHCARE.LOCAL",
+                EmailConfirmed = true,
+                IsActive = true,
+                SecurityStamp = Guid.NewGuid().ToString("N"),
+                ConcurrencyStamp = Guid.NewGuid().ToString("N"),
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+            });
+            db.StaffMembers.Add(new Domain.Staff.StaffMember
+            {
+                Id = peerStaffId,
+                UserId = peerUserId,
+                OrganizationId = clinic.OrganizationId,
+                ClinicId = clinic.Id,
+                Role = Domain.Identity.AppRoles.Doctor,
+                IsActive = true,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+            });
+
+            peerOnlyPatientId = Guid.NewGuid();
+            db.Patients.Add(new Domain.Patients.Patient
+            {
+                Id = peerOnlyPatientId,
+                FirstName = "Peer",
+                LastName = "Only",
+                IsActive = true,
+            });
+            var clinicPatientId = Guid.NewGuid();
+            db.ClinicPatients.Add(new Domain.Patients.ClinicPatient
+            {
+                Id = clinicPatientId,
+                ClinicId = clinic.Id,
+                PatientId = peerOnlyPatientId,
+                LocalPatientNumber = "DEV-P-PEER-ONLY",
+                Status = Domain.Patients.ClinicPatientStatus.Active,
+                RegisteredAtUtc = now,
+                UpdatedAtUtc = now,
+            });
+            db.Appointments.Add(new Domain.Appointments.Appointment
+            {
+                Id = Guid.NewGuid(),
+                OrganizationId = clinic.OrganizationId,
+                ClinicId = clinic.Id,
+                PatientId = peerOnlyPatientId,
+                ClinicPatientId = clinicPatientId,
+                DoctorStaffMemberId = peerStaffId,
+                AppointmentDateUtc = now.AddDays(-1),
+                DurationMinutes = 30,
+                Status = Domain.Appointments.AppointmentStatus.Confirmed,
+                Source = Domain.Appointments.AppointmentSource.Staff,
+                CreatedByUserId = peerUserId,
+                Version = 0,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await AuthenticateAsync(StaffAEmail, StaffAPassword);
+        var list = await _client!.GetAsync("/api/v1/staff/patients");
+        var body = await list.Content.ReadFromJsonAsync<PagedResponse<StaffPatientSummaryResponse>>();
+        body!.Items.Should().NotContain(i => i.PatientId == peerOnlyPatientId);
+
+        var detail = await _client!.GetAsync($"/api/v1/staff/patients/{peerOnlyPatientId}");
+        detail.StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.NotFound);
+        var json = await detail.Content.ReadAsStringAsync();
+        json.Should().NotContain("Peer");
+        json.Should().NotContain("DEV-P-PEER-ONLY");
     }
 
     [Fact]

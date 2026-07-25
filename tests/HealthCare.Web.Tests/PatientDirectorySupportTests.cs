@@ -120,6 +120,28 @@ public sealed class PatientDirectorySupportTests
     }
 
     [Fact]
+    public async Task Doctor_Subtitle_Is_Appointment_Linked()
+    {
+        var state = new PermissionState();
+        await state.SetFromUserAsync(new CurrentUserResponse
+        {
+            UserId = Guid.NewGuid(),
+            Email = "doctor@test.local",
+            Roles = [WebRoles.Doctor],
+            Permissions = [WebPermissions.PatientsSearch, WebPermissions.PatientsRead],
+            HasActiveStaffMembership = true,
+            ClinicId = Guid.NewGuid(),
+            OrganizationId = Guid.NewGuid(),
+            StaffMemberId = Guid.NewGuid(),
+        });
+
+        PatientDirectoryPermissionRules.CanView(state).Should().BeTrue();
+        PatientDirectoryPermissionRules.CanUpdateClinicStatus(state).Should().BeFalse();
+        PatientDirectoryPageCopy.Subtitle(state).Should().Contain("assigned appointments");
+        PatientDirectoryPageCopy.ClinicCaption(state, "Clinic A").Should().Be("Clinic A");
+    }
+
+    [Fact]
     public async Task Missing_Read_And_Update_Permissions_Are_Detectable()
     {
         var state = new PermissionState();

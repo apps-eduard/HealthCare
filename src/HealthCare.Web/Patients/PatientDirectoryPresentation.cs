@@ -32,7 +32,9 @@ public static class PatientDirectoryPermissionRules
 public static class PatientDirectoryPageCopy
 {
     public static string Subtitle(IPermissionState permissions) =>
-        permissions.IsClinicAdmin
+        permissions.IsDoctor && !permissions.IsPlatformAdmin
+            ? "Patients from your assigned appointments"
+            : permissions.IsClinicAdmin
             ? "Patients enrolled in your clinic"
             : permissions.IsOrganizationAdmin
                 ? "Organization patient search and clinic enrollment"
@@ -41,7 +43,7 @@ public static class PatientDirectoryPageCopy
                     : "Clinic patient search and enrollment status";
 
     public static string ClinicCaption(IPermissionState permissions, string? clinicName) =>
-        permissions.IsClinicAdmin
+        permissions.IsClinicAdmin || (permissions.IsDoctor && !permissions.IsPlatformAdmin)
             ? (string.IsNullOrWhiteSpace(clinicName) ? "Your clinic" : clinicName)
             : (clinicName ?? "Selected clinic");
 }

@@ -70,7 +70,7 @@ Clinical ownership key: StaffMemberId
 
 | Gap | Current behavior | Approved target | Phase |
 |-----|------------------|-----------------|-------|
-| Patient access | Clinic-wide enrollment (Model B) | Appointment-linked (Model A) | **DR-5** |
+| Patient access | Clinic-wide enrollment (Model B) | Appointment-linked (Model A) | **DR-5 delivered** |
 | Appointment ownership | Any clinic staff with permission may act | Doctor list/view/mutate **own** only | **DR-4 delivered** |
 | Medical-note read | Any clinic Doctor/Nurse with permission | Author + authorized own appointment only | **DR-6** |
 | Medical-note amend | Any clinic Doctor | Author-only append | **DR-6** |
@@ -90,7 +90,7 @@ Clinical ownership key: StaffMemberId
 | 6–8 | Own schedule / list / detail | Yes | Own only (API + UI) | Shared pages (filter locked) | **DR-4** |
 | 9–14 | Confirm/check-in/complete/no-show/cancel/reschedule | Own only | Own only | Shared | DR-4 / DR-7 |
 | — | Appointment **create** | **Not in Doctor Web MVP** | Removed from DOCTOR matrix | No UI | **DR-4** |
-| 15–18 | Patient summary/directory/history | Model A | Clinic-wide (**gap**) | Shared | **DR-5** |
+| 15–18 | Patient summary/directory/history | Model A | Model A enforced | Shared | **DR-5** |
 | 19–22 | Medical notes CRUD lifecycle | Tightened ownership | API broader than approved | Missing UI | **DR-6** |
 | 23–26 | Diagnosis/treatment/Rx/docs | SOAP fields only; no Rx module | Notes only | — | DR-6 / out of scope |
 | 27–29 | Ops summaries / audit browser / clinic reports | **No** | N/A or denied | Hide | — |
@@ -182,7 +182,7 @@ A DOCTOR may access a patient only when **all** are true:
 
 Cross-patient access → safe denied/not-found (no existence leak).
 
-**Current APIs are clinic-wide and too broad. DR-5 must tighten backend enforcement.** Documentation must not claim Model A is already enforced.
+**Current APIs enforce Model A for Doctor (DR-5).** Clinic Admin remains clinic-wide enrollment search.
 
 ---
 
@@ -420,7 +420,7 @@ medical_notes.read / create / update_draft / sign / amend
 |------|----------------|
 | Appointment ownership missing | **Mitigated in DR-4** |
 | `appointments.create` on DOCTOR | **Removed in DR-4** |
-| Clinic-wide patient access | **Security risk → DR-5** |
+| Clinic-wide patient access | **Mitigated in DR-5 (Model A)** |
 | Clinic-wide note read/amend | **Security risk → DR-6** |
 | reminders/summaries | Existing; **out of Doctor nav** |
 
@@ -486,7 +486,7 @@ Covering-doctor / care-team; InProgress API; note-before-complete policy; specia
 | DR-2 | Doctor profile | Small | **Delivered** (2026-07-25) |
 | DR-3 | My availability and schedule | Small | **Delivered** (2026-07-25) |
 | DR-4 | My appointment ownership and workflows | Medium | **Delivered** (2026-07-25) |
-| DR-5 | Appointment-linked patient access | Large | Not started |
+| DR-5 | Appointment-linked patient access | Large | **Delivered** (2026-07-25) |
 | DR-6 | Medical notes ownership and lifecycle | Large | Not started |
 | DR-7 | Clinical workflow and completion hardening | Medium | Not started |
 | DR-8 | Doctor reports | — | **Skipped by default** |
@@ -614,3 +614,4 @@ Covering-doctor / care-team; InProgress API; note-before-complete policy; specia
 | 2026-07-25 | **DR-2 delivered:** `doctor_profile.read` / `doctor_profile.update`, `GET/PATCH /api/v1/doctor/profile`, `/doctor/profile` My Profile UI; Specialty remains Clinic Admin–controlled |
 | 2026-07-25 | **DR-3 delivered:** confirm self-only `/availability`; lock queue/calendar doctor filter to self; peer availability edit denied |
 | 2026-07-25 | **DR-4 delivered:** Doctor appointment ownership (list/view/mutate); removed `appointments.create` from DOCTOR; sibling peer denial; CA clinic-wide unchanged |
+| 2026-07-25 | **DR-5 delivered:** Model A patient access (appointment-linked search/detail); Patients nav restored for Doctor; peer-only/unrelated denial |

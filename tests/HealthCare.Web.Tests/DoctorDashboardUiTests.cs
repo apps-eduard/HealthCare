@@ -39,7 +39,7 @@ public sealed class DoctorDashboardUiTests
         state.IsDoctor.Should().BeTrue();
         DoctorDashboardPermissionRules.CanView(state).Should().BeTrue();
         DoctorConsoleNavigation.IsDoctorConsoleActor(state).Should().BeTrue();
-        DoctorConsoleNavigation.ShowPatientsLink(state).Should().BeFalse();
+        DoctorConsoleNavigation.ShowPatientsLink(state).Should().BeTrue();
         DoctorConsoleNavigation.ShowDoctorsDirectory(state).Should().BeFalse();
         DoctorConsoleNavigation.ShowOperations(state).Should().BeFalse();
         DoctorConsoleNavigation.ShowClinicsDirectory(state).Should().BeFalse();
@@ -89,7 +89,7 @@ public sealed class DoctorDashboardUiTests
     }
 
     [Fact]
-    public void StaffLayout_Hides_Doctor_Admin_And_Patients_Until_Dr5()
+    public void StaffLayout_Shows_Patients_And_Hides_Doctor_Admin_Nav()
     {
         var path = Path.Combine(
             FindRepoRoot(),
@@ -104,6 +104,7 @@ public sealed class DoctorDashboardUiTests
         source.Should().Contain("DoctorConsoleNavigation.ShowClinicsDirectory");
         source.Should().Contain("DoctorConsoleNavigation.ShowMyProfileLink");
         source.Should().Contain("/doctor/profile");
+        source.Should().Contain("/patients");
     }
 
     [Fact]

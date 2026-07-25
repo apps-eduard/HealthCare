@@ -132,14 +132,15 @@ Authoritative Doctor Web MVP scope: `Docs/mvp-doctor-scope.md` (**approved** 202
 **Approved target (enforce in DR phases):**
 
 - Own assigned appointments only (list/view/mutate).
-- Appointment-linked patient access (Model A) — **not yet enforced**; current APIs remain clinic-wide until DR-5.
+- Appointment-linked patient access (Model A) — **DR-5 delivered**; Doctor search/detail limited to assigned-appointment patients (any status).
 - Own availability (`availability.manage_self`).
 - Medical notes with author + own-appointment ownership (DR-6 tightens today’s broader clinic Doctor read/amend).
 - Doctor dashboard / profile when those permissions ship (DR-1/DR-2).
-- **DR-1 delivered:** `doctor_dashboard.read` + `GET /api/v1/doctor/dashboard` + Doctor Dashboard UI; Doctor console nav hides Patients/Ops/Clinics/Doctors directory until later phases.
+- **DR-1 delivered:** `doctor_dashboard.read` + `GET /api/v1/doctor/dashboard` + Doctor Dashboard UI; Doctor console nav hides Ops/Clinics/Doctors directory.
 - **DR-2 delivered:** `doctor_profile.read` / `doctor_profile.update` + `GET/PATCH /api/v1/doctor/profile` + `/doctor/profile` (My Profile); Specialty/email/role/clinic/active remain read-only; successful updates audit `doctor_profile_update` with safe changed-field names only.
 - **DR-3 delivered:** Doctor self-only availability UX (`/availability`); appointment queue/calendar doctor filter locked to authenticated Doctor; peer availability edit denied (404).
 - **DR-4 delivered:** Doctor appointment list/view/mutate ownership (`DoctorStaffMemberId`); `appointments.create` removed from DOCTOR; Create button hidden via permission matrix; sibling Doctor peer appointment denied (404); Clinic Admin remains clinic-wide.
+- **DR-5 delivered:** Model A staff patient search/detail; Patients nav shown for Doctor; unrelated/peer-only patients denied.
 
 **Not allowed:**
 

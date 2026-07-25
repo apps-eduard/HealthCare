@@ -11,8 +11,7 @@ public static class DoctorDashboardPermissionRules
 }
 
 /// <summary>
-/// Doctor console navigation helpers. Patients remain hidden until DR-5 Model A ships.
-/// Appointments remain visible; ownership hardening is DR-4.
+/// Doctor console navigation helpers. Patients are Model A (appointment-linked) after DR-5.
 /// </summary>
 public static class DoctorConsoleNavigation
 {
@@ -24,7 +23,7 @@ public static class DoctorConsoleNavigation
         IsDoctorConsoleActor(permissions) && permissions.Has(WebPermissions.DoctorProfileRead);
 
     public static bool ShowPatientsLink(IPermissionState permissions) =>
-        !IsDoctorConsoleActor(permissions) && permissions.Has(WebPermissions.PatientsSearch);
+        permissions.Has(WebPermissions.PatientsSearch);
 
     public static bool ShowDoctorsDirectory(IPermissionState permissions) =>
         !IsDoctorConsoleActor(permissions);

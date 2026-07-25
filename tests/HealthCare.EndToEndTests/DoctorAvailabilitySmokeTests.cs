@@ -39,8 +39,15 @@ public sealed class DoctorAvailabilitySmokeTests : E2ePageTestBase
             await Expect(Page.Locator("[data-testid='calendar-doctor-self']")).ToBeVisibleAsync(new() { Timeout = 60_000 });
             await Expect(Page.GetByText("Your assigned schedule", new() { Exact = false })).ToBeVisibleAsync();
 
-            await Expect(Page.GetByRole(AriaRole.Link, new() { Name = "Patients" })).ToHaveCountAsync(0);
+            await Expect(Page.GetByRole(AriaRole.Link, new() { Name = "Patients" })).ToBeVisibleAsync();
             await Expect(Page.GetByRole(AriaRole.Link, new() { Name = "Staff Management" })).ToHaveCountAsync(0);
+
+            await Page.GetByRole(AriaRole.Link, new() { Name = "Patients" }).ClickAsync();
+            await Expect(Page).ToHaveURLAsync(new Regex(".*/patients.*"));
+            await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Patient Directory" }))
+                .ToBeVisibleAsync(new() { Timeout = 60_000 });
+            await Expect(Page.GetByText("Patients from your assigned appointments", new() { Exact = false }))
+                .ToBeVisibleAsync();
 
             await LogoutAsync();
             await Expect(Page).ToHaveURLAsync(new Regex(".*/login.*"));

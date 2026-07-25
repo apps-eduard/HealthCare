@@ -23,7 +23,7 @@ public sealed class StaffPatientSearchAndAdminTests
         var data = await harness.SeedTwoClinicsAsync();
         var sut = harness.CreateService(
             data.ClinicAStaffUserId,
-            AppRoles.Doctor,
+            AppRoles.ClinicAdmin,
             data.Org1Id,
             data.ClinicAId,
             data.ClinicAStaffMemberId);
@@ -42,7 +42,7 @@ public sealed class StaffPatientSearchAndAdminTests
         var data = await harness.SeedTwoClinicsAsync();
         var sut = harness.CreateService(
             data.ClinicAStaffUserId,
-            AppRoles.Doctor,
+            AppRoles.ClinicAdmin,
             data.Org1Id,
             data.ClinicAId,
             data.ClinicAStaffMemberId);
@@ -116,7 +116,7 @@ public sealed class StaffPatientSearchAndAdminTests
         {
             IsAuthenticated = true,
             UserId = Guid.NewGuid(),
-            Roles = [AppRoles.Doctor],
+            Roles = [AppRoles.ClinicAdmin],
         };
         var sut = new StaffPatientService(
             harness.Db,
@@ -136,7 +136,7 @@ public sealed class StaffPatientSearchAndAdminTests
         var data = await harness.SeedTwoClinicsAsync();
         var sut = harness.CreateService(
             data.ClinicAStaffUserId,
-            AppRoles.Doctor,
+            AppRoles.ClinicAdmin,
             data.Org1Id,
             data.ClinicAId,
             data.ClinicAStaffMemberId);
@@ -164,7 +164,7 @@ public sealed class StaffPatientSearchAndAdminTests
         var data = await harness.SeedTwoClinicsAsync();
         var sut = harness.CreateService(
             data.ClinicAStaffUserId,
-            AppRoles.Doctor,
+            AppRoles.ClinicAdmin,
             data.Org1Id,
             data.ClinicAId,
             data.ClinicAStaffMemberId);
@@ -180,7 +180,7 @@ public sealed class StaffPatientSearchAndAdminTests
         var data = await harness.SeedTwoClinicsAsync();
         var sut = harness.CreateService(
             data.ClinicAStaffUserId,
-            AppRoles.Doctor,
+            AppRoles.ClinicAdmin,
             data.Org1Id,
             data.ClinicAId,
             data.ClinicAStaffMemberId);
@@ -205,7 +205,7 @@ public sealed class StaffPatientSearchAndAdminTests
 
         var sut = harness.CreateService(
             data.ClinicAStaffUserId,
-            AppRoles.Doctor,
+            AppRoles.ClinicAdmin,
             data.Org1Id,
             data.ClinicAId,
             data.ClinicAStaffMemberId);
@@ -244,7 +244,7 @@ public sealed class StaffPatientSearchAndAdminTests
 
         var sut = harness.CreateService(
             data.ClinicAStaffUserId,
-            AppRoles.Doctor,
+            AppRoles.ClinicAdmin,
             data.Org1Id,
             data.ClinicAId,
             data.ClinicAStaffMemberId);
@@ -275,7 +275,7 @@ public sealed class StaffPatientSearchAndAdminTests
         var data = await harness.SeedTwoClinicsAsync();
         var sut = harness.CreateService(
             data.ClinicAStaffUserId,
-            AppRoles.Doctor,
+            AppRoles.ClinicAdmin,
             data.Org1Id,
             data.ClinicAId,
             data.ClinicAStaffMemberId);
@@ -292,7 +292,7 @@ public sealed class StaffPatientSearchAndAdminTests
         var data = await harness.SeedTwoClinicsAsync();
         var sut = harness.CreateService(
             data.ClinicAStaffUserId,
-            AppRoles.Doctor,
+            AppRoles.ClinicAdmin,
             data.Org1Id,
             data.ClinicAId,
             data.ClinicAStaffMemberId);
@@ -308,7 +308,7 @@ public sealed class StaffPatientSearchAndAdminTests
         var data = await harness.SeedTwoClinicsAsync();
         var sut = harness.CreateService(
             data.ClinicAStaffUserId,
-            AppRoles.Doctor,
+            AppRoles.ClinicAdmin,
             data.Org1Id,
             data.ClinicAId,
             data.ClinicAStaffMemberId);
@@ -328,7 +328,7 @@ public sealed class StaffPatientSearchAndAdminTests
         var data = await harness.SeedTwoClinicsAsync();
         var sut = harness.CreateService(
             data.ClinicAStaffUserId,
-            AppRoles.Doctor,
+            AppRoles.ClinicAdmin,
             data.Org1Id,
             data.ClinicAId,
             data.ClinicAStaffMemberId);
@@ -491,7 +491,7 @@ public sealed class StaffPatientSearchAndAdminTests
         var data = await harness.SeedTwoClinicsAsync();
         var sut = harness.CreateService(
             data.ClinicAStaffUserId,
-            AppRoles.Doctor,
+            AppRoles.ClinicAdmin,
             data.Org1Id,
             data.ClinicAId,
             data.ClinicAStaffMemberId);
@@ -542,7 +542,7 @@ public sealed class StaffPatientSearchAndAdminTests
         await harness.SeedExtraClinicAPatientsAsync(data.ClinicAId, count: 5);
         var sut = harness.CreateService(
             data.ClinicAStaffUserId,
-            AppRoles.Doctor,
+            AppRoles.ClinicAdmin,
             data.Org1Id,
             data.ClinicAId,
             data.ClinicAStaffMemberId);

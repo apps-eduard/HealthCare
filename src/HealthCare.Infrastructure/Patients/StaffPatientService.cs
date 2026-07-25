@@ -409,24 +409,48 @@ public sealed class StaffPatientService : IStaffPatientService
     {
         if (scope.Mode == ScopeMode.Clinic || scope.Mode == ScopeMode.PlatformBypass)
         {
-            return query.Where(cp => cp.ClinicId == scope.ClinicId!.Value);
+            query = query.Where(cp => cp.ClinicId == scope.ClinicId!.Value);
         }
-
-        // Organization: only clinics in the trusted organization.
-        var organizationId = scope.OrganizationId;
-        query =
-            from cp in query
-            join c in _dbContext.Clinics.AsNoTracking() on cp.ClinicId equals c.Id
-            where c.OrganizationId == organizationId
-            select cp;
-
-        if (scope.ClinicId.HasValue)
+        else
         {
-            var clinicId = scope.ClinicId.Value;
-            query = query.Where(cp => cp.ClinicId == clinicId);
+            // Organization: only clinics in the trusted organization.
+            var organizationId = scope.OrganizationId;
+            query =
+                from cp in query
+                join c in _dbContext.Clinics.AsNoTracking() on cp.ClinicId equals c.Id
+                where c.OrganizationId == organizationId
+                select cp;
+
+            if (scope.ClinicId.HasValue)
+            {
+                var clinicId = scope.ClinicId.Value;
+                query = query.Where(cp => cp.ClinicId == clinicId);
+            }
         }
 
-        return query;
+        return ApplyDoctorAppointmentLinkedFilter(query);
+    }
+
+    private bool IsDoctorActor() =>
+        _currentStaff.HasActiveMembership
+        && string.Equals(_currentStaff.Role, AppRoles.Doctor, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Model A: Doctor may only see patients with an assigned appointment (any status) in the membership clinic.
+    /// </summary>
+    private IQueryable<ClinicPatient> ApplyDoctorAppointmentLinkedFilter(IQueryable<ClinicPatient> query)
+    {
+        if (!IsDoctorActor())
+        {
+            return query;
+        }
+
+        var doctorStaffMemberId = _currentStaff.StaffMemberId;
+        return query.Where(cp =>
+            _dbContext.Appointments.Any(a =>
+                a.ClinicId == cp.ClinicId
+                && a.PatientId == cp.PatientId
+                && a.DoctorStaffMemberId == doctorStaffMemberId));
     }
 
     private async Task<TrackedEnrollment?> FindEnrollmentInScopeAsync(

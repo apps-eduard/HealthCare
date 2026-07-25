@@ -40,7 +40,7 @@ public sealed class DoctorProfileUiTests
         DoctorProfilePermissionRules.CanUpdate(state).Should().BeTrue();
         DoctorConsoleNavigation.IsDoctorConsoleActor(state).Should().BeTrue();
         DoctorConsoleNavigation.ShowMyProfileLink(state).Should().BeTrue();
-        DoctorConsoleNavigation.ShowPatientsLink(state).Should().BeFalse();
+        DoctorConsoleNavigation.ShowPatientsLink(state).Should().BeTrue();
     }
 
     [Fact]
