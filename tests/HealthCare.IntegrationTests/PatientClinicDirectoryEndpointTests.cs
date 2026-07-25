@@ -140,8 +140,9 @@ public sealed class PatientClinicDirectoryEndpointTests : IAsyncLifetime
         var client = _client!;
         await AuthenticateAsync(PatientEmail, PatientPassword);
         var search = await client.GetFromJsonAsync<PagedResponse<PatientClinicListItemResponse>>(
-            "/api/v1/patients/me/clinics?search=dev-clinic&page=1&pageSize=5");
+            "/api/v1/patients/me/clinics?search=Dev%20Clinic&page=1&pageSize=5");
         search!.Items.Should().NotBeEmpty();
+        search.Items.Should().Contain(c => c.ClinicCode == ClinicCode);
 
         var page = await client.GetFromJsonAsync<PagedResponse<PatientClinicListItemResponse>>(
             "/api/v1/patients/me/clinics?page=1&pageSize=1");
