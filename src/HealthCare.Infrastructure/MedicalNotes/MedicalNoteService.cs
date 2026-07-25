@@ -2,6 +2,7 @@ using HealthCare.Application.Authorization;
 using HealthCare.Application.MedicalNotes;
 using HealthCare.Contracts.MedicalNotes;
 using HealthCare.Domain.Appointments;
+using HealthCare.Domain.Identity;
 using HealthCare.Domain.MedicalNotes;
 using HealthCare.Domain.Patients;
 using HealthCare.Domain.Staff;
@@ -47,9 +48,14 @@ public sealed class MedicalNoteService : IMedicalNoteService
         {
             _access.EnsureClinicalStaffForNotes();
             var appointment = await LoadInScopeAppointmentAsync(appointmentId, cancellationToken);
-            var notes = await _dbContext.MedicalNotes
+            EnsureDoctorOwnsAppointmentForNotes(appointment);
+
+            var notesQuery = _dbContext.MedicalNotes
                 .AsNoTracking()
-                .Where(n => n.AppointmentId == appointment.Id)
+                .Where(n => n.AppointmentId == appointment.Id
+                            && n.AuthorStaffMemberId == _currentStaff.StaffMemberId);
+
+            var notes = await notesQuery
                 .OrderBy(n => n.CreatedAtUtc)
                 .ToListAsync(cancellationToken);
 
@@ -86,6 +92,8 @@ public sealed class MedicalNoteService : IMedicalNoteService
         {
             _access.EnsureClinicalStaffForNotes();
             var note = await LoadInScopeNoteAsync(medicalNoteId, cancellationToken);
+            EnsureAuthorOwnsNote(note);
+            await EnsureDoctorOwnsNoteAppointmentAsync(note, cancellationToken);
             var author = await _dbContext.StaffMembers.AsNoTracking()
                 .FirstOrDefaultAsync(s => s.Id == note.AuthorStaffMemberId, cancellationToken);
 
@@ -133,6 +141,7 @@ public sealed class MedicalNoteService : IMedicalNoteService
             MedicalNoteContentValidator.EnsureMeaningfulContent(subjective, objective, assessment, plan, additional);
 
             var appointment = await LoadInScopeAppointmentAsync(appointmentId, cancellationToken);
+            EnsureDoctorOwnsAppointmentForNotes(appointment);
             if (!MedicalNoteRules.IsEligibleForDraftCreate(appointment.Status))
             {
                 throw MedicalNoteException.InvalidAppointmentState();
@@ -200,14 +209,10 @@ public sealed class MedicalNoteService : IMedicalNoteService
         {
             _access.EnsureClinicalStaffForNotes();
             var note = await LoadInScopeNoteForUpdateAsync(medicalNoteId, cancellationToken);
+            EnsureAuthorOwnsNote(note);
             if (note.Status != MedicalNoteStatus.Draft)
             {
                 throw MedicalNoteException.NotDraft();
-            }
-
-            if (note.AuthorStaffMemberId != _currentStaff.StaffMemberId)
-            {
-                throw MedicalNoteException.AuthorRequired();
             }
 
             if (note.Version != request.ExpectedVersion)
@@ -285,14 +290,10 @@ public sealed class MedicalNoteService : IMedicalNoteService
         {
             _access.EnsureClinicalStaffForNotes();
             var note = await LoadInScopeNoteForUpdateAsync(medicalNoteId, cancellationToken);
+            EnsureAuthorOwnsNote(note);
             if (note.Status != MedicalNoteStatus.Draft)
             {
                 throw MedicalNoteException.AlreadySigned();
-            }
-
-            if (note.AuthorStaffMemberId != _currentStaff.StaffMemberId)
-            {
-                throw MedicalNoteException.AuthorRequired();
             }
 
             _access.EnsureNoteTypeAllowed(note.NoteType, _currentStaff.Role);
@@ -362,6 +363,8 @@ public sealed class MedicalNoteService : IMedicalNoteService
             }
 
             var original = await LoadInScopeNoteForUpdateAsync(medicalNoteId, cancellationToken);
+            EnsureAuthorOwnsNote(original);
+            await EnsureDoctorOwnsNoteAppointmentAsync(original, cancellationToken);
             if (original.Status != MedicalNoteStatus.Signed)
             {
                 throw MedicalNoteException.AmendmentRequiresSignedNote();
@@ -515,6 +518,7 @@ public sealed class MedicalNoteService : IMedicalNoteService
         }
 
         _access.EnsureClinicScope(appointment.OrganizationId, appointment.ClinicId);
+        EnsureDoctorOwnsAppointmentForNotes(appointment);
         return appointment;
     }
 
@@ -543,6 +547,53 @@ public sealed class MedicalNoteService : IMedicalNoteService
 
         _access.EnsureClinicScope(note.OrganizationId, note.ClinicId);
         return note;
+    }
+
+    private bool IsDoctorActor() =>
+        _currentStaff.HasActiveMembership
+        && string.Equals(_currentStaff.Role, AppRoles.Doctor, StringComparison.Ordinal);
+
+    private void EnsureDoctorOwnsAppointmentForNotes(Appointment appointment)
+    {
+        if (!IsDoctorActor())
+        {
+            return;
+        }
+
+        if (appointment.DoctorStaffMemberId == _currentStaff.StaffMemberId)
+        {
+            return;
+        }
+
+        throw MedicalNoteException.NotFound();
+    }
+
+    private void EnsureAuthorOwnsNote(MedicalNote note)
+    {
+        if (note.AuthorStaffMemberId == _currentStaff.StaffMemberId)
+        {
+            return;
+        }
+
+        throw MedicalNoteException.NotFound();
+    }
+
+    private async Task EnsureDoctorOwnsNoteAppointmentAsync(MedicalNote note, CancellationToken cancellationToken)
+    {
+        if (!IsDoctorActor())
+        {
+            return;
+        }
+
+        var appointment = await _dbContext.Appointments
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.Id == note.AppointmentId, cancellationToken);
+        if (appointment is null)
+        {
+            throw MedicalNoteException.NotFound();
+        }
+
+        EnsureDoctorOwnsAppointmentForNotes(appointment);
     }
 
     private void EnsureClinicPatientExists(Appointment appointment)

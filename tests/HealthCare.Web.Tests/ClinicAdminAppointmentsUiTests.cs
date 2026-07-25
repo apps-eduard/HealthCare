@@ -103,7 +103,7 @@ public sealed class ClinicAdminAppointmentsUiTests
         detail.Should().Contain("ExpectedVersion");
         detail.Should().Contain("CompleteAsync");
         detail.Should().Contain("MarkNoShowAsync");
-        detail.Should().NotContain("MedicalNote");
+        detail.Should().Contain("MedicalNotePermissionRules.CanView");
 
         layout.Should().Contain("RouterLink=\"/appointments\"");
         layout.Should().Contain("WebPermissions.AppointmentsRead");

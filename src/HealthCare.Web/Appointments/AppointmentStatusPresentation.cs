@@ -38,4 +38,7 @@ public static class AppointmentStatusPresentation
 
     public static bool IsTerminal(string? status) =>
         status is "Completed" or "NoShow" or "CancelledByPatient" or "CancelledByClinic";
+
+    public static bool AllowsMedicalNoteCreate(string? status) =>
+        status is "CheckedIn" or "InProgress" or "Completed";
 }

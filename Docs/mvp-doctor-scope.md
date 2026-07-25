@@ -421,7 +421,7 @@ medical_notes.read / create / update_draft / sign / amend
 | Appointment ownership missing | **Mitigated in DR-4** |
 | `appointments.create` on DOCTOR | **Removed in DR-4** |
 | Clinic-wide patient access | **Mitigated in DR-5 (Model A)** |
-| Clinic-wide note read/amend | **Security risk → DR-6** |
+| Clinic-wide note read/amend | **Mitigated in DR-6 (author + own appointment)** |
 | reminders/summaries | Existing; **out of Doctor nav** |
 
 ---
@@ -487,7 +487,7 @@ Covering-doctor / care-team; InProgress API; note-before-complete policy; specia
 | DR-3 | My availability and schedule | Small | **Delivered** (2026-07-25) |
 | DR-4 | My appointment ownership and workflows | Medium | **Delivered** (2026-07-25) |
 | DR-5 | Appointment-linked patient access | Large | **Delivered** (2026-07-25) |
-| DR-6 | Medical notes ownership and lifecycle | Large | Not started |
+| DR-6 | Medical notes ownership and lifecycle | Large | **Delivered** (2026-07-25) |
 | DR-7 | Clinical workflow and completion hardening | Medium | Not started |
 | DR-8 | Doctor reports | — | **Skipped by default** |
 | DR-9 | Cross-role security, audit, negative testing | Medium | Not started |
@@ -615,3 +615,4 @@ Covering-doctor / care-team; InProgress API; note-before-complete policy; specia
 | 2026-07-25 | **DR-3 delivered:** confirm self-only `/availability`; lock queue/calendar doctor filter to self; peer availability edit denied |
 | 2026-07-25 | **DR-4 delivered:** Doctor appointment ownership (list/view/mutate); removed `appointments.create` from DOCTOR; sibling peer denial; CA clinic-wide unchanged |
 | 2026-07-25 | **DR-5 delivered:** Model A patient access (appointment-linked search/detail); Patients nav restored for Doctor; peer-only/unrelated denial |
+| 2026-07-25 | **DR-6 delivered:** author + own-appointment medical notes; appointment-detail note UX; peer note denied (404); WebPermissions + typed client |

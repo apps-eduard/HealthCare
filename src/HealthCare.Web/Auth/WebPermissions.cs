@@ -52,6 +52,12 @@ public static class WebPermissions
     public const string PatientsRead = "patients.read";
     public const string PatientsUpdateClinicStatus = "patients.update_clinic_status";
 
+    public const string MedicalNotesRead = "medical_notes.read";
+    public const string MedicalNotesCreate = "medical_notes.create";
+    public const string MedicalNotesUpdateDraft = "medical_notes.update_draft";
+    public const string MedicalNotesSign = "medical_notes.sign";
+    public const string MedicalNotesAmend = "medical_notes.amend";
+
     public const string RemindersRead = "reminders.read";
     public const string RemindersRetry = "reminders.retry";
     public const string SummariesRead = "summaries.read";

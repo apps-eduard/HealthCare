@@ -142,18 +142,20 @@ public sealed class PlatformTenantArchitectureTests
     }
 
     [Fact]
-    public void Medical_Note_Permissions_Remain_Absent_From_Web_Catalog_Duplicates()
+    public void Web_Does_Not_Duplicate_RolePermissionMatrix_And_Exposes_Medical_Note_Gates()
     {
-        // Web must not recreate RolePermissionMatrix; medical-note UI is intentionally absent.
+        // Web mirrors permission string constants for UI gates; authoritative grants stay in API matrix.
         typeof(IOrganizationDirectoryApiClient).Assembly.GetTypes()
             .Select(t => t.Name)
             .Should()
             .NotContain("RolePermissionMatrix");
 
         typeof(WebPermissions).GetFields()
-            .Select(f => f.Name)
+            .Select(f => f.GetRawConstantValue())
             .Should()
-            .NotContain(n => n.Contains("MedicalNote", StringComparison.OrdinalIgnoreCase));
+            .Contain(WebPermissions.MedicalNotesRead)
+            .And.Contain(WebPermissions.MedicalNotesCreate)
+            .And.Contain(WebPermissions.MedicalNotesAmend);
     }
 
     [Fact]

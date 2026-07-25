@@ -164,9 +164,88 @@ public sealed class MedicalNotesFoundationTests
         var sign = () => otherAuthor.SignAsync(note.Id, new SignMedicalNoteRequest { ExpectedVersion = note.Version });
 
         await update.Should().ThrowAsync<MedicalNoteException>()
-            .Where(e => e.ErrorCode == MedicalNoteErrorCodes.AuthorRequired);
+            .Where(e => e.ErrorCode == MedicalNoteErrorCodes.NotFound);
         await sign.Should().ThrowAsync<MedicalNoteException>()
-            .Where(e => e.ErrorCode == MedicalNoteErrorCodes.AuthorRequired);
+            .Where(e => e.ErrorCode == MedicalNoteErrorCodes.NotFound);
+    }
+
+    [Fact]
+    public async Task Doctor_Cannot_Create_Or_Read_Notes_On_Peer_Appointment()
+    {
+        await using var h = await AppointmentHarness.CreateAsync();
+        var data = await h.SeedAsync();
+        var peerUserId = Guid.NewGuid();
+        var peerStaffId = Guid.NewGuid();
+        h.Db.StaffMembers.Add(new Domain.Staff.StaffMember
+        {
+            Id = peerStaffId,
+            UserId = peerUserId,
+            OrganizationId = data.Org1Id,
+            ClinicId = data.ClinicAId,
+            Role = AppRoles.Doctor,
+            IsActive = true,
+        });
+        await h.Db.SaveChangesAsync();
+
+        var appointment = await h.SeedAppointmentAsync(data, AppointmentStatus.CheckedIn);
+        appointment.DoctorStaffMemberId = peerStaffId;
+        await h.Db.SaveChangesAsync();
+
+        var doctor = h.CreateMedicalNoteService(
+            data.DoctorAUserId, data.Org1Id, data.ClinicAId, data.DoctorAStaffId, AppRoles.Doctor);
+
+        await FluentActions.Awaiting(() => doctor.CreateDraftAsync(appointment.Id, CreateDraft()))
+            .Should().ThrowAsync<MedicalNoteException>()
+            .Where(e => e.ErrorCode == MedicalNoteErrorCodes.NotFound);
+
+        var peer = h.CreateMedicalNoteService(
+            peerUserId, data.Org1Id, data.ClinicAId, peerStaffId, AppRoles.Doctor);
+        var note = await peer.CreateDraftAsync(appointment.Id, CreateDraft());
+
+        await FluentActions.Awaiting(() => doctor.GetByIdAsync(note.Id))
+            .Should().ThrowAsync<MedicalNoteException>()
+            .Where(e => e.ErrorCode == MedicalNoteErrorCodes.NotFound);
+
+        await FluentActions.Awaiting(() => doctor.ListForAppointmentAsync(appointment.Id))
+            .Should().ThrowAsync<MedicalNoteException>()
+            .Where(e => e.ErrorCode == MedicalNoteErrorCodes.NotFound);
+    }
+
+    [Fact]
+    public async Task Doctor_Cannot_Amend_Peer_Authored_Note()
+    {
+        await using var h = await AppointmentHarness.CreateAsync();
+        var data = await h.SeedAsync();
+        var appointment = await h.SeedAppointmentAsync(data);
+        var author = h.CreateMedicalNoteService(
+            data.DoctorAUserId, data.Org1Id, data.ClinicAId, data.DoctorAStaffId, AppRoles.Doctor);
+        var draft = await author.CreateDraftAsync(appointment.Id, CreateDraft());
+        var signed = await author.SignAsync(draft.Id, new SignMedicalNoteRequest { ExpectedVersion = draft.Version });
+
+        var peerUserId = Guid.NewGuid();
+        var peerStaffId = Guid.NewGuid();
+        h.Db.StaffMembers.Add(new Domain.Staff.StaffMember
+        {
+            Id = peerStaffId,
+            UserId = peerUserId,
+            OrganizationId = data.Org1Id,
+            ClinicId = data.ClinicAId,
+            Role = AppRoles.Doctor,
+            IsActive = true,
+        });
+        await h.Db.SaveChangesAsync();
+
+        var peer = h.CreateMedicalNoteService(
+            peerUserId, data.Org1Id, data.ClinicAId, peerStaffId, AppRoles.Doctor);
+
+        await FluentActions.Awaiting(() => peer.AmendAsync(signed.Id, new AmendMedicalNoteRequest
+            {
+                ExpectedVersion = signed.Version,
+                AmendmentReason = "Peer correction",
+                Plan = "Peer plan",
+            }))
+            .Should().ThrowAsync<MedicalNoteException>()
+            .Where(e => e.ErrorCode == MedicalNoteErrorCodes.NotFound);
     }
 
     [Fact]

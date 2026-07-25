@@ -134,13 +134,14 @@ Authoritative Doctor Web MVP scope: `Docs/mvp-doctor-scope.md` (**approved** 202
 - Own assigned appointments only (list/view/mutate).
 - Appointment-linked patient access (Model A) — **DR-5 delivered**; Doctor search/detail limited to assigned-appointment patients (any status).
 - Own availability (`availability.manage_self`).
-- Medical notes with author + own-appointment ownership (DR-6 tightens today’s broader clinic Doctor read/amend).
+- Medical notes with author + own-appointment ownership (**DR-6 delivered**).
 - Doctor dashboard / profile when those permissions ship (DR-1/DR-2).
 - **DR-1 delivered:** `doctor_dashboard.read` + `GET /api/v1/doctor/dashboard` + Doctor Dashboard UI; Doctor console nav hides Ops/Clinics/Doctors directory.
 - **DR-2 delivered:** `doctor_profile.read` / `doctor_profile.update` + `GET/PATCH /api/v1/doctor/profile` + `/doctor/profile` (My Profile); Specialty/email/role/clinic/active remain read-only; successful updates audit `doctor_profile_update` with safe changed-field names only.
 - **DR-3 delivered:** Doctor self-only availability UX (`/availability`); appointment queue/calendar doctor filter locked to authenticated Doctor; peer availability edit denied (404).
 - **DR-4 delivered:** Doctor appointment list/view/mutate ownership (`DoctorStaffMemberId`); `appointments.create` removed from DOCTOR; Create button hidden via permission matrix; sibling Doctor peer appointment denied (404); Clinic Admin remains clinic-wide.
 - **DR-5 delivered:** Model A staff patient search/detail; Patients nav shown for Doctor; unrelated/peer-only patients denied.
+- **DR-6 delivered:** author-only note list/read/amend; create only on own appointments; appointment-detail note UX; peer note access denied (404).
 
 **Not allowed:**
 
@@ -433,6 +434,7 @@ Access requires:
 - Active staff membership in the note’s clinic/organization
 - Clinical role (`DOCTOR` or `NURSE`)
 - Explicit `medical_notes.*` permission
+- **DOCTOR (DR-6):** create only on own assigned appointments; list/read/update/sign/amend author-only (peer → safe 404)
 - Administrative roles alone (clinic/org/platform admin, receptionist) **must not** read note bodies
 
 ### 8.2 Lifecycle and immutability

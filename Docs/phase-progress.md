@@ -2,10 +2,10 @@
 
 ## Progress overview
 
-**Overall completion: 64%**
+**Overall completion: 65%**
 
 ```text
-[████████████████████░░░░░░░░░░░░]  64%
+[████████████████████░░░░░░░░░░░░]  65%
 ```
 
 | Metric | Value |
@@ -15,11 +15,11 @@
 | Partial | 8 (Phases 2, 3, 4, 6, 7, 8, 9, 10) |
 | In progress | 0 |
 | Not started | 3 |
-| Weighted score | (3×1.0) + (0.7 + 0.95 + 0.5 + 0.75 + 0.85 + 0.7 + 0.7 + 0.85) = 9.0 / 14 ≈ **64%** |
+| Weighted score | (3×1.0) + (0.7 + 0.95 + 0.5 + 0.75 + 0.85 + 0.7 + 0.85 + 0.85) = 9.15 / 14 ≈ **65%** |
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Doctor Web MVP DR-6 (not started) — DR-1–DR-5 delivered; scope approved 2026-07-25
+**Current focus:** Doctor Web MVP DR-7 (not started) — DR-1–DR-6 delivered; scope approved 2026-07-25
 
 ### All phases at a glance
 
@@ -35,7 +35,7 @@
 | 6 | Staff and doctors | Partial | `████████░░` 75% |
 | 7 | Appointment booking | Partial | `█████████░` 85% |
 | 8 | Staff web application (Fluent UI) | Partial | `████████░░` 80% |
-| 9 | Medical notes | Partial | `███████░░░` 70% |
+| 9 | Medical notes | Partial | `████████░░` 85% |
 | 10 | Hangfire and notifications | Partial | `█████████░` 85% |
 | 11 | Patient mobile application | Not started | `░░░░░░░░░░` 0% |
 | 12 | Audit and security hardening | Not started | `░░░░░░░░░░` 0% |
@@ -747,8 +747,8 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 ---
 ## Phase 9 — Medical notes
 
-**Status:** Partial (~70% — secure backend foundation; no staff UI yet)  
-**Updated:** 2026-07-23
+**Status:** Partial (~85% — secure backend + Doctor appointment-detail UI; no global notes nav)  
+**Updated:** 2026-07-25
 
 ### Delivered
 
@@ -761,10 +761,11 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 - Optimistic concurrency via `Version` / `ExpectedVersion`
 - Migration: `AddMedicalNotesFoundation` applied to `healthcare_db`
 - Unit + architecture + integration suites (Docker-dependent integration retained)
+- **DR-6:** author + own-appointment ownership (peer → 404); WebPermissions + typed client; appointment-detail note UX (create/save/sign/amend)
 
 ### Known limitations / remaining
 
-- No staff medical-notes UI yet
+- No global Medical Notes nav / deep-link page (appointment detail only)
 - No patient self-access / IsVisibleToPatient
 - No ordinary delete; drafts cannot be abandoned via API yet
 - No field-level encryption (document TLS + encrypted DB/backups)
@@ -772,7 +773,7 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 
 ### Verification
 
-- Build succeeded; unit **254**; architecture **18**; integration Docker unavailable
+- Build succeeded; unit **461**; architecture **19**; web **321+**; integration Docker-dependent
 - Migration applied: `20260723192913_AddMedicalNotesFoundation`
 
 ---
@@ -1069,13 +1070,13 @@ Authoritative scope: **`Docs/mvp-doctor-scope.md`** (**approved** 2026-07-25). D
 | DR-3 | My availability and schedule | Small | **Delivered** (2026-07-25) |
 | DR-4 | Appointment ownership and workflows | Medium | **Delivered** (2026-07-25) |
 | DR-5 | Appointment-linked patient access (Model A) | Large | **Delivered** (2026-07-25) |
-| DR-6 | Medical notes ownership and lifecycle | Large | Not started |
+| DR-6 | Medical notes ownership and lifecycle | Large | **Delivered** (2026-07-25) |
 | DR-7 | Clinical workflow / completion hardening | Medium | Not started |
 | DR-8 | Doctor reports | — | **Skipped by default** |
 | DR-9 | Cross-role security / negative testing | Medium | Not started |
 | DR-10 | E2E + Doctor MVP completion | Medium | Not started |
 
-**Temporary known gaps after DR-5:** medical-note ownership/UI (DR-6).
+**Temporary known gaps after DR-6:** clinical workflow polish (DR-7); full negative matrix (DR-9); Doctor MVP E2E pack (DR-10).
 
 | 2026-07-25 | — | Doctor Web MVP scope **approved** (Model A, ownership, notes DR-6, DR-8 skipped) |
 | 2026-07-25 | 8 | Doctor DR-1 — `doctor_dashboard.read` + Doctor Dashboard API/UI + Doctor console nav |
@@ -1083,6 +1084,7 @@ Authoritative scope: **`Docs/mvp-doctor-scope.md`** (**approved** 2026-07-25). D
 | 2026-07-25 | 8 | Doctor DR-3 — self-only availability UX + queue/calendar doctor filter locked to self |
 | 2026-07-25 | 8 | Doctor DR-4 — appointment ownership + remove `appointments.create` from DOCTOR |
 | 2026-07-25 | 8 | Doctor DR-5 — Model A appointment-linked patient access + Patients nav |
+| 2026-07-25 | 8/9 | Doctor DR-6 — medical-note ownership + appointment-detail note UX |
 
 ---
 

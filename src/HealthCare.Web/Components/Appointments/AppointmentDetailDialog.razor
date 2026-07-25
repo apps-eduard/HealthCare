@@ -1,7 +1,9 @@
 @namespace HealthCare.Web.Components.Appointments
 @inherits FeedbackComponent<AppointmentDetailDialog.Args>
 @using HealthCare.Contracts.Appointments
+@using HealthCare.Contracts.MedicalNotes
 @using HealthCare.Web.Appointments
+@using HealthCare.Web.MedicalNotes
 @using HealthCare.Web.Operations
 
 @if (_loading)
@@ -106,6 +108,109 @@ else
                 </div>
             }
         }
+
+        @if (MedicalNotePermissionRules.CanView(Permissions))
+        {
+            <h4 style="font-size:0.95rem;margin:0.75rem 0 0.5rem;">Medical notes</h4>
+            @if (_notesLoading)
+            {
+                <PageLoading />
+            }
+            else
+            {
+                @if (_notes.Count == 0)
+                {
+                    <div class="hc-caption">No notes authored by you for this appointment.</div>
+                }
+                else
+                {
+                    <div class="hc-table-wrap">
+                        <table class="hc-table" aria-label="Medical notes">
+                            <thead>
+                                <tr>
+                                    <th>Type</th>
+                                    <th>Status</th>
+                                    <th>Updated</th>
+                                    <th class="hc-actions">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            @foreach (var note in _notes)
+                            {
+                                <tr>
+                                    <td>@note.NoteType</td>
+                                    <td>@note.Status</td>
+                                    <td><span class="hc-caption">@note.UpdatedAtUtc.UtcDateTime.ToString("u")</span></td>
+                                    <td class="hc-actions">
+                                        <Button Type="@ButtonType.Link"
+                                                Disabled="_busy"
+                                                OnClick="@(() => OpenNoteAsync(note.Id))"
+                                                AriaLabel="Open medical note">
+                                            Open
+                                        </Button>
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+
+                @if (MedicalNotePermissionRules.CanCreate(Permissions)
+                     && AppointmentStatusPresentation.AllowsMedicalNoteCreate(_appointment.Status))
+                {
+                    <Button Type="@ButtonType.Default"
+                            Disabled="_busy"
+                            Style="margin-top:0.5rem;"
+                            OnClick="CreateDraftNoteAsync"
+                            AriaLabel="Create medical note draft">
+                        New draft note
+                    </Button>
+                }
+
+                @if (_selectedNote is not null)
+                {
+                    <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid var(--hc-border, #e5e7eb);">
+                        <div class="hc-caption">@_selectedNote.NoteType · @_selectedNote.Status · v@_selectedNote.Version</div>
+                        @if (string.Equals(_selectedNote.Status, "Draft", StringComparison.OrdinalIgnoreCase)
+                             && MedicalNotePermissionRules.CanUpdateDraft(Permissions))
+                        {
+                            <div style="display:flex;flex-direction:column;gap:6px;margin-top:0.5rem;">
+                                <Input TextArea="@true" Rows="2" Placeholder="Subjective" @bind-Value="_noteSubjective" AriaLabel="Subjective" />
+                                <Input TextArea="@true" Rows="2" Placeholder="Objective" @bind-Value="_noteObjective" AriaLabel="Objective" />
+                                <Input TextArea="@true" Rows="2" Placeholder="Assessment" @bind-Value="_noteAssessment" AriaLabel="Assessment" />
+                                <Input TextArea="@true" Rows="2" Placeholder="Plan" @bind-Value="_notePlan" AriaLabel="Plan" />
+                            </div>
+                            <Space Style="margin-top:0.5rem;">
+                                <Button Disabled="_busy" OnClick="SaveDraftNoteAsync" AriaLabel="Save medical note draft">Save draft</Button>
+                                @if (MedicalNotePermissionRules.CanSign(Permissions))
+                                {
+                                    <Button Type="@ButtonType.Primary" Disabled="_busy" OnClick="SignNoteAsync" AriaLabel="Sign medical note">Sign</Button>
+                                }
+                            </Space>
+                        }
+                        else
+                        {
+                            <div style="margin-top:0.5rem;display:flex;flex-direction:column;gap:4px;">
+                                <div><strong>S:</strong> @(_selectedNote.Subjective ?? "—")</div>
+                                <div><strong>O:</strong> @(_selectedNote.Objective ?? "—")</div>
+                                <div><strong>A:</strong> @(_selectedNote.Assessment ?? "—")</div>
+                                <div><strong>P:</strong> @(_selectedNote.Plan ?? "—")</div>
+                            </div>
+                            @if (string.Equals(_selectedNote.Status, "Signed", StringComparison.OrdinalIgnoreCase)
+                                 && MedicalNotePermissionRules.CanAmend(Permissions))
+                            {
+                                <div style="margin-top:0.5rem;display:flex;flex-direction:column;gap:6px;">
+                                    <Input Placeholder="Amendment reason" @bind-Value="_amendReason" AriaLabel="Amendment reason" />
+                                    <Input TextArea="@true" Rows="2" Placeholder="Updated plan (optional)" @bind-Value="_amendPlan" AriaLabel="Amendment plan" />
+                                    <Button Disabled="_busy" OnClick="AmendNoteAsync" AriaLabel="Amend medical note">Amend</Button>
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+            }
+        }
     </div>
 }
 
@@ -134,17 +239,27 @@ else
 
     [Inject] private IAppointmentApiClient AppointmentsApi { get; set; } = default!;
     [Inject] private IStaffOperationsApiClient OperationsApi { get; set; } = default!;
+    [Inject] private IMedicalNoteApiClient NotesApi { get; set; } = default!;
     [Inject] private IPermissionState Permissions { get; set; } = default!;
     [Inject] private IUiModalService Modals { get; set; } = default!;
     [Inject] private IUserNotificationService Notify { get; set; } = default!;
 
     private AppointmentResponse? _appointment;
     private readonly List<AppointmentReminderResponse> _reminders = [];
+    private readonly List<MedicalNoteSummaryResponse> _notes = [];
+    private MedicalNoteDetailResponse? _selectedNote;
     private bool _loading = true;
     private bool _remindersLoading;
+    private bool _notesLoading;
     private bool _busy;
     private string? _error;
     private bool _changed;
+    private string? _noteSubjective;
+    private string? _noteObjective;
+    private string? _noteAssessment;
+    private string? _notePlan;
+    private string? _amendReason;
+    private string? _amendPlan;
 
     private Guid AppointmentId => Options.AppointmentId;
     private bool PlatformAdminBypass => Options.PlatformAdminBypass;
@@ -159,12 +274,15 @@ else
         {
             _appointment = await AppointmentsApi.GetByIdAsync(AppointmentId, PlatformAdminBypass);
             await LoadRemindersAsync();
+            await LoadNotesAsync();
         }
         catch (ApiProblemException ex)
         {
             _appointment = null;
             _error = AppointmentProblemMessages.ToUserMessage(ex);
             _reminders.Clear();
+            _notes.Clear();
+            _selectedNote = null;
         }
         finally
         {
@@ -193,6 +311,212 @@ else
         finally
         {
             _remindersLoading = false;
+        }
+    }
+
+    private async Task LoadNotesAsync()
+    {
+        _notes.Clear();
+        _selectedNote = null;
+        if (!MedicalNotePermissionRules.CanView(Permissions) || _appointment is null)
+        {
+            return;
+        }
+
+        _notesLoading = true;
+        try
+        {
+            var items = await NotesApi.ListForAppointmentAsync(_appointment.Id);
+            _notes.AddRange(items.OrderByDescending(n => n.UpdatedAtUtc));
+        }
+        catch (ApiProblemException)
+        {
+            // Appointment detail remains usable if note list fails.
+        }
+        finally
+        {
+            _notesLoading = false;
+        }
+    }
+
+    private async Task CreateDraftNoteAsync()
+    {
+        if (_busy || _appointment is null || !MedicalNotePermissionRules.CanCreate(Permissions))
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var created = await NotesApi.CreateDraftAsync(_appointment.Id, new CreateMedicalNoteDraftRequest
+            {
+                NoteType = "Progress",
+                Plan = "Initial plan",
+            });
+            Notify.Success("Draft note created.");
+            _changed = true;
+            await LoadNotesAsync();
+            await OpenNoteAsync(created.Id);
+        }
+        catch (ApiProblemException ex)
+        {
+            Notify.Error(MedicalNoteProblemMessages.ToUserMessage(ex));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OpenNoteAsync(Guid noteId)
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            _selectedNote = await NotesApi.GetByIdAsync(noteId);
+            _noteSubjective = _selectedNote.Subjective;
+            _noteObjective = _selectedNote.Objective;
+            _noteAssessment = _selectedNote.Assessment;
+            _notePlan = _selectedNote.Plan;
+            _amendReason = null;
+            _amendPlan = null;
+        }
+        catch (ApiProblemException ex)
+        {
+            _selectedNote = null;
+            Notify.Error(MedicalNoteProblemMessages.ToUserMessage(ex));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SaveDraftNoteAsync()
+    {
+        if (_busy || _selectedNote is null || !MedicalNotePermissionRules.CanUpdateDraft(Permissions))
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            _selectedNote = await NotesApi.UpdateDraftAsync(_selectedNote.Id, new UpdateMedicalNoteDraftRequest
+            {
+                ExpectedVersion = _selectedNote.Version,
+                Subjective = _noteSubjective,
+                Objective = _noteObjective,
+                Assessment = _noteAssessment,
+                Plan = _notePlan,
+            });
+            Notify.Success("Draft note saved.");
+            _changed = true;
+            await LoadNotesAsync();
+            _noteSubjective = _selectedNote.Subjective;
+            _noteObjective = _selectedNote.Objective;
+            _noteAssessment = _selectedNote.Assessment;
+            _notePlan = _selectedNote.Plan;
+        }
+        catch (ApiProblemException ex) when (MedicalNoteProblemMessages.IsConcurrencyConflict(ex))
+        {
+            Notify.Warning(MedicalNoteProblemMessages.ToUserMessage(ex));
+            await OpenNoteAsync(_selectedNote.Id);
+        }
+        catch (ApiProblemException ex)
+        {
+            Notify.Error(MedicalNoteProblemMessages.ToUserMessage(ex));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SignNoteAsync()
+    {
+        if (_busy || _selectedNote is null || !MedicalNotePermissionRules.CanSign(Permissions))
+        {
+            return;
+        }
+
+        if (!await Modals.ConfirmAsync("Sign note", "Sign this draft note? It becomes immutable."))
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            _selectedNote = await NotesApi.SignAsync(_selectedNote.Id, new SignMedicalNoteRequest
+            {
+                ExpectedVersion = _selectedNote.Version,
+            });
+            Notify.Success("Note signed.");
+            _changed = true;
+            await LoadNotesAsync();
+        }
+        catch (ApiProblemException ex) when (MedicalNoteProblemMessages.IsConcurrencyConflict(ex))
+        {
+            Notify.Warning(MedicalNoteProblemMessages.ToUserMessage(ex));
+            await OpenNoteAsync(_selectedNote.Id);
+        }
+        catch (ApiProblemException ex)
+        {
+            Notify.Error(MedicalNoteProblemMessages.ToUserMessage(ex));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task AmendNoteAsync()
+    {
+        if (_busy || _selectedNote is null || !MedicalNotePermissionRules.CanAmend(Permissions))
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_amendReason))
+        {
+            Notify.Warning("Amendment reason is required.");
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            _selectedNote = await NotesApi.AmendAsync(_selectedNote.Id, new AmendMedicalNoteRequest
+            {
+                ExpectedVersion = _selectedNote.Version,
+                AmendmentReason = _amendReason.Trim(),
+                Plan = string.IsNullOrWhiteSpace(_amendPlan) ? null : _amendPlan,
+            });
+            Notify.Success("Amendment signed.");
+            _changed = true;
+            _amendReason = null;
+            _amendPlan = null;
+            await LoadNotesAsync();
+        }
+        catch (ApiProblemException ex) when (MedicalNoteProblemMessages.IsConcurrencyConflict(ex))
+        {
+            Notify.Warning(MedicalNoteProblemMessages.ToUserMessage(ex));
+            await OpenNoteAsync(_selectedNote.Id);
+        }
+        catch (ApiProblemException ex)
+        {
+            Notify.Error(MedicalNoteProblemMessages.ToUserMessage(ex));
+        }
+        finally
+        {
+            _busy = false;
         }
     }
 

@@ -123,6 +123,7 @@ builder.Services.AddScoped<IClinicSettingsApiClient, ClinicSettingsApiClient>();
 builder.Services.AddScoped<IClinicReportsApiClient, ClinicReportsApiClient>();
 builder.Services.AddScoped<IClinicAuditLogApiClient, ClinicAuditLogApiClient>();
 builder.Services.AddScoped<IAppointmentApiClient, AppointmentApiClient>();
+builder.Services.AddScoped<IMedicalNoteApiClient, MedicalNoteApiClient>();
 builder.Services.AddScoped<IStaffPatientApiClient, StaffPatientApiClient>();
 builder.Services.AddScoped<IDoctorAvailabilityApiClient, DoctorAvailabilityApiClient>();
 builder.Services.AddScoped<IStaffOperationsApiClient, StaffOperationsApiClient>();

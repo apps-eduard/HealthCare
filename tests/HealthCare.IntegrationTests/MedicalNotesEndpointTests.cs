@@ -169,6 +169,73 @@ public sealed class MedicalNotesEndpointTests : IAsyncLifetime
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
+    [Fact]
+    public async Task Same_Clinic_Peer_Doctor_Cannot_Read_Or_Amend_Note()
+    {
+        var appointment = await CreateEligibleAppointmentAsync();
+        var create = await _client!.PostAsJsonAsync(
+            $"/api/v1/appointments/{appointment.Id}/medical-notes", CreateDraft());
+        create.StatusCode.Should().Be(HttpStatusCode.OK);
+        var note = (await create.Content.ReadFromJsonAsync<MedicalNoteDetailResponse>())!;
+        var signed = await _client!.PostAsJsonAsync(
+            $"/api/v1/medical-notes/{note.Id}/sign",
+            new SignMedicalNoteRequest { ExpectedVersion = note.Version });
+        signed.StatusCode.Should().Be(HttpStatusCode.OK);
+        var signedNote = (await signed.Content.ReadFromJsonAsync<MedicalNoteDetailResponse>())!;
+
+        const string peerEmail = "peer.notes@healthcare.local";
+        const string peerPassword = "ChangeMe_PeerNotes_1!";
+        using (var scope = _factory!.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+            var clinic = await db.Clinics.SingleAsync(c => c.Slug == "dev-clinic-a");
+            var roleEntity = await db.Roles.SingleAsync(r => r.Name == AppRoles.Doctor);
+            var peerUserId = Guid.NewGuid();
+            var user = new ApplicationUser
+            {
+                Id = peerUserId,
+                UserName = peerEmail,
+                NormalizedUserName = peerEmail.ToUpperInvariant(),
+                Email = peerEmail,
+                NormalizedEmail = peerEmail.ToUpperInvariant(),
+                EmailConfirmed = true,
+                IsActive = true,
+            };
+            user.PasswordHash = new PasswordHasher<ApplicationUser>().HashPassword(user, peerPassword);
+            db.Users.Add(user);
+            db.UserRoles.Add(new IdentityUserRole<Guid> { UserId = user.Id, RoleId = roleEntity.Id });
+            db.StaffMembers.Add(new StaffMember
+            {
+                Id = Guid.NewGuid(),
+                UserId = peerUserId,
+                OrganizationId = clinic.OrganizationId,
+                ClinicId = clinic.Id,
+                Role = AppRoles.Doctor,
+                FirstName = "Peer",
+                LastName = "Notes",
+                IsActive = true,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await AuthenticateAsync(peerEmail, peerPassword);
+        var get = await _client!.GetAsync($"/api/v1/medical-notes/{signedNote.Id}");
+        get.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        var list = await _client!.GetAsync($"/api/v1/appointments/{appointment.Id}/medical-notes");
+        list.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        var amend = await _client!.PostAsJsonAsync(
+            $"/api/v1/medical-notes/{signedNote.Id}/amend",
+            new AmendMedicalNoteRequest
+            {
+                ExpectedVersion = signedNote.Version,
+                AmendmentReason = "Peer attempt",
+                Plan = "Peer plan",
+            });
+        amend.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
     [Theory]
     [InlineData(AppRoles.ClinicAdmin)]
     [InlineData(AppRoles.OrganizationAdmin)]
