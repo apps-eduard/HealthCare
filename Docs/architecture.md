@@ -8,11 +8,11 @@ The platform must provide a unified patient experience while maintaining strict 
 
 Example:
 
-- The patient registers once using Google or email.
+- The patient registers once using email (Google deferred; see Patient Mobile MVP scope).
 - The patient can see Clinic A, Clinic B, and other available clinics.
 - The patient can book a dental appointment at Clinic A.
 - The same patient can later book dialysis treatment at Clinic B.
-- The patient can see their own records from both clinics.
+- The patient can see their own appointments from both clinics (patient-visible clinical note summaries are deferred).
 - Clinic A must never see Clinic B's private records.
 - Clinic B must never see Clinic A's private records.
 
@@ -97,6 +97,7 @@ The MVP must follow these principles:
 - Shared Razor components where practical
 - Secure token storage
 - REST API communication
+- Authoritative product scope: **`Docs/mvp-patient-scope.md`** (approved 2026-07-25; PM-0…PM-8)
 
 ### 4.3 Backend
 
@@ -111,8 +112,8 @@ The MVP must follow these principles:
 ### 4.4 Authentication and authorization
 
 - ASP.NET Core Identity
-- Google authentication for patient registration and login
-- Email/password as an optional second login method
+- **Patient Mobile MVP:** email/password registration + login (shared JWT/refresh); Google and OTP deferred
+- Staff email/password (Web BFF cookie session)
 - JWT access tokens
 - Refresh tokens
 - Role-based and policy-based authorization
@@ -170,29 +171,26 @@ The MVP uses PostgreSQL. Do not generate SQL Server-specific code, migrations, p
 
 ### 5.1 Included in MVP
 
-- Global patient registration and login
-- Google authentication
+- Global patient registration and login (**email/password** for Patient Mobile MVP; Google deferred)
 - Staff authentication
 - Organization management
 - Clinic management
 - Staff management
-- Clinic directory for patients
-- Clinic profile and specialty
-- Doctor availability
+- Clinic directory for patients (authenticated browse/search approved; clinic-code enrollment retained)
+- Clinic profile and specialty (optional clinic specialty string; no specialty subsystem)
+- Doctor availability (patient read of slots)
 - Patient profile
 - Clinic-patient registration relationship
-- Appointment booking
-- Appointment approval or confirmation
-- Appointment cancellation
+- Appointment booking (patient bookings start as **`Requested`**)
+- Appointment approval or confirmation (**staff-driven**; patient self-confirm out of Patient MVP)
+- Appointment cancellation and rescheduling (patient; **2-hour** cutoff approved)
 - Appointment status tracking
-- Basic clinic-private medical notes
-- Patient view of their own records
-- Appointment confirmation notifications
-- Appointment reminder notifications
-- Audit logging
+- Basic clinic-private medical notes (**staff-only**; no patient note bodies in Patient MVP)
 - Organization and clinic isolation
 - Patient self-scope isolation
 - Docker-based local and production deployment
+
+Patient Mobile delivery phases: **PM-1…PM-8** per `Docs/mvp-patient-scope.md`.
 
 ### 5.2 Excluded from MVP
 
@@ -204,6 +202,9 @@ The MVP uses PostgreSQL. Do not generate SQL Server-specific code, migrations, p
 - Advanced electronic medical record features
 - Cross-clinic automatic record sharing
 - Patient consent-based record sharing
+- Patient-visible clinical note summaries / `IsVisibleToPatient` (deferred pending privacy decision)
+- Patient Google / OTP login (deferred)
+- Patient Web application (deferred; MAUI only for initial Patient MVP)
 - AI diagnosis or medical recommendations
 - Complex hospital admission management
 - Bed management
@@ -505,21 +506,23 @@ POST   /api/v1/staff/patients/{clinicPatientId}/medical-notes
 
 ## 10. Authentication flows
 
-### 10.1 Patient Google login
+### 10.1 Patient login (Patient Mobile MVP)
 
 ```text
-Patient selects Sign in with Google
+Patient registers with email/password (email confirmation required)
         |
-Google authenticates the patient
+Patient submits email/password
         |
-API validates the Google identity token
+API POST /api/v1/auth/login
         |
-API finds or creates ApplicationUser
-        |
-API finds or creates Patient
+API validates Identity credentials and patient linkage
         |
 API issues access and refresh tokens
+        |
+MAUI stores tokens in secure storage
 ```
+
+Google authentication and OTP are **deferred** (not required for Patient Mobile MVP). See `Docs/mvp-patient-scope.md`.
 
 ### 10.2 Staff login
 
@@ -628,21 +631,22 @@ Use Ant Design Blazor to build:
 
 ### 12.2 Patient mobile application
 
+Authoritative scope: **`Docs/mvp-patient-scope.md`**.
+
 The patient app should provide:
 
-- Google sign-in
-- Clinic discovery
-- Search by clinic name, location, and specialty
-- Clinic details
-- Available doctors
-- Appointment booking
-- My appointments
-- Appointment cancellation
-- My clinic records grouped by clinic
+- Email/password registration and login (Google deferred)
+- Authenticated clinic discovery (name / city / optional specialty string)
+- Clinic-code enrollment (alternate)
+- Clinic details (patient-safe)
+- Available doctors and slots
+- Appointment booking (`Requested`)
+- My appointments (upcoming + past)
+- Appointment cancellation and rescheduling (2-hour cutoff)
 - Profile management
-- Notifications
+- Status via refreshed API data (no notification inbox in first release)
 
-Records must be grouped by clinic to avoid confusion.
+Patient-visible clinical records grouped by clinic are **deferred**. Medical-note bodies remain staff-only.
 
 ---
 

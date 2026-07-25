@@ -19,7 +19,7 @@
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Doctor Web MVP **complete** (DR-1–DR-7 + DR-9 + DR-10; DR-8 skipped). Next product track: Patient MVP (do not start until planned).
+**Current focus:** Patient Mobile MVP **PM-0 complete** (scope approved). Next implementation milestone: **PM-1** (backend gap hardening). Do not start PM-1 until explicitly scheduled. Doctor Web MVP remains complete.
 
 ### All phases at a glance
 
@@ -156,7 +156,7 @@ Authoritative design docs:
 
 ### Deferred / risks
 
-- Full MAUI mobile project deferred to Phase 11 (class library placeholder)
+- Full MAUI mobile project deferred to Patient Mobile MVP (**PM-2…PM-8**; scope `Docs/mvp-patient-scope.md`; class library placeholder today)
 - Integration tests require Docker Desktop running for Testcontainers
 
 ---
@@ -947,13 +947,17 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 
 ## Phase 11 — Patient mobile application
 
-**Status:** Not started
+**Status:** Not started (scope approved — **PM-0**)  
+**Authoritative scope:** `Docs/mvp-patient-scope.md`
 
-### Planned
+### Planned (PM-1…PM-8)
 
-- Replace Mobile placeholder with .NET MAUI Blazor Hybrid (Android first)
-- Secure token storage
-- Full patient MVP flow
+- PM-1: Backend gap hardening (profile `404`, 2-hour cutoff, DTO review) — no mobile UI
+- PM-2: Replace Mobile placeholder with .NET MAUI Blazor Hybrid (Android first)
+- PM-3…PM-6: Auth/profile, discovery, booking, my appointments
+- PM-7…PM-8: Security matrix + Patient E2E
+
+Do not mark Phase 11 complete until PM-8 DoD is met.
 
 ---
 
@@ -1057,11 +1061,11 @@ Authoritative scope: **`Docs/mvp-clinic-admin-scope.md`** (product-owner approve
 | CA-9 | Clinic-filtered audit | Medium | **Delivered** (2026-07-25) |
 | CA-10 | Hardening + Playwright E2E | Medium | **Delivered** (2026-07-25) |
 
-Clinic Admin Web MVP is complete. Doctor Web MVP is complete (see below). Next recommended product track: Patient MVP (do not start until planned).
+Clinic Admin Web MVP is complete. Doctor Web MVP is complete (see below). Patient Mobile MVP scope is approved (PM-0); implementation starts at PM-1 when scheduled.
 
 ### Doctor Web MVP (approved scope)
 
-Authoritative scope: **`Docs/mvp-doctor-scope.md`** (**approved** 2026-07-25). **Status: complete** (DR-1–DR-7 + DR-9 + DR-10; DR-8 skipped). Final baseline `3553947`. Patient MVP must not start until planned.
+Authoritative scope: **`Docs/mvp-doctor-scope.md`** (**approved** 2026-07-25). **Status: complete** (DR-1–DR-7 + DR-9 + DR-10; DR-8 skipped). Final baseline `3553947`.
 
 | Phase | Theme | Complexity | Status |
 |-------|--------|------------|--------|
@@ -1105,6 +1109,30 @@ Authoritative scope: **`Docs/mvp-doctor-scope.md`** (**approved** 2026-07-25). *
 | 2026-07-25 | 9/12 | Doctor DR-9 — cross-role authorization negative matrix |
 | 2026-07-25 | 8/12 | Doctor DR-10 — Playwright Doctor E2E pack; Doctor Web MVP complete |
 | 2026-07-25 | — | Doctor Web MVP milestone closeout review; baseline `3553947` |
+| 2026-07-25 | — | Patient API readiness audit accepted (partially complete; no `mvp-patient-scope` yet) |
+| 2026-07-25 | — | **PM-0:** Patient Mobile MVP scope approved — `Docs/mvp-patient-scope.md`; baseline `c1e036a` |
+
+### Patient Mobile MVP (approved scope)
+
+Authoritative scope: **`Docs/mvp-patient-scope.md`** (**approved** 2026-07-25). **Status: PM-0 documentation complete; implementation not started.**
+
+Patient-facing app: **.NET MAUI Blazor Hybrid** (Android first). No separate Patient Web app in the initial MVP. Existing Patient APIs (auth, profile, code enrollment, doctors/slots, book → `Requested`, list/detail, cancel, reschedule) are retained; do not rebuild them.
+
+| Phase | Theme | Complexity | Status |
+|-------|--------|------------|--------|
+| PM-0 | Patient MVP scope and contract | Docs | **Delivered** (2026-07-25) |
+| PM-1 | Backend gap hardening (404 concealment, 2h cutoff, DTO review) | Medium | Not started |
+| PM-2 | MAUI mobile foundation | Medium | Not started |
+| PM-3 | Mobile auth + profile | Medium | Not started |
+| PM-4 | Clinic browse + Doctor discovery | Medium | Not started |
+| PM-5 | Appointment booking (mobile) | Medium | Not started |
+| PM-6 | My Appointments / cancel / reschedule | Medium | Not started |
+| PM-7 | Patient security negative matrix | Medium | Not started |
+| PM-8 | Patient mobile E2E | Medium | Not started |
+
+**Known backend gaps vs approved scope (for PM-1 / PM-4):** cross-patient profile currently `403` (target `404`); cancel/reschedule lack 2-hour cutoff; authenticated patient clinic browse/search missing; shared `AppointmentResponse` needs patient-safe review.
+
+**Do not** start mobile UI before PM-1 (unless product owner waives). **Do not** treat PM-0 as PM-1.
 
 ---
 

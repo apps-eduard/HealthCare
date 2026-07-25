@@ -5,7 +5,7 @@
 **Authority:** This document overrides informal notes in `Docs/security.md` §4.4 where they conflict; keep matrix and security cross-links in sync when coding.  
 **Related:** `Docs/mvp-clinic-admin-scope.md`, `Docs/mvp-organization-admin-scope.md`, `Docs/authorization-matrix.md`, `Docs/security.md` §4.4 / medical-notes.  
 **Do not** copy Clinic Admin or Organization Admin capabilities into Doctor without validating ownership and clinical least-privilege.  
-**Do not** start Patient MVP or Mobile App from this document.
+**Patient Mobile MVP** is scoped separately in `Docs/mvp-patient-scope.md` (PM-0 approved); do not implement Patient features from this Doctor document.
 
 Verified baseline when approved (2026-07-25):
 

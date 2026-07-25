@@ -174,19 +174,23 @@ Not allowed by default:
 
 ### 4.7 PATIENT
 
-Allowed:
+Authoritative Product MVP: **`Docs/mvp-patient-scope.md`** (**approved** 2026-07-25). Patient Mobile MVP uses email/password + existing Patient APIs; clinical note visibility and Google/OTP are deferred.
 
-- Manage their own profile.
-- Discover clinics.
-- Book appointments for themselves.
-- View their own appointments.
-- View only their own records that are marked visible to the patient.
+Allowed (Patient Mobile MVP):
+
+- Manage their own profile (approved demographic/contact fields).
+- Discover clinics via clinic-code enrollment **and** authenticated clinic browse/search (browse API is an approved gap until PM-4).
+- View Doctors and available slots for active clinics (patient-safe fields only).
+- Book appointments for themselves (initial status **`Requested`**; not auto-confirmed).
+- View, cancel, and reschedule **their own** appointments under approved rules (including **2-hour** cancel/reschedule cutoff — API gap until PM-1).
 
 Not allowed:
 
-- Access another patient's data.
-- Access staff endpoints.
-- Select or manipulate another patient ID.
+- Access another patient's data (foreign appointment → `404`; foreign patient profile by ID → target `404`, currently `403` until PM-1).
+- Access staff, clinic-admin, organization-admin, or platform endpoints.
+- Select or manipulate another patient ID for self-service identity.
+- View medical-note bodies, amendments, or patient-visible clinical summaries in this MVP (`IsVisibleToPatient` deferred).
+- Patient-driven confirm, check-in, or arrival.
 
 ---
 
@@ -194,12 +198,20 @@ Not allowed:
 
 ### 5.1 Patient authentication
 
-- Support Google authentication.
-- Validate Google identity tokens on the server.
-- Store the external provider subject identifier.
-- Do not trust only the email address as proof of identity.
-- Link external login to an internal UUID user ID.
-- Allow account recovery using a controlled workflow.
+**Patient Mobile MVP (approved):**
+
+- Email and password via ASP.NET Core Identity.
+- Patient self-registration remains enabled; email confirmation required before login.
+- Shared JWT access + refresh tokens; logout revokes refresh tokens.
+- One user account links to exactly one Patient record; resolve PatientId from server linkage, never from client-supplied IDs on self-service routes.
+- Password recovery may reuse the existing Identity completion endpoint; do not invent a parallel custom reset system for MVP.
+
+**Deferred (not current MVP requirements):**
+
+- Google authentication / identity-token validation.
+- Mobile OTP login.
+
+Future options may revisit Google/OTP; until then do not block Patient MVP on external identity providers.
 
 ### 5.2 Staff authentication
 
@@ -464,7 +476,7 @@ Required for production:
 
 ### 8.5 Future consent / patient visibility
 
-Patient-visible notes and consent-based sharing are deferred. Do not partially implement automatic sharing in the MVP.
+Patient-visible notes and consent-based sharing are deferred. Authoritative Patient Mobile MVP (`Docs/mvp-patient-scope.md`) does **not** include `IsVisibleToPatient` or note-body access. Do not partially implement automatic sharing in the MVP.
 
 ---
 
@@ -707,7 +719,7 @@ Response semantics under test:
 |------|------|
 | 401 | Unauthenticated caller on protected routes |
 | 403 | Authenticated caller lacks permission/role (e.g. Patient→staff APIs; Doctor→clinic reports; CA/OA/PA→note bodies) |
-| 404 | Concealed out-of-scope (peer/cross-clinic Doctor appointment or note) |
+| 404 | Concealed out-of-scope (peer/cross-clinic Doctor appointment or note; Patient foreign appointment). **Patient Mobile MVP target:** foreign patient profile by ID also `404` (currently `403` until PM-1 — see `Docs/mvp-patient-scope.md`) |
 | 409 | In-scope workflow/concurrency conflict only (DR-7); never used to leak out-of-scope existence |
 
 ### 16.8 Doctor Web MVP E2E pack (DR-10)

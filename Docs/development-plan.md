@@ -14,15 +14,17 @@ Each phase must be completed, built, tested, and reviewed before starting the ne
 
 Deliver a usable multi-clinic platform where:
 
-- A patient registers once using Google or email.
-- A patient can discover multiple clinics.
-- A patient can book appointments with different clinics.
-- A patient can view their own appointments and allowed records.
+- A patient registers once using **email/password** (Google deferred per Patient Mobile MVP).
+- A patient can discover multiple clinics (authenticated browse + clinic-code enrollment).
+- A patient can book appointments with different clinics (status **`Requested`**).
+- A patient can view, cancel, and reschedule their own appointments under approved rules.
 - Each clinic can manage only its own patients, appointments, and medical notes.
 - Clinic A cannot access Clinic B's private records.
 - Clinic B cannot access Clinic A's private records.
 - Staff use an Ant Design Blazor web application (Fluent UI / MudBlazor removed).
-- Patients use a .NET MAUI Blazor Hybrid application.
+- Patients use a .NET MAUI Blazor Hybrid application (`Docs/mvp-patient-scope.md`, PM-1…PM-8).
+
+Patient-visible clinical note summaries are **not** part of the initial Patient Mobile MVP.
 
 ---
 
@@ -160,8 +162,8 @@ Implement global user identity for staff and patients.
 - Add `ApplicationUser` based on ASP.NET Core Identity.
 - Add Identity EF Core configuration.
 - Add staff email/password login.
-- Add patient Google authentication.
-- Add optional patient email/password registration.
+- Add patient email/password registration and login (shared JWT endpoints).
+- **Deferred:** patient Google authentication (`POST /api/v1/auth/google`) — see `Docs/mvp-patient-scope.md`.
 - Add JWT access tokens.
 - Add refresh tokens.
 - Hash refresh tokens in the database.
@@ -173,12 +175,13 @@ Implement global user identity for staff and patients.
 
 ```text
 POST /api/v1/auth/register/patient
-POST /api/v1/auth/google
 POST /api/v1/auth/login
 POST /api/v1/auth/refresh
 POST /api/v1/auth/logout
 GET  /api/v1/auth/me
 ```
+
+*(Deferred / not Patient MVP: `POST /api/v1/auth/google`.)*
 
 ### Tests
 
@@ -187,7 +190,7 @@ GET  /api/v1/auth/me
 - Disabled account cannot log in.
 - Refresh token rotation works.
 - Reused refresh token revokes its token family.
-- Google token validation rejects invalid tokens.
+- Patient registration + email confirmation gate works.
 
 ### Acceptance criteria
 
@@ -257,8 +260,8 @@ Implement organization and clinic management.
 - Add migrations.
 - Add organization administration endpoints.
 - Add clinic administration endpoints.
-- Add public clinic directory endpoints.
-- Add specialty and city filters.
+- Add clinic directory endpoints (staff directory exists; **authenticated Patient browse/search** is an approved Patient MVP gap — see `Docs/mvp-patient-scope.md` PM-4).
+- Add specialty and city filters (clinic optional `Specialty` / `City` strings; no specialty subsystem).
 - Add clinic active/inactive status.
 
 ### Staff web screens
@@ -272,8 +275,13 @@ Implement organization and clinic management.
 ### Patient endpoints
 
 ```text
-GET /api/v1/clinics
-GET /api/v1/clinics/{clinicId}
+# Existing today:
+POST /api/v1/patients/me/clinics/register   (clinic code)
+GET  /api/v1/clinics/{clinicCode}/doctors
+GET  /api/v1/clinics/{clinicCode}/doctors/{staffMemberId}/available-slots
+
+# Approved Patient MVP gap (PM-4): authenticated clinic browse/search
+# (exact route to be designed in PM-1/PM-4; not anonymous public unless later approved)
 ```
 
 ### Tests
@@ -547,25 +555,22 @@ Add reliable background processing.
 
 ## 15. Phase 11 - Patient mobile application
 
+Authoritative product contract: **`Docs/mvp-patient-scope.md`** (PM-0 approved 2026-07-25).
+
+Deliver Patient Mobile via milestones **PM-1…PM-8** (do not treat Phase 11 as a single unstructured drop).
+
 ### Objectives
 
-Build the Android-first patient experience.
+Build the Android-first patient experience on existing Patient APIs; close approved backend gaps first (PM-1).
 
-### Screens
+### Screens (by milestone)
 
-- Splash and authentication
-- Google sign-in
-- Clinic directory
-- Clinic details
-- Doctor list
-- Availability
-- Book appointment
-- My appointments
-- Appointment details
-- Cancel appointment
-- My records grouped by clinic
-- Profile
-- Notifications
+- PM-2: shell, secure tokens, typed client
+- PM-3: register / confirm-email / login / logout / profile
+- PM-4: clinic browse + code enroll / doctors / slots
+- PM-5: book appointment (`Requested`)
+- PM-6: my appointments / cancel / reschedule (2-hour cutoff)
+- PM-7 / PM-8: security matrix + E2E
 
 ### Security requirements
 
@@ -573,12 +578,14 @@ Build the Android-first patient experience.
 - Clear local tokens on logout.
 - Do not persist medical data unnecessarily.
 - Do not trust client-provided patient IDs.
+- Cross-patient concealment target: **404**.
 
 ### Acceptance criteria
 
-- Android app supports the full patient MVP flow.
+- Android app supports the full Patient Mobile MVP flow per `mvp-patient-scope.md`.
 - A patient can use one account across multiple clinics.
-- Records remain visually separated by clinic.
+- Clinical note bodies remain inaccessible to patients.
+- Google / OTP / push inbox remain deferred.
 
 ---
 
