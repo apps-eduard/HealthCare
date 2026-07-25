@@ -43,10 +43,11 @@ public sealed class ClinicAdminAppointmentsSmokeTests : E2ePageTestBase
 
             await Page.GetByRole(AriaRole.Button, new() { Name = $"Details for appointment {created.Id}" })
                 .ClickAsync();
-            var dialog = Page.Locator(".ant-modal").Filter(new() { HasText = "Confirmed" });
+            var dialog = Page.Locator(".ant-modal").Filter(new() { HasText = created.Id.ToString("D") });
             await Expect(dialog).ToBeVisibleAsync(new() { Timeout = 20_000 });
             await Expect(dialog.GetByText("Medical note", new() { Exact = false })).ToHaveCountAsync(0);
             await Expect(dialog.GetByRole(AriaRole.Button, new() { Name = "Complete" })).ToHaveCountAsync(0);
+            await Expect(dialog.GetByText("Confirmed")).ToBeVisibleAsync();
 
             await dialog.GetByRole(AriaRole.Button, new() { Name = "No-show" }).ClickAsync();
             var confirm = Page.Locator(".ant-modal").Filter(new() { HasText = "Confirm no-show" });
@@ -55,6 +56,7 @@ public sealed class ClinicAdminAppointmentsSmokeTests : E2ePageTestBase
 
             await Expect(Page.GetByText("No-show succeeded.", new() { Exact = false }))
                 .ToBeVisibleAsync(new() { Timeout = 30_000 });
+            dialog = Page.Locator(".ant-modal").Filter(new() { HasText = created.Id.ToString("D") });
             await Expect(dialog.GetByText("NoShow")).ToBeVisibleAsync(new() { Timeout = 20_000 });
 
             await Page.ReloadAsync();
