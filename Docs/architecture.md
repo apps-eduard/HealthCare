@@ -361,6 +361,8 @@ NoShow
 ```
 
 Allowed transitions are enforced in `AppointmentStatusTransitions` (no reopen from terminal). Staff MVP completes from **CheckedIn** (or **InProgress** if set); medical notes are **not** required for completion. `InProgress` transition API remains deferred.
+
+Cross-role negative authorization coverage for Doctor Web MVP is tracked as **DR-9** (`CrossRoleAuthorizationMatrixTests` / `CrossRoleAuthorizationEndpointMatrixTests`).
 ### 6.6 Medical note model
 
 ```text

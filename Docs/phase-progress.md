@@ -19,7 +19,7 @@
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Doctor Web MVP DR-9 (not started) — DR-1–DR-7 delivered; DR-8 skipped; scope approved 2026-07-25
+**Current focus:** Doctor Web MVP DR-10 (not started) — DR-1–DR-7 + DR-9 delivered; DR-8 skipped; scope approved 2026-07-25
 
 ### All phases at a glance
 
@@ -1073,10 +1073,10 @@ Authoritative scope: **`Docs/mvp-doctor-scope.md`** (**approved** 2026-07-25). D
 | DR-6 | Medical notes ownership and lifecycle | Large | **Delivered** (2026-07-25) |
 | DR-7 | Clinical workflow / completion hardening | Medium | **Delivered** (2026-07-25) |
 | DR-8 | Doctor reports | — | **Skipped by default** |
-| DR-9 | Cross-role security / negative testing | Medium | Not started |
+| DR-9 | Cross-role security / negative testing | Medium | **Delivered** (2026-07-25) |
 | DR-10 | E2E + Doctor MVP completion | Medium | Not started |
 
-**Temporary known gaps after DR-7:** full negative matrix (DR-9); Doctor MVP E2E pack (DR-10). `InProgress` transition API remains deferred.
+**Temporary known gaps after DR-9:** Doctor MVP E2E pack (DR-10). `InProgress` transition API remains deferred. DR-8 remains skipped.
 
 | 2026-07-25 | — | Doctor Web MVP scope **approved** (Model A, ownership, notes DR-6, DR-8 skipped) |
 | 2026-07-25 | 8 | Doctor DR-1 — `doctor_dashboard.read` + Doctor Dashboard API/UI + Doctor console nav |
@@ -1086,6 +1086,7 @@ Authoritative scope: **`Docs/mvp-doctor-scope.md`** (**approved** 2026-07-25). D
 | 2026-07-25 | 8 | Doctor DR-5 — Model A appointment-linked patient access + Patients nav |
 | 2026-07-25 | 8/9 | Doctor DR-6 — medical-note ownership + appointment-detail note UX |
 | 2026-07-25 | 7/8 | Doctor DR-7 — clinical workflow / completion hardening |
+| 2026-07-25 | 9/12 | Doctor DR-9 — cross-role authorization negative matrix |
 
 ---
 

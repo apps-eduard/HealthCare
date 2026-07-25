@@ -490,7 +490,7 @@ Covering-doctor / care-team; InProgress API; note-before-complete policy; specia
 | DR-6 | Medical notes ownership and lifecycle | Large | **Delivered** (2026-07-25) |
 | DR-7 | Clinical workflow and completion hardening | Medium | **Delivered** (2026-07-25) |
 | DR-8 | Doctor reports | — | **Skipped by default** |
-| DR-9 | Cross-role security, audit, negative testing | Medium | Not started |
+| DR-9 | Cross-role security, audit, negative testing | Medium | **Delivered** (2026-07-25) |
 | DR-10 | E2E hardening and Doctor MVP completion | Medium | Not started |
 
 ### DR-1 — Doctor dashboard and navigation foundation
@@ -573,6 +573,7 @@ Covering-doctor / care-team; InProgress API; note-before-complete policy; specia
 ### DR-9 — Cross-role security, audit and negative testing
 
 - **Objective:** Full negative matrix; PA bypass limits; inactive membership; note non-bypass  
+- **Status:** **Delivered** (2026-07-25) — unit permission/ownership matrix + integration HTTP matrix + Web gate tests  
 - **Deps:** DR-1–DR-7  
 - **Complexity:** Medium  
 
@@ -617,3 +618,4 @@ Covering-doctor / care-team; InProgress API; note-before-complete policy; specia
 | 2026-07-25 | **DR-5 delivered:** Model A patient access (appointment-linked search/detail); Patients nav restored for Doctor; peer-only/unrelated denial |
 | 2026-07-25 | **DR-6 delivered:** author + own-appointment medical notes; appointment-detail note UX; peer note denied (404); WebPermissions + typed client |
 | 2026-07-25 | **DR-7 delivered:** transition/completion hardening; completion without mandatory note; safer confirmations; denial audit; Cancel aligned for CheckedIn/InProgress |
+| 2026-07-25 | **DR-9 delivered:** cross-role authorization negative matrix (unit + integration HTTP); Doctor report/audit surfaces remain denied; PA note non-bypass reconfirmed |

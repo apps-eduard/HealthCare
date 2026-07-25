@@ -143,6 +143,7 @@ Authoritative Doctor Web MVP scope: `Docs/mvp-doctor-scope.md` (**approved** 202
 - **DR-5 delivered:** Model A staff patient search/detail; Patients nav shown for Doctor; unrelated/peer-only patients denied.
 - **DR-6 delivered:** author-only note list/read/amend; create only on own appointments; appointment-detail note UX; peer note access denied (404).
 - **DR-7 delivered:** invalid/terminal transitions audited and rejected (409); completion without mandatory note; ExpectedVersion concurrency; Doctor peer mutate → 404; Web actions aligned (incl. Cancel on CheckedIn/InProgress); safer Complete confirmation + reload on conflict/invalid transition.
+- **DR-9 delivered:** table-driven cross-role negative matrix (unit permission catalog + ownership precedence; integration HTTP matrix for org/clinic/doctor/patient/admin denials). Documented semantics: `401` unauthenticated, `403` authenticated wrong permission/role (incl. admin note-body denial), `404` concealed out-of-scope (peer Doctor / cross-clinic), `409` only after in-scope authz for workflow/concurrency. Doctor report/audit/org-dashboard surfaces remain denied. Platform Admin bypass does not unlock note bodies.
 
 **Not allowed:**
 
@@ -690,6 +691,23 @@ Do not add headers blindly. Verify compatibility with Blazor and Ant Design Blaz
 - Invalid enum is rejected.
 - Excessive page size is rejected.
 - Malformed JSON returns a safe error.
+
+### 16.7 Doctor Web MVP negative matrix (DR-9)
+
+Implemented suites (representative MVP surfaces; not every route):
+
+- Unit: `CrossRoleAuthorizationMatrixTests` — role×forbidden permission catalog; peer Doctor appointment/note concealment; authz-before-concurrency; foreign-org patient directory isolation; denial without success audit
+- Integration: `CrossRoleAuthorizationEndpointMatrixTests` — HTTP matrix across anonymous, Patient, Doctor A/B, Clinic Admin, Org Admin, Platform Admin for appointments, medical notes, clinic reports/audit, doctor/org dashboards, staff patient APIs
+- Web: `DoctorCrossRoleSecurityUiTests` — Doctor/Patient cannot open clinic reports/audit/org admin gates
+
+Response semantics under test:
+
+| Code | When |
+|------|------|
+| 401 | Unauthenticated caller on protected routes |
+| 403 | Authenticated caller lacks permission/role (e.g. Patient→staff APIs; Doctor→clinic reports; CA/OA/PA→note bodies) |
+| 404 | Concealed out-of-scope (peer/cross-clinic Doctor appointment or note) |
+| 409 | In-scope workflow/concurrency conflict only (DR-7); never used to leak out-of-scope existence |
 
 ---
 
