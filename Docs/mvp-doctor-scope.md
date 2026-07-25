@@ -630,3 +630,4 @@ Covering-doctor / care-team; InProgress API; note-before-complete policy; specia
 | 2026-07-25 | **DR-7 delivered:** transition/completion hardening; completion without mandatory note; safer confirmations; denial audit; Cancel aligned for CheckedIn/InProgress |
 | 2026-07-25 | **DR-9 delivered:** cross-role authorization negative matrix (unit + integration HTTP); Doctor report/audit surfaces remain denied; PA note non-bypass reconfirmed |
 | 2026-07-25 | **DR-10 delivered:** Playwright Doctor E2E pack (note lifecycle, completion with/without note, denials, peer concealment, responsive); Doctor Web MVP complete |
+| 2026-07-25 | **Milestone closeout:** accepted baseline `3553947`; verification Unit 511 · Arch 19 · Web 327 · Integration 207 · Doctor E2E 8 |

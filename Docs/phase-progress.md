@@ -1057,11 +1057,11 @@ Authoritative scope: **`Docs/mvp-clinic-admin-scope.md`** (product-owner approve
 | CA-9 | Clinic-filtered audit | Medium | **Delivered** (2026-07-25) |
 | CA-10 | Hardening + Playwright E2E | Medium | **Delivered** (2026-07-25) |
 
-Clinic Admin Web MVP is complete. Next recommended product track: Doctor MVP (do not start Patient MVP until Doctor MVP is planned).
+Clinic Admin Web MVP is complete. Doctor Web MVP is complete (see below). Next recommended product track: Patient MVP (do not start until planned).
 
 ### Doctor Web MVP (approved scope)
 
-Authoritative scope: **`Docs/mvp-doctor-scope.md`** (**approved** 2026-07-25). Do not start DR-1 until ready to implement; Patient MVP must not start until Doctor MVP completes.
+Authoritative scope: **`Docs/mvp-doctor-scope.md`** (**approved** 2026-07-25). **Status: complete** (DR-1–DR-7 + DR-9 + DR-10; DR-8 skipped). Final baseline `3553947`. Patient MVP must not start until planned.
 
 | Phase | Theme | Complexity | Status |
 |-------|--------|------------|--------|
@@ -1076,7 +1076,23 @@ Authoritative scope: **`Docs/mvp-doctor-scope.md`** (**approved** 2026-07-25). D
 | DR-9 | Cross-role security / negative testing | Medium | **Delivered** (2026-07-25) |
 | DR-10 | E2E + Doctor MVP completion | Medium | **Delivered** (2026-07-25) |
 
-**Doctor Web MVP status:** Complete (DR-8 skipped). Deferred: dedicated `InProgress` staff API; Doctor reports.
+**Doctor Web MVP status:** Complete (DR-8 skipped).
+
+**Closeout verification totals (authoritative DR-10 run, 2026-07-25):** Unit 511 · Architecture 19 · Web 327 · Integration (docsvr) 207 · Playwright Doctor E2E 8 · DR-9 unit matrix 44 · DR-9 integration matrix 2 · Medical-note foundation 21 · Appointment clinical workflow 6 · Patient self-scope related 7 · Doctor appointment ownership 4.
+
+#### Deferred items (approved exclusions / known gaps — not defects)
+
+| Item | Notes |
+|------|--------|
+| Dedicated staff `InProgress` transition API | Deferred; staff MVP completes from `CheckedIn` (or `InProgress` if already set) |
+| Doctor reports | Unapproved; DR-8 skipped |
+| Appointment reopen workflow | Out of Doctor Web MVP |
+| Artificial browser-level concurrency E2E | Excluded; covered in unit/integration |
+| Full WCAG certification | Not performed; basic labeled controls only |
+| Ant Design selected-note refresh | UI risk mitigated by explicit reselection after save/create |
+| DR-9 HTTP matrix breadth | Representative MVP surfaces, not every route |
+| Nurse / Receptionist negative HTTP coverage | Stronger at unit/catalog level than full HTTP matrix |
+| Windows Docker integration | Unavailable; Ubuntu **docsvr** is authoritative for Integration + Playwright |
 
 | 2026-07-25 | — | Doctor Web MVP scope **approved** (Model A, ownership, notes DR-6, DR-8 skipped) |
 | 2026-07-25 | 8 | Doctor DR-1 — `doctor_dashboard.read` + Doctor Dashboard API/UI + Doctor console nav |
@@ -1088,6 +1104,7 @@ Authoritative scope: **`Docs/mvp-doctor-scope.md`** (**approved** 2026-07-25). D
 | 2026-07-25 | 7/8 | Doctor DR-7 — clinical workflow / completion hardening |
 | 2026-07-25 | 9/12 | Doctor DR-9 — cross-role authorization negative matrix |
 | 2026-07-25 | 8/12 | Doctor DR-10 — Playwright Doctor E2E pack; Doctor Web MVP complete |
+| 2026-07-25 | — | Doctor Web MVP milestone closeout review; baseline `3553947` |
 
 ---
 
