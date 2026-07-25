@@ -144,6 +144,7 @@ Authoritative Doctor Web MVP scope: `Docs/mvp-doctor-scope.md` (**approved** 202
 - **DR-6 delivered:** author-only note list/read/amend; create only on own appointments; appointment-detail note UX; peer note access denied (404).
 - **DR-7 delivered:** invalid/terminal transitions audited and rejected (409); completion without mandatory note; ExpectedVersion concurrency; Doctor peer mutate → 404; Web actions aligned (incl. Cancel on CheckedIn/InProgress); safer Complete confirmation + reload on conflict/invalid transition.
 - **DR-9 delivered:** table-driven cross-role negative matrix (unit permission catalog + ownership precedence; integration HTTP matrix for org/clinic/doctor/patient/admin denials). Documented semantics: `401` unauthenticated, `403` authenticated wrong permission/role (incl. admin note-body denial), `404` concealed out-of-scope (peer Doctor / cross-clinic), `409` only after in-scope authz for workflow/concurrency. Doctor report/audit/org-dashboard surfaces remain denied. Platform Admin bypass does not unlock note bodies.
+- **DR-10 delivered:** Playwright Doctor E2E pack on Ubuntu docsvr (Chromium headless): note draft/sign/amend lifecycle, completion with and without note, restricted nav + direct-route denial, peer appointment/note concealment, desktop + narrow viewports. Doctor Web MVP complete (DR-8 skipped).
 
 **Not allowed:**
 
@@ -708,6 +709,20 @@ Response semantics under test:
 | 403 | Authenticated caller lacks permission/role (e.g. Patient→staff APIs; Doctor→clinic reports; CA/OA/PA→note bodies) |
 | 404 | Concealed out-of-scope (peer/cross-clinic Doctor appointment or note) |
 | 409 | In-scope workflow/concurrency conflict only (DR-7); never used to leak out-of-scope existence |
+
+### 16.8 Doctor Web MVP E2E pack (DR-10)
+
+Playwright Chromium (headless) on Ubuntu **docsvr** via `tests/HealthCare.EndToEndTests` (temporary Postgres + separate Web/API processes). Seeded Development users; appointments/notes created via API helpers (`DoctorE2eApi`) then exercised in the browser.
+
+Browser scenarios (representative):
+
+- Clinical: own CheckedIn appointment → draft → save → sign (immutable) → amend (append-only) → complete with confirmation
+- Completion without note: complete succeeds; note count remains zero (no auto-create)
+- Denials: admin nav absent; direct `/clinic/reports`, `/clinic/audit-logs`, `/staff`, org admin routes denied; no Doctor report center
+- Peer concealment: peer clinic-B appointment absent from queue; peer note GET → 404 (no note deep link in Web)
+- Viewports: default 1440×900; narrow 390×844 smoke for detail dialog + note/complete actions
+
+Lower-level DR-9 matrix and unit/integration workflow suites remain authoritative for concurrency and exhaustive HTTP matrices.
 
 ---
 

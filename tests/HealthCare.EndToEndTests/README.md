@@ -93,3 +93,21 @@ E2E tests share one host fixture and use an xUnit collection with `DisableParall
 - Doctor DR-1: login → Doctor Dashboard → org settings denied → logout (`DoctorDashboardSmokeTests`)
 - Doctor DR-2: login → My Profile → update display name → reload persistence; identity fields read-only; admin nav absent (`DoctorProfileSmokeTests`)
 - Doctor DR-3/DR-5: login → My Availability self-lock → queue/calendar self defaults; Patients directory (Model A); Staff absent (`DoctorAvailabilitySmokeTests`)
+- Doctor DR-10 clinical: own CheckedIn appointment → draft note → save → sign → amend → complete with confirmation (`DoctorClinicalWorkflowSmokeTests`)
+- Doctor DR-10 completion without note: complete succeeds; no auto-created medical note (`DoctorCompletionWithoutNoteSmokeTests`)
+- Doctor DR-10 denials: admin nav absent + direct restricted routes; peer clinic-B appointment/note concealed (`DoctorAccessDenialSmokeTests`)
+- Doctor DR-10 responsive: 390×844 detail dialog + note/complete actions; restricted nav stays absent (`DoctorResponsiveWorkflowSmokeTests`)
+
+### Doctor DR-10 environment notes
+
+| Item | Value |
+|------|--------|
+| Host | Ubuntu **docsvr** only (not Windows) |
+| Browser | Playwright Chromium |
+| Mode | Headless by default (`HEALTHCARE_E2E_HEADED=true` for headed) |
+| Base URL | Ephemeral `http://127.0.0.1:{port}` from `E2eHostFixture` |
+| Data | Development seed users + API-created unique appointments (`DoctorE2eApi`) |
+| Desktop viewport | 1440×900 (default `E2ePageTestBase`) |
+| Narrow viewport | 390×844 (responsive smoke) |
+
+Do not commit `tests/HealthCare.EndToEndTests/artifacts/` screenshots or Playwright traces.

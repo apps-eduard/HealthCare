@@ -1,7 +1,7 @@
 # MVP Doctor Scope
 
 **Status:** **Approved** by product owner (2026-07-25). Authoritative for the `DOCTOR` Web MVP.  
-**Implementation:** Doctor Web MVP **DR-1–DR-3 delivered** (2026-07-25). Later DR phases not started. Permissions ship with their phase.  
+**Implementation:** Doctor Web MVP **complete** (DR-1–DR-7 + DR-9 + DR-10; DR-8 skipped) as of 2026-07-25.  
 **Authority:** This document overrides informal notes in `Docs/security.md` §4.4 where they conflict; keep matrix and security cross-links in sync when coding.  
 **Related:** `Docs/mvp-clinic-admin-scope.md`, `Docs/mvp-organization-admin-scope.md`, `Docs/authorization-matrix.md`, `Docs/security.md` §4.4 / medical-notes.  
 **Do not** copy Clinic Admin or Organization Admin capabilities into Doctor without validating ownership and clinical least-privilege.  
@@ -77,7 +77,7 @@ Clinical ownership key: StaffMemberId
 | Doctor dashboard | Missing | `GET /api/v1/doctor/dashboard` | **DR-1** |
 | Doctor profile | Admin staff APIs only | Self `GET/PATCH /api/v1/doctor/profile` | **DR-2 delivered** |
 | Medical-notes Web | Missing | Appointment-detail entry | **DR-6** |
-| Doctor E2E | None | Full pack | **DR-10** |
+| Doctor E2E | Full pack (DR-10) | Full pack | **DR-10 delivered** |
 
 ### Capability matrix (summary)
 
@@ -96,7 +96,7 @@ Clinical ownership key: StaffMemberId
 | 27–29 | Ops summaries / audit browser / clinic reports | **No** | N/A or denied | Hide | — |
 | 30–36 | Isolation / PA / CA / OA / patient / anon / inactive | Required | Partial | Partial | DR-9 |
 | 37–40 | Concurrency / audit safety / a11y / responsive | Required | Partial | Partial | DR-7/DR-9/DR-10 |
-| 41 | Doctor E2E | Required | — | None | DR-10 |
+| 41 | Doctor E2E | Required | — | Delivered | **DR-10** |
 
 ---
 
@@ -467,14 +467,14 @@ Covering-doctor / care-team; InProgress API; note-before-complete policy; specia
 ## 30. Definition of Done (overall)
 
 - [x] Scope approved by product owner (2026-07-25)  
-- [ ] DR-1 … DR-10 complete (DR-8 skipped)  
-- [ ] Unit + Architecture + Web + Integration + E2E green on required hosts  
-- [ ] Appointment ownership enforced for Doctor  
-- [ ] Patient access = Model A  
-- [ ] Medical-note Web + tightened ownership green  
-- [ ] No org/clinic-admin privilege leakage  
-- [ ] Docs updated as permissions ship  
-- [ ] No secrets / note bodies in logs or artifacts  
+- [x] DR-1 … DR-10 complete (DR-8 skipped)  
+- [x] Unit + Architecture + Web + Integration + E2E green on required hosts  
+- [x] Appointment ownership enforced for Doctor  
+- [x] Patient access = Model A  
+- [x] Medical-note Web + tightened ownership green  
+- [x] No org/clinic-admin privilege leakage  
+- [x] Docs updated as permissions ship  
+- [x] No secrets / note bodies in logs or artifacts  
 
 ---
 
@@ -491,7 +491,7 @@ Covering-doctor / care-team; InProgress API; note-before-complete policy; specia
 | DR-7 | Clinical workflow and completion hardening | Medium | **Delivered** (2026-07-25) |
 | DR-8 | Doctor reports | — | **Skipped by default** |
 | DR-9 | Cross-role security, audit, negative testing | Medium | **Delivered** (2026-07-25) |
-| DR-10 | E2E hardening and Doctor MVP completion | Medium | Not started |
+| DR-10 | E2E hardening and Doctor MVP completion | Medium | **Delivered** (2026-07-25) |
 
 ### DR-1 — Doctor dashboard and navigation foundation
 
@@ -580,7 +580,16 @@ Covering-doctor / care-team; InProgress API; note-before-complete policy; specia
 ### DR-10 — E2E hardening and Doctor MVP completion
 
 - **Objective:** Playwright Doctor pack on docsvr; mark MVP complete in docs  
-- **Scenarios:** login/logout; dashboard; profile; availability; own appointment action; Model A patient; note draft/sign; admin routes denied; narrow viewport  
+- **Status:** **Delivered** (2026-07-25) — Chromium headless on Ubuntu docsvr against ephemeral Web+API+Postgres  
+- **Scenarios covered:**
+  - Login → Doctor Dashboard (existing DR-1 smoke)
+  - Profile / availability / Model A Patients (existing DR-2/DR-3/DR-5 smokes)
+  - Own CheckedIn appointment → draft note → save → sign → amend → complete with confirmation
+  - Completion **without** medical note (no auto-created note)
+  - Restricted nav absent + direct URL denial (clinic reports/audit/staff/org admin; no Doctor report center)
+  - Peer clinic-B appointment + peer note concealed (queue + API 404; no note deep link in Web)
+  - Desktop 1440×900 + narrow 390×844 workflow smoke
+- **Intentionally not covered:** artificial browser concurrency races; full WCAG certification; Doctor reports (DR-8 skipped); dedicated `InProgress` staff API; reopen workflow  
 - **Deps:** prior phases  
 - **Complexity:** Medium  
 
@@ -619,3 +628,4 @@ Covering-doctor / care-team; InProgress API; note-before-complete policy; specia
 | 2026-07-25 | **DR-6 delivered:** author + own-appointment medical notes; appointment-detail note UX; peer note denied (404); WebPermissions + typed client |
 | 2026-07-25 | **DR-7 delivered:** transition/completion hardening; completion without mandatory note; safer confirmations; denial audit; Cancel aligned for CheckedIn/InProgress |
 | 2026-07-25 | **DR-9 delivered:** cross-role authorization negative matrix (unit + integration HTTP); Doctor report/audit surfaces remain denied; PA note non-bypass reconfirmed |
+| 2026-07-25 | **DR-10 delivered:** Playwright Doctor E2E pack (note lifecycle, completion with/without note, denials, peer concealment, responsive); Doctor Web MVP complete |

@@ -146,6 +146,7 @@ The MVP uses PostgreSQL. Do not generate SQL Server-specific code, migrations, p
 - Testcontainers for PostgreSQL integration tests
 - ASP.NET Core integration testing
 - Architecture tests where useful
+- Playwright Chromium end-to-end tests (`HealthCare.EndToEndTests`) on Ubuntu docsvr — Organization Admin, Clinic Admin, and Doctor Web MVP packs against ephemeral Web + API + Postgres processes (see `tests/HealthCare.EndToEndTests/README.md`)
 
 ### 4.8 Deployment
 
