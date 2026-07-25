@@ -475,6 +475,7 @@ else
             });
             Notify.Success("Draft note saved.");
             _changed = true;
+            var savedNoteId = _selectedNote.Id;
             _noteSubjective = _selectedNote.Subjective;
             _noteObjective = _selectedNote.Objective;
             _noteAssessment = _selectedNote.Assessment;
@@ -482,6 +483,7 @@ else
             _busy = false;
             await InvokeAsync(StateHasChanged);
             await LoadNotesAsync();
+            await SelectNoteAsync(savedNoteId);
         }
         catch (ApiProblemException ex) when (MedicalNoteProblemMessages.IsConcurrencyConflict(ex))
         {
