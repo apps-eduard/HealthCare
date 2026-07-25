@@ -381,7 +381,7 @@ MedicalNote
 ├── CreatedAtUtc / UpdatedAtUtc
 ```
 
-Medical notes are clinic-private clinical content. MVP has **no patient self-access** and **no ordinary delete**.
+Medical notes are clinic-private clinical content. MVP has **no patient self-access** and **no ordinary delete**. Patient Mobile MVP (`Docs/mvp-patient-scope.md`): foreign patient profile → `404`; patient cancel/reschedule require ≥2 hours before start (`appointment.patient_mutation_cutoff`).
 Signed notes are immutable; corrections create signed amendment rows.
 Access requires clinical role (DOCTOR/NURSE) plus medical_notes.* permissions — administrative roles alone do not read note bodies.
 Audit: `MedicalNoteAuditEvent` stores metadata only (never SOAP content).
