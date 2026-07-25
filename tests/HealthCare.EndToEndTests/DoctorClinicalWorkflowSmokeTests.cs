@@ -50,9 +50,10 @@ public sealed class DoctorClinicalWorkflowSmokeTests : E2ePageTestBase
             await Expect(Page.GetByText("Draft note saved.", new() { Exact = false }))
                 .ToBeVisibleAsync(new() { Timeout = 30_000 });
 
-            await dialog.GetByRole(AriaRole.Button, new() { Name = "Sign medical note" })
-                .Or(dialog.GetByRole(AriaRole.Button, new() { Name = "Sign" }))
-                .ClickAsync();
+            var signButton = dialog.GetByRole(AriaRole.Button, new() { Name = "Sign medical note" })
+                .Or(dialog.GetByRole(AriaRole.Button, new() { Name = "Sign" }));
+            await Expect(signButton).ToBeEnabledAsync(new() { Timeout = 30_000 });
+            await signButton.ClickAsync();
             var signConfirm = Page.Locator(".ant-modal").Filter(new() { HasText = "Sign note" });
             await Expect(signConfirm).ToBeVisibleAsync(new() { Timeout = 10_000 });
             await signConfirm.GetByRole(AriaRole.Button, new() { Name = "OK" }).ClickAsync();
@@ -68,9 +69,10 @@ public sealed class DoctorClinicalWorkflowSmokeTests : E2ePageTestBase
 
             await dialog.Locator("#medical-note-amend-reason").FillAsync("DR10 correction");
             await dialog.Locator("#medical-note-amend-plan").FillAsync("DR10 amended plan");
-            await dialog.GetByRole(AriaRole.Button, new() { Name = "Amend medical note" })
-                .Or(dialog.GetByRole(AriaRole.Button, new() { Name = "Amend" }))
-                .ClickAsync();
+            var amendButton = dialog.GetByRole(AriaRole.Button, new() { Name = "Amend medical note" })
+                .Or(dialog.GetByRole(AriaRole.Button, new() { Name = "Amend" }));
+            await Expect(amendButton).ToBeEnabledAsync(new() { Timeout = 30_000 });
+            await amendButton.ClickAsync();
             await Expect(Page.GetByText("Amendment signed.", new() { Exact = false }))
                 .ToBeVisibleAsync(new() { Timeout = 30_000 });
 
