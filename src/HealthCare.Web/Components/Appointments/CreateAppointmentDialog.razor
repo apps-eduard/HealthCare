@@ -19,7 +19,7 @@ else
                    Message="Select an organization in the platform banner before creating an appointment."
                    ShowIcon="true" />
         }
-        @if (Permissions.CanFilterByClinic || Permissions.IsPlatformAdmin)
+        @if (AppointmentDirectoryPermissionRules.ShowClinicPicker(Permissions) || Permissions.IsPlatformAdmin)
         {
             <ClinicPicker Value="_clinicId"
                           ValueChanged="OnClinicChanged"
@@ -31,10 +31,14 @@ else
                           PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
                           Disabled="@(_busy || (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization))" />
         }
-        else if (Permissions.Has(WebPermissions.ClinicsRead))
+        else if (Permissions.Has(WebPermissions.ClinicsRead) || Permissions.CurrentUser?.ClinicId is not null)
         {
-            <ClinicPicker Label="Clinic" AllowClear="false" Required="false" Disabled="true" />
-            <div class="hc-caption">Appointments are created in your assigned clinic.</div>
+            <div>
+                <div class="hc-filter-label">Clinic</div>
+                <div class="hc-caption" data-testid="create-appointment-clinic-caption">
+                    @AppointmentDirectoryPageCopy.CreateClinicCaption
+                </div>
+            </div>
         }
 
         <PatientPicker Value="_patientId"

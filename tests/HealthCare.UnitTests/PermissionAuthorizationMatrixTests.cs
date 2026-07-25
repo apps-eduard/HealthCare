@@ -132,8 +132,11 @@ public sealed class PermissionAuthorizationMatrixTests
         var sut = CreateStaff(AppRoles.ClinicAdmin);
         sut.HasPermission(Permissions.Patients.Search).Should().BeTrue();
         sut.HasPermission(Permissions.Availability.ManageClinic).Should().BeTrue();
+        sut.HasPermission(Permissions.Appointments.Complete).Should().BeTrue();
+        sut.HasPermission(Permissions.Appointments.NoShow).Should().BeTrue();
         sut.HasPermission(Permissions.Roles.Assign).Should().BeTrue();
         sut.HasPermission(Permissions.Hangfire.Dashboard).Should().BeFalse();
+        sut.HasPermission(Permissions.MedicalNotes.Read).Should().BeFalse();
     }
 
     [Fact]

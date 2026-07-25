@@ -115,7 +115,10 @@ else
     {
         @foreach (var action in AppointmentActionRules.GetVisibleActions(_appointment.Status, Permissions))
         {
-            <Button Type="@ButtonType.Primary" Disabled="_busy" OnClick="@(() => RunActionAsync(action))">
+            <Button Type="@ButtonType.Primary"
+                    Disabled="_busy"
+                    OnClick="@(() => RunActionAsync(action))"
+                    AriaLabel="@ActionLabel(action)">
                 @ActionLabel(action)
             </Button>
         }

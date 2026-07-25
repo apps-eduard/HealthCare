@@ -28,7 +28,7 @@ else if (!Permissions.Has(WebPermissions.AppointmentsRead))
 else
 {
     <HcPageHeader Title="Appointment Calendar"
-                  Subtitle="@(string.IsNullOrWhiteSpace(_timezoneLabel) ? "Day and week clinic schedule" : $"Clinic timezone: {_timezoneLabel}")">
+                  Subtitle="@AppointmentDirectoryPageCopy.CalendarSubtitle(Permissions, _timezoneLabel)">
         <Breadcrumb>
             <Breadcrumb>
                 <BreadcrumbItem Href="/dashboard">Home</BreadcrumbItem>
@@ -103,13 +103,22 @@ else
                     </SelectOptions>
                 </Select>
             </div>
-            @if (Permissions.CanFilterByClinic)
+            @if (AppointmentDirectoryPermissionRules.ShowClinicPicker(Permissions))
             {
                 <ClinicPicker Value="_clinicId" ValueChanged="OnClinicFilterChanged" Label="Clinic" AllowClear="false" Required="true"
                               HelperText="@(Permissions.IsPlatformAdmin ? "Required for PLATFORM_ADMIN" : "Select a clinic for calendar scope")"
                               ActiveOnly="true" PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
                               PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
                               Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)" />
+            }
+            else if (_clinicId is not null || !string.IsNullOrWhiteSpace(_clinicCaptionName))
+            {
+                <div>
+                    <div class="hc-filter-label">Clinic</div>
+                    <div class="hc-caption" data-testid="appointments-calendar-clinic-caption">
+                        @AppointmentDirectoryPageCopy.ClinicCaption(Permissions, _clinicCaptionName)
+                    </div>
+                </div>
             }
             <div>
                 <span class="hc-filter-label">&nbsp;</span>
@@ -195,6 +204,7 @@ else
     private string? _status;
     private Guid? _doctorId;
     private Guid? _clinicId;
+    private string? _clinicCaptionName;
     private string? _timezoneLabel;
     private string? _rangeLabel;
     private Guid? _boundOrganizationId;
@@ -406,6 +416,11 @@ else
         _timezoneLabel = null;
         if (clinicId is not Guid id)
         {
+            if (!AppointmentDirectoryPermissionRules.ShowClinicPicker(Permissions))
+            {
+                _clinicCaptionName = null;
+            }
+
             return;
         }
 
@@ -414,12 +429,21 @@ else
             if (ClinicCache.TryGet(id, out var cached) && cached is not null)
             {
                 _timezoneLabel = cached.TimeZoneId;
+                if (!AppointmentDirectoryPermissionRules.ShowClinicPicker(Permissions))
+                {
+                    _clinicCaptionName = cached.Name;
+                }
+
                 return;
             }
 
             var detail = await ClinicsApi.GetByIdAsync(id, Permissions.IsPlatformAdmin);
             ClinicCache.Set(detail);
             _timezoneLabel = detail.TimeZoneId;
+            if (!AppointmentDirectoryPermissionRules.ShowClinicPicker(Permissions))
+            {
+                _clinicCaptionName = detail.Name;
+            }
         }
         catch (ApiProblemException ex)
         {

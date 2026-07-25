@@ -47,7 +47,8 @@ public sealed class AppointmentsController : ControllerBase
         return Ok(result);
     }
 
-    [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    // Authenticated (not StaffUser): PLATFORM_ADMIN may lack membership and uses explicit bypass in the service.
+    [Authorize(Policy = AuthorizationPolicies.Authenticated)]
     [AuthorizePermission(Permissions.Appointments.Create)]
     [HttpPost("staff/appointments")]
     [ProducesResponseType(typeof(AppointmentResponse), StatusCodes.Status200OK)]
@@ -65,7 +66,7 @@ public sealed class AppointmentsController : ControllerBase
         return Ok(result);
     }
 
-    [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    [Authorize(Policy = AuthorizationPolicies.Authenticated)]
     [AuthorizePermission(Permissions.Appointments.Read)]
     [HttpGet("staff/appointments")]
     [ProducesResponseType(typeof(PagedResponse<AppointmentResponse>), StatusCodes.Status200OK)]
@@ -79,7 +80,7 @@ public sealed class AppointmentsController : ControllerBase
         return Ok(result);
     }
 
-    [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    [Authorize(Policy = AuthorizationPolicies.Authenticated)]
     [AuthorizePermission(Permissions.Appointments.Read)]
     [HttpGet("staff/appointments/queue")]
     [ProducesResponseType(typeof(PagedResponse<AppointmentResponse>), StatusCodes.Status200OK)]
@@ -93,7 +94,7 @@ public sealed class AppointmentsController : ControllerBase
         return Ok(result);
     }
 
-    [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    [Authorize(Policy = AuthorizationPolicies.Authenticated)]
     [AuthorizePermission(Permissions.Appointments.Read)]
     [HttpGet("staff/appointments/calendar")]
     [ProducesResponseType(typeof(PagedResponse<AppointmentResponse>), StatusCodes.Status200OK)]
@@ -121,7 +122,7 @@ public sealed class AppointmentsController : ControllerBase
         return Ok(result);
     }
 
-    [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    [Authorize(Policy = AuthorizationPolicies.Authenticated)]
     [AuthorizePermission(Permissions.Appointments.Confirm)]
     [HttpPost("staff/appointments/{appointmentId:guid}/confirm")]
     public async Task<ActionResult<AppointmentResponse>> Confirm(
@@ -164,7 +165,7 @@ public sealed class AppointmentsController : ControllerBase
         return Ok(await _appointments.RescheduleAsync(appointmentId, request, bypass, cancellationToken));
     }
 
-    [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    [Authorize(Policy = AuthorizationPolicies.Authenticated)]
     [AuthorizePermission(Permissions.Appointments.CheckIn)]
     [HttpPost("staff/appointments/{appointmentId:guid}/check-in")]
     public async Task<ActionResult<AppointmentResponse>> CheckIn(
@@ -177,7 +178,7 @@ public sealed class AppointmentsController : ControllerBase
         return Ok(await _appointments.CheckInAsync(appointmentId, request, bypass, cancellationToken));
     }
 
-    [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    [Authorize(Policy = AuthorizationPolicies.Authenticated)]
     [AuthorizePermission(Permissions.Appointments.Complete)]
     [HttpPost("staff/appointments/{appointmentId:guid}/complete")]
     public async Task<ActionResult<AppointmentResponse>> Complete(
@@ -190,7 +191,7 @@ public sealed class AppointmentsController : ControllerBase
         return Ok(await _appointments.CompleteAsync(appointmentId, request, bypass, cancellationToken));
     }
 
-    [Authorize(Policy = AuthorizationPolicies.StaffUser)]
+    [Authorize(Policy = AuthorizationPolicies.Authenticated)]
     [AuthorizePermission(Permissions.Appointments.NoShow)]
     [HttpPost("staff/appointments/{appointmentId:guid}/no-show")]
     public async Task<ActionResult<AppointmentResponse>> NoShow(

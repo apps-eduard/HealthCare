@@ -55,7 +55,7 @@ internal class NoOpAuthorizationAuditLogger : IAuthorizationAuditLogger
     {
     }
 
-    public void AppointmentOperation(
+    public virtual void AppointmentOperation(
         string operation,
         string resultCode,
         Guid? organizationId = null,

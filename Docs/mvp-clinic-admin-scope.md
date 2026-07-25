@@ -392,7 +392,11 @@ Search/detail/status/enroll **own clinic** only. Hide cross-clinic enroll UI for
 
 ## 13. Appointment management
 
-Queue/calendar + confirm/check-in/cancel/reschedule/complete/no-show. Backend + Web **implemented**. Ensure Complete is visible for Clinic Admin (CA-6). Org Admin remains without `appointments.complete`.
+Queue/calendar + confirm/check-in/cancel/reschedule/complete/no-show. Backend + Web **implemented**. Org Admin remains without `appointments.complete`.
+
+### Status
+
+**CA-6 delivered:** `/appointments` (+ calendar) clinic-scoped for Clinic Admin (fixed clinic caption, no clinic picker); Complete visible when status allows (`CheckedIn`/`InProgress`); create dialog uses clinic caption (not disabled picker); staff appointment APIs use `Authenticated` + service scope so Platform Admin requires explicit `clinicId` + `platformAdminBypass`. Completing does not create medical notes.
 
 ---
 
@@ -569,7 +573,7 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 | CA-3 | Staff UI hardening | Small | **Delivered** (2026-07-24) |
 | CA-4 | Doctor directory + availability verify | Small | **Delivered** (2026-07-25) |
 | CA-5 | Patients verify | Small | **Delivered** (2026-07-25) |
-| CA-6 | Appointments verify (Complete for CA) | Small | After CA-1 |
+| CA-6 | Appointments verify (Complete for CA) | Small | **Delivered** (2026-07-25) |
 | CA-7 | Operations verify | Small | After CA-1 |
 | CA-8 | Clinic reports (JSON) | Large | Approved |
 | CA-9 | Clinic-filtered audit | Medium | Approved |
@@ -595,7 +599,7 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 | Staff ops | Matrix | existing staff.* | Done | **Done** (CA-3 actor-aware) | — | CA-3 |
 | Doctors / availability | Matrix | availability.* + staff.read | Done | **Done** (`/doctors` + `/availability`) | — | CA-4 |
 | Patients | Matrix | patients.* | Done | **Done** (CA-5 actor-aware) | — | CA-5 |
-| Appointments | Matrix | appointments.* | Done | Done | Complete for CA | CA-6 |
+| Appointments | Matrix | appointments.* | Done | **Done** (CA-6 actor-aware + Complete) | — | CA-6 |
 | Ops | Matrix | reminders/summaries | Done | Done | Verify | CA-7 |
 | Clinic reports | Approved | `clinic_reports.read` | Missing | Missing | New | CA-8 |
 | Clinic audit | Approved | `clinic_audit_logs.read` | Missing | Missing | New | CA-9 |
@@ -617,3 +621,4 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 | 2026-07-24 | **CA-3 delivered:** Clinic Admin actor-aware `/staff` (no clinic picker/change-clinic; clinic role filter); E2E staff smoke |
 | 2026-07-25 | **CA-4 delivered:** `/doctors` directory + availability deep-link/actor polish; doctor DisplayName fix; Clinic Admin E2E doctors smoke |
 | 2026-07-25 | **CA-5 delivered:** `/patients` actor-aware directory; hide cross-clinic enroll; status ExpectedVersion; Platform Admin Authenticated+bypass; E2E patients smoke |
+| 2026-07-25 | **CA-6 delivered:** `/appointments` actor-aware queue/calendar; Complete for Clinic Admin; no-show E2E; staff appointment Authenticated+bypass |
