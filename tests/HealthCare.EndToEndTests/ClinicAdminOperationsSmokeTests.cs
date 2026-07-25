@@ -56,7 +56,7 @@ public sealed class ClinicAdminOperationsSmokeTests : E2ePageTestBase
             var row = Page.Locator("table.hc-table tbody tr")
                 .Filter(new() { HasText = seeded.AppointmentId.ToString("D")[..8] });
             await Expect(row).ToBeVisibleAsync(new() { Timeout = 30_000 });
-            await Expect(row.GetByText("Failed")).ToBeVisibleAsync();
+            await Expect(row.GetByText("Failed", new() { Exact = true })).ToBeVisibleAsync();
 
             await row.GetByRole(AriaRole.Button, new() { Name = "Retry reminder" }).ClickAsync();
             var confirm = Page.Locator(".ant-modal").Filter(new() { HasText = "Retry reminder" });
@@ -76,7 +76,7 @@ public sealed class ClinicAdminOperationsSmokeTests : E2ePageTestBase
             row = Page.Locator("table.hc-table tbody tr")
                 .Filter(new() { HasText = seeded.AppointmentId.ToString("D")[..8] });
             await Expect(row).ToBeVisibleAsync(new() { Timeout = 30_000 });
-            await Expect(row.GetByText("Pending")).ToBeVisibleAsync();
+            await Expect(row.GetByText("Pending", new() { Exact = true })).ToBeVisibleAsync();
 
             await Expect(Page.Locator("label", new() { HasText = "Clinic filter" })).ToHaveCountAsync(0);
             await Expect(Page.GetByText("Hangfire", new() { Exact = false })).ToHaveCountAsync(0);
