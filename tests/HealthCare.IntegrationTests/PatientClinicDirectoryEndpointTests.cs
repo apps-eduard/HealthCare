@@ -117,15 +117,16 @@ public sealed class PatientClinicDirectoryEndpointTests : IAsyncLifetime
     [Fact]
     public async Task Linked_Patient_Can_Browse_Active_Clinics()
     {
+        var client = _client!;
         await AuthenticateAsync(PatientEmail, PatientPassword);
-        var page = await _client!.GetFromJsonAsync<PagedResponse<PatientClinicListItemResponse>>(
+        var page = await client.GetFromJsonAsync<PagedResponse<PatientClinicListItemResponse>>(
             "/api/v1/patients/me/clinics?page=1&pageSize=20");
 
         page.Should().NotBeNull();
         page!.Items.Should().Contain(c => c.ClinicCode == ClinicCode);
         page.Items.Should().OnlyContain(c => !string.IsNullOrWhiteSpace(c.Name));
 
-        var json = await (await _client.GetAsync("/api/v1/patients/me/clinics")).Content.ReadAsStringAsync();
+        var json = await (await client.GetAsync("/api/v1/patients/me/clinics")).Content.ReadAsStringAsync();
         var lowered = json.ToLowerInvariant();
         lowered.Should().NotContain("organizationid");
         lowered.Should().NotContain("\"clinicid\"");
@@ -136,12 +137,13 @@ public sealed class PatientClinicDirectoryEndpointTests : IAsyncLifetime
     [Fact]
     public async Task Search_And_Pagination_Work()
     {
+        var client = _client!;
         await AuthenticateAsync(PatientEmail, PatientPassword);
-        var search = await _client!.GetFromJsonAsync<PagedResponse<PatientClinicListItemResponse>>(
+        var search = await client.GetFromJsonAsync<PagedResponse<PatientClinicListItemResponse>>(
             "/api/v1/patients/me/clinics?search=dev-clinic&page=1&pageSize=5");
         search!.Items.Should().NotBeEmpty();
 
-        var page = await _client.GetFromJsonAsync<PagedResponse<PatientClinicListItemResponse>>(
+        var page = await client.GetFromJsonAsync<PagedResponse<PatientClinicListItemResponse>>(
             "/api/v1/patients/me/clinics?page=1&pageSize=1");
         page!.PageSize.Should().Be(1);
         page.Items.Should().HaveCount(1);
@@ -159,12 +161,13 @@ public sealed class PatientClinicDirectoryEndpointTests : IAsyncLifetime
             await db.SaveChangesAsync();
         }
 
+        var client = _client!;
         await AuthenticateAsync(PatientEmail, PatientPassword);
-        var page = await _client!.GetFromJsonAsync<PagedResponse<PatientClinicListItemResponse>>(
+        var page = await client.GetFromJsonAsync<PagedResponse<PatientClinicListItemResponse>>(
             "/api/v1/patients/me/clinics");
         page!.Items.Should().NotContain(c => c.ClinicCode == ClinicCode);
 
-        var detail = await _client.GetAsync($"/api/v1/patients/me/clinics/{ClinicCode}");
+        var detail = await client.GetAsync($"/api/v1/patients/me/clinics/{ClinicCode}");
         detail.StatusCode.Should().Be(HttpStatusCode.NotFound);
 
         await using (var scope = _factory.Services.CreateAsyncScope())
@@ -179,14 +182,15 @@ public sealed class PatientClinicDirectoryEndpointTests : IAsyncLifetime
     [Fact]
     public async Task Clinic_Detail_Is_Patient_Safe()
     {
+        var client = _client!;
         await AuthenticateAsync(PatientEmail, PatientPassword);
-        var detail = await _client!.GetFromJsonAsync<PatientClinicDetailResponse>(
+        var detail = await client.GetFromJsonAsync<PatientClinicDetailResponse>(
             $"/api/v1/patients/me/clinics/{ClinicCode}");
         detail.Should().NotBeNull();
         detail!.ClinicCode.Should().Be(ClinicCode);
         detail.Name.Should().NotBeNullOrWhiteSpace();
 
-        var json = await (await _client.GetAsync($"/api/v1/patients/me/clinics/{ClinicCode}"))
+        var json = await (await client.GetAsync($"/api/v1/patients/me/clinics/{ClinicCode}"))
             .Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
@@ -198,15 +202,16 @@ public sealed class PatientClinicDirectoryEndpointTests : IAsyncLifetime
     [Fact]
     public async Task Doctors_And_Slots_Remain_Accessible()
     {
+        var client = _client!;
         await AuthenticateAsync(PatientEmail, PatientPassword);
-        var doctors = await _client!.GetFromJsonAsync<List<ClinicDoctorResponse>>(
+        var doctors = await client.GetFromJsonAsync<List<ClinicDoctorResponse>>(
             $"/api/v1/clinics/{ClinicCode}/doctors");
         doctors.Should().NotBeNull();
         doctors!.Should().NotBeEmpty();
 
         var doctorId = doctors[0].StaffMemberId;
         var date = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(1));
-        var slotsResponse = await _client.GetAsync(
+        var slotsResponse = await client.GetAsync(
             $"/api/v1/clinics/{ClinicCode}/doctors/{doctorId:D}/available-slots?date={date:yyyy-MM-dd}");
         slotsResponse.StatusCode.Should().Be(HttpStatusCode.OK);
     }
