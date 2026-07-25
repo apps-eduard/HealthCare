@@ -215,26 +215,64 @@ public sealed class ClinicAdminAppointmentEndpointTests : IAsyncLifetime
     [Fact]
     public async Task Cross_Clinic_Detail_Denied_For_Clinic_Admin()
     {
-        await AuthenticateAsync(StaffBEmail, StaffBPassword);
-        var patientId = await GetSeedPatientIdAsync();
-        var doctorB = await GetClinicBDoctorStaffIdAsync();
-        var create = await _client!.PostAsJsonAsync("/api/v1/staff/appointments", new
+        Guid createdId;
+        int version;
+        using (var scope = _factory!.Services.CreateScope())
         {
-            patientId,
-            doctorStaffMemberId = doctorB,
-            appointmentDateUtc = AlignedFutureSlotUtc(daysAhead: 8),
-            durationMinutes = 30,
-        });
-        create.StatusCode.Should().Be(HttpStatusCode.OK);
-        var created = await create.Content.ReadFromJsonAsync<AppointmentResponse>();
+            var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+            var clinicB = await db.Clinics.SingleAsync(c => c.Slug == "dev-clinic-b");
+            var doctorB = await db.StaffMembers
+                .Where(s => s.ClinicId == clinicB.Id && s.Role == AppRoles.Doctor)
+                .Select(s => s.Id)
+                .SingleAsync();
+            var patientId = await db.Patients.Select(p => p.Id).FirstAsync();
+            var enrollment = await db.ClinicPatients
+                .SingleOrDefaultAsync(cp => cp.ClinicId == clinicB.Id && cp.PatientId == patientId);
+            if (enrollment is null)
+            {
+                enrollment = new Domain.Patients.ClinicPatient
+                {
+                    Id = Guid.NewGuid(),
+                    ClinicId = clinicB.Id,
+                    PatientId = patientId,
+                    LocalPatientNumber = "B-CA",
+                    Status = Domain.Patients.ClinicPatientStatus.Active,
+                    RegisteredAtUtc = DateTimeOffset.UtcNow,
+                    UpdatedAtUtc = DateTimeOffset.UtcNow,
+                };
+                db.ClinicPatients.Add(enrollment);
+            }
+
+            var appointment = new Domain.Appointments.Appointment
+            {
+                Id = Guid.NewGuid(),
+                OrganizationId = clinicB.OrganizationId,
+                ClinicId = clinicB.Id,
+                PatientId = patientId,
+                ClinicPatientId = enrollment.Id,
+                DoctorStaffMemberId = doctorB,
+                AppointmentDateUtc = AlignedFutureSlotUtc(daysAhead: 8),
+                DurationMinutes = 30,
+                Status = Domain.Appointments.AppointmentStatus.Confirmed,
+                Source = Domain.Appointments.AppointmentSource.Staff,
+                CreatedByUserId = Guid.NewGuid(),
+                Version = 0,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+                UpdatedAtUtc = DateTimeOffset.UtcNow,
+            };
+            db.Appointments.Add(appointment);
+            await db.SaveChangesAsync();
+            createdId = appointment.Id;
+            version = appointment.Version;
+        }
 
         await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
-        var detail = await _client!.GetAsync($"/api/v1/appointments/{created!.Id}");
+        var detail = await _client!.GetAsync($"/api/v1/appointments/{createdId}");
         detail.StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.NotFound);
 
         var mutate = await _client!.PostAsJsonAsync(
-            $"/api/v1/staff/appointments/{created.Id}/no-show",
-            new AppointmentActionRequest { ExpectedVersion = created.Version });
+            $"/api/v1/staff/appointments/{createdId}/no-show",
+            new AppointmentActionRequest { ExpectedVersion = version });
         mutate.StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.NotFound);
     }
 
