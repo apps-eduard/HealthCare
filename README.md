@@ -107,7 +107,7 @@ dotnet run --project src/HealthCare.Web --launch-profile http
 - Security: `/security` via `IOrganizationSecurityApiClient` (`security_sessions.read` / `security_sessions.revoke`). Session list with masked IP/UA, staff-wide revoke, compromise response (deactivate + revoke), and failed-login / authorization-denial / cross-clinic summaries. Access tokens may remain valid until expiry or next stamp check after revoke.
 - Governance: `/audit-logs` (`organization_audit_logs.read`) and `/usage` (`organization_usage.read`) via typed clients. Safe audit fields only; correlation lookup; usage snapshot with clinic/staff limits and remaining capacity. No audit export/edit/delete; no limit modification or billing.
 - Organization profile: `/organization/settings` (`organization_profile.read` / `organization_profile.update`) via `IOrganizationSettingsApiClient`. Editable contact/timezone/branding fields; read-only status, slug, and limit summary with link to `/usage`.
-- Medical notes: no staff UI yet; PLATFORM_ADMIN remains denied even with a selected organization.
+- Medical notes: appointment-detail draft/sign/amend UX for Doctor (author + own-appointment); no standalone notes nav; PLATFORM_ADMIN remains denied note bodies even with a selected organization.
 
 ### 6. Build and test
 
