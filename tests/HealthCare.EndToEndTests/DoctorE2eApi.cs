@@ -154,14 +154,26 @@ internal static class DoctorE2eApi
     private static DateTimeOffset NextUniqueSlotUtc()
     {
         var n = Interlocked.Increment(ref _slotSequence);
-        // Stay clear of other E2E suites (typically day+2..+5) and avoid Fri/Sat weekend blocks.
-        var slotDay = DateOnly.FromDateTime(DateTime.UtcNow.Date).AddDays(10 + (n / 12));
-        while (slotDay.DayOfWeek is DayOfWeek.Friday or DayOfWeek.Saturday)
+        // Must land inside the Appointment Queue default date window (typically today .. today+7).
+        // Use afternoon slots to avoid collisions with other E2E suites (morning day+2..+5).
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var maxDay = today.AddDays(7);
+        var slotDay = today.AddDays(1 + ((n - 1) % 6));
+        while (slotDay.DayOfWeek is DayOfWeek.Friday or DayOfWeek.Saturday || slotDay > maxDay)
         {
             slotDay = slotDay.AddDays(1);
+            if (slotDay > maxDay)
+            {
+                slotDay = today.AddDays(1);
+            }
+
+            if (slotDay.DayOfWeek is not DayOfWeek.Friday and not DayOfWeek.Saturday && slotDay <= maxDay)
+            {
+                break;
+            }
         }
 
-        var minuteOfDay = 8 * 60 + ((n - 1) % 12) * 30;
+        var minuteOfDay = 14 * 60 + ((n - 1) % 16) * 15;
         var hour = minuteOfDay / 60;
         var minute = minuteOfDay % 60;
         return new DateTimeOffset(
