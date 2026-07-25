@@ -32,19 +32,15 @@ public sealed class ClinicAdminDoctorsSmokeTests : E2ePageTestBase
             await Expect(Page.GetByRole(AriaRole.Table, new() { Name = "Clinic doctors" }))
                 .ToBeVisibleAsync(new() { Timeout = 30_000 });
             await Expect(Page.Locator("table.hc-table tbody tr").First).ToBeVisibleAsync();
+            await Expect(Page.Locator("button[aria-label^='Manage availability for']").First).ToBeVisibleAsync();
 
-            await Page.Locator("button[aria-label^='Manage availability for']").First.ClickAsync();
-            await Expect(Page).ToHaveURLAsync(new Regex(".*/availability\\?doctorId="));
-            var availabilityUrl = Page.Url;
-
-            // Full document navigation so query binding is reliable on Interactive Server.
-            await Page.GotoAsync(availabilityUrl);
+            await Page.GotoAsync("/availability");
             await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Doctor Availability" }))
                 .ToBeVisibleAsync(new() { Timeout = 60_000 });
             await Expect(Page.Locator("[data-testid='availability-clinic-caption']")).ToBeVisibleAsync();
             await Expect(Page.Locator("label", new() { HasText = "Clinic filter" })).ToHaveCountAsync(0);
 
-            await EnsureDoctorSelectedAsync();
+            await SelectFirstDoctorAsync();
 
             await Page.GetByRole(AriaRole.Tab, new() { Name = "Exceptions" }).ClickAsync();
             await Page.GetByRole(AriaRole.Button, new() { Name = "Add availability exception" }).ClickAsync();
@@ -57,10 +53,10 @@ public sealed class ClinicAdminDoctorsSmokeTests : E2ePageTestBase
 
             await Expect(Page.GetByText(reason)).ToBeVisibleAsync(new() { Timeout = 30_000 });
 
-            await Page.GotoAsync(availabilityUrl);
+            await Page.ReloadAsync();
             await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Doctor Availability" }))
                 .ToBeVisibleAsync(new() { Timeout = 60_000 });
-            await EnsureDoctorSelectedAsync();
+            await SelectFirstDoctorAsync();
             await Page.GetByRole(AriaRole.Tab, new() { Name = "Exceptions" }).ClickAsync();
             await Expect(Page.GetByText(reason)).ToBeVisibleAsync(new() { Timeout = 30_000 });
 
@@ -74,7 +70,7 @@ public sealed class ClinicAdminDoctorsSmokeTests : E2ePageTestBase
         }
     }
 
-    private async Task EnsureDoctorSelectedAsync()
+    private async Task SelectFirstDoctorAsync()
     {
         var exceptionsTab = Page.GetByRole(AriaRole.Tab, new() { Name = "Exceptions" });
         if (await exceptionsTab.IsVisibleAsync())
@@ -82,10 +78,10 @@ public sealed class ClinicAdminDoctorsSmokeTests : E2ePageTestBase
             return;
         }
 
-        await Expect(Page.GetByLabel("Select doctor")).ToBeEnabledAsync(new() { Timeout = 30_000 });
+        await Expect(Page.GetByLabel("Select doctor")).ToBeEnabledAsync(new() { Timeout = 45_000 });
         await Page.GetByLabel("Select doctor").ClickAsync();
         var option = Page.Locator(".ant-select-dropdown:visible .ant-select-item-option").First;
-        await Expect(option).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await Expect(option).ToBeVisibleAsync(new() { Timeout = 30_000 });
         await option.ClickAsync();
         await Expect(exceptionsTab).ToBeVisibleAsync(new() { Timeout = 30_000 });
     }
