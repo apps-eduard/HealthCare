@@ -576,6 +576,48 @@ public sealed class AppointmentAvailabilityTests
     }
 
     [Fact]
+    public async Task Doctor_Cannot_Manage_Same_Clinic_Peer_Availability()
+    {
+        await using var h = await AppointmentHarness.CreateAsync();
+        var data = await h.SeedAsync();
+
+        var peerUserId = Guid.NewGuid();
+        var peerStaffId = Guid.NewGuid();
+        h.Db.StaffMembers.Add(new StaffMember
+        {
+            Id = peerStaffId,
+            UserId = peerUserId,
+            OrganizationId = data.Org1Id,
+            ClinicId = data.ClinicAId,
+            Role = AppRoles.Doctor,
+            IsActive = true,
+        });
+        await h.Db.SaveChangesAsync();
+
+        var sut = h.CreateAvailabilityService(
+            data.DoctorAUserId, data.Org1Id, data.ClinicAId, data.DoctorAStaffId, AppRoles.Doctor);
+
+        await FluentActions.Awaiting(() => sut.ListAvailabilityAsync(peerStaffId))
+            .Should().ThrowAsync<AvailabilityException>()
+            .Where(e => e.ErrorCode == AvailabilityErrorCodes.DoctorNotFound);
+
+        await FluentActions.Awaiting(() => sut.CreateAvailabilityAsync(peerStaffId, new CreateDoctorAvailabilityRequest
+            {
+                DayOfWeek = nameof(DayOfWeek.Monday),
+                StartLocalTime = "09:00",
+                EndLocalTime = "10:00",
+                SlotDurationMinutes = 30,
+                EffectiveFrom = new DateOnly(2026, 1, 1),
+            }))
+            .Should().ThrowAsync<AvailabilityException>()
+            .Where(e => e.ErrorCode == AvailabilityErrorCodes.DoctorNotFound);
+
+        await FluentActions.Awaiting(() => sut.ListAvailabilityAsync(data.DoctorBStaffId))
+            .Should().ThrowAsync<AvailabilityException>()
+            .Where(e => e.ErrorCode == AvailabilityErrorCodes.DoctorNotFound);
+    }
+
+    [Fact]
     public async Task List_Exceptions_Returns_Doctor_Exceptions()
     {
         await using var h = await AppointmentHarness.CreateAsync();

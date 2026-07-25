@@ -15,7 +15,7 @@
 @inject IClinicDirectoryCache ClinicCache
 @inject NavigationManager Navigation
 
-<PageTitle>Doctor Availability</PageTitle>
+<PageTitle>@(_selfOnly ? "My Availability" : "Doctor Availability")</PageTitle>
 
 @if (Permissions.IsPatientOnly)
 {
@@ -27,12 +27,12 @@ else if (!AvailabilityPermissionRules.CanView(Permissions))
 }
 else
 {
-    <HcPageHeader Title="Doctor Availability"
+    <HcPageHeader Title="@(_selfOnly ? "My Availability" : "Doctor Availability")"
                   Subtitle="@(string.IsNullOrWhiteSpace(_timeZoneId) ? "Weekly windows and exceptions in clinic local time" : $"Clinic timezone: {_timeZoneId}")">
         <Breadcrumb>
             <Breadcrumb>
                 <BreadcrumbItem Href="/dashboard">Home</BreadcrumbItem>
-                <BreadcrumbItem>Doctor Availability</BreadcrumbItem>
+                <BreadcrumbItem>@(_selfOnly ? "My Availability" : "Doctor Availability")</BreadcrumbItem>
             </Breadcrumb>
         </Breadcrumb>
         <ChildContent>

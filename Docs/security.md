@@ -138,6 +138,7 @@ Authoritative Doctor Web MVP scope: `Docs/mvp-doctor-scope.md` (**approved** 202
 - Doctor dashboard / profile when those permissions ship (DR-1/DR-2).
 - **DR-1 delivered:** `doctor_dashboard.read` + `GET /api/v1/doctor/dashboard` + Doctor Dashboard UI; Doctor console nav hides Patients/Ops/Clinics/Doctors directory until later phases.
 - **DR-2 delivered:** `doctor_profile.read` / `doctor_profile.update` + `GET/PATCH /api/v1/doctor/profile` + `/doctor/profile` (My Profile); Specialty/email/role/clinic/active remain read-only; successful updates audit `doctor_profile_update` with safe changed-field names only.
+- **DR-3 delivered:** Doctor self-only availability UX (`/availability`); appointment queue/calendar doctor filter locked to authenticated Doctor; peer availability edit denied (404). Appointment API ownership remains DR-4.
 
 **Not allowed:**
 

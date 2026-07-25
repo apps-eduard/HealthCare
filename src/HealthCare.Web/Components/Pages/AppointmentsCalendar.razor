@@ -91,18 +91,35 @@ else
                     </SelectOptions>
                 </Select>
             </div>
-            <div>
-                <span class="hc-filter-label">Doctor</span>
-                <Select TItemValue="string" TItem="string" Value="@(_doctorId?.ToString() ?? "")" ValueChanged="OnDoctorFilterChanged" Style="width:100%;" AllowClear>
-                    <SelectOptions>
-                        <SelectOption TItemValue="string" TItem="string" Value="@("")" Label="Any" />
-                        @foreach (var doctor in _doctors)
-                        {
-                            <SelectOption TItemValue="string" TItem="string" Value="@doctor.StaffMemberId.ToString()" Label="@doctor.DisplayName" />
-                        }
-                    </SelectOptions>
-                </Select>
-            </div>
+            @if (AppointmentDirectoryPermissionRules.LockDoctorFilterToSelf(Permissions))
+            {
+                <div>
+                    <span class="hc-filter-label">Doctor</span>
+                    <Input Id="calendar-doctor-self"
+                           Value="@_selfDoctorLabel"
+                           Disabled="true"
+                           Style="width:100%;"
+                           AriaLabel="Selected doctor (self)" />
+                    <div class="hc-caption" data-testid="calendar-doctor-self" style="margin-top:4px;">
+                        Filtered to your assignments (API ownership hardens in DR-4)
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div>
+                    <span class="hc-filter-label">Doctor</span>
+                    <Select TItemValue="string" TItem="string" Value="@(_doctorId?.ToString() ?? "")" ValueChanged="OnDoctorFilterChanged" Style="width:100%;" AllowClear>
+                        <SelectOptions>
+                            <SelectOption TItemValue="string" TItem="string" Value="@("")" Label="Any" />
+                            @foreach (var doctor in _doctors)
+                            {
+                                <SelectOption TItemValue="string" TItem="string" Value="@doctor.StaffMemberId.ToString()" Label="@doctor.DisplayName" />
+                            }
+                        </SelectOptions>
+                    </Select>
+                </div>
+            }
             @if (AppointmentDirectoryPermissionRules.ShowClinicPicker(Permissions))
             {
                 <ClinicPicker Value="_clinicId" ValueChanged="OnClinicFilterChanged" Label="Clinic" AllowClear="false" Required="true"
@@ -203,6 +220,7 @@ else
     private string? _error;
     private string? _status;
     private Guid? _doctorId;
+    private string _selfDoctorLabel = "You (self)";
     private Guid? _clinicId;
     private string? _clinicCaptionName;
     private string? _timezoneLabel;
@@ -261,6 +279,7 @@ else
 
         RebuildWeekDays();
         await LoadDoctorsAsync();
+        ApplyDoctorSelfScope();
         await LoadAsync();
     }
 
@@ -475,6 +494,27 @@ else
         {
             _doctors = [];
         }
+
+        ApplyDoctorSelfScope();
+    }
+
+    private void ApplyDoctorSelfScope()
+    {
+        if (!AppointmentDirectoryPermissionRules.LockDoctorFilterToSelf(Permissions))
+        {
+            return;
+        }
+
+        if (Permissions.CurrentUser?.StaffMemberId is not Guid selfId || selfId == Guid.Empty)
+        {
+            _doctorId = null;
+            _selfDoctorLabel = "You (self)";
+            return;
+        }
+
+        _doctorId = selfId;
+        var me = _doctors.FirstOrDefault(d => d.StaffMemberId == selfId);
+        _selfDoctorLabel = string.IsNullOrWhiteSpace(me?.DisplayName) ? "You (self)" : me!.DisplayName;
     }
 
     private async Task LoadAsync()
@@ -549,6 +589,12 @@ else
 
     private Task OnDoctorFilterChanged(string? value)
     {
+        if (AppointmentDirectoryPermissionRules.LockDoctorFilterToSelf(Permissions))
+        {
+            ApplyDoctorSelfScope();
+            return Task.CompletedTask;
+        }
+
         _doctorId = Guid.TryParse(value, out var id) ? id : null;
         return Task.CompletedTask;
     }

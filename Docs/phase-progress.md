@@ -19,7 +19,7 @@
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Doctor Web MVP DR-3 (not started) — DR-1 and DR-2 delivered; scope approved 2026-07-25
+**Current focus:** Doctor Web MVP DR-4 (not started) — DR-1–DR-3 delivered; scope approved 2026-07-25
 
 ### All phases at a glance
 
@@ -1066,7 +1066,7 @@ Authoritative scope: **`Docs/mvp-doctor-scope.md`** (**approved** 2026-07-25). D
 |-------|--------|------------|--------|
 | DR-1 | Doctor dashboard + navigation | Medium | **Delivered** (2026-07-25) |
 | DR-2 | Doctor profile | Small | **Delivered** (2026-07-25) |
-| DR-3 | My availability and schedule | Small | Not started |
+| DR-3 | My availability and schedule | Small | **Delivered** (2026-07-25) |
 | DR-4 | Appointment ownership and workflows | Medium | Not started |
 | DR-5 | Appointment-linked patient access (Model A) | Large | Not started |
 | DR-6 | Medical notes ownership and lifecycle | Large | Not started |
@@ -1075,11 +1075,12 @@ Authoritative scope: **`Docs/mvp-doctor-scope.md`** (**approved** 2026-07-25). D
 | DR-9 | Cross-role security / negative testing | Medium | Not started |
 | DR-10 | E2E + Doctor MVP completion | Medium | Not started |
 
-**Temporary known gaps after DR-2:** appointment ownership (DR-4), Model A patients (DR-5; Patients nav hidden for Doctor), medical-note ownership/UI (DR-6).
+**Temporary known gaps after DR-3:** appointment ownership (DR-4), Model A patients (DR-5; Patients nav hidden for Doctor), medical-note ownership/UI (DR-6).
 
 | 2026-07-25 | — | Doctor Web MVP scope **approved** (Model A, ownership, notes DR-6, DR-8 skipped) |
 | 2026-07-25 | 8 | Doctor DR-1 — `doctor_dashboard.read` + Doctor Dashboard API/UI + Doctor console nav |
 | 2026-07-25 | 8 | Doctor DR-2 — `doctor_profile.read/update` + Doctor Profile API/UI + My Profile nav |
+| 2026-07-25 | 8 | Doctor DR-3 — self-only availability UX + queue/calendar doctor filter locked to self |
 
 ---
 

@@ -154,6 +154,42 @@ public sealed class AppointmentAvailabilityEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Doctor_Cannot_Manage_Same_Clinic_Peer_Availability()
+    {
+        await AuthenticateAsync(StaffAEmail, StaffAPassword);
+        var doctorA = await GetClinicADoctorStaffIdAsync();
+
+        Guid peerStaffId;
+        using (var scope = _factory!.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+            var clinicAId = await db.Clinics.Where(c => c.Slug == "dev-clinic-a").Select(c => c.Id).SingleAsync();
+            var orgId = await db.Clinics.Where(c => c.Id == clinicAId).Select(c => c.OrganizationId).SingleAsync();
+            peerStaffId = Guid.NewGuid();
+            db.StaffMembers.Add(new Domain.Staff.StaffMember
+            {
+                Id = peerStaffId,
+                UserId = Guid.NewGuid(),
+                OrganizationId = orgId,
+                ClinicId = clinicAId,
+                Role = AppRoles.Doctor,
+                IsActive = true,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var own = await _client!.GetAsync($"/api/v1/staff/doctors/{doctorA}/availability");
+        own.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var peer = await _client.GetAsync($"/api/v1/staff/doctors/{peerStaffId}/availability");
+        peer.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        var otherClinic = await GetClinicBDoctorStaffIdAsync();
+        var cross = await _client.GetAsync($"/api/v1/staff/doctors/{otherClinic}/availability");
+        cross.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task Doctor_Listing_Returns_Only_Active_Clinic_Doctors()
     {
         await AuthenticateAsync(PatientEmail, PatientPassword);

@@ -19,12 +19,27 @@ public static class AppointmentDirectoryPermissionRules
 
     public static bool ShowClinicPicker(IPermissionState permissions) =>
         permissions.CanFilterByClinic;
+
+    /// <summary>
+    /// Doctor schedule UX locks the doctor filter to the authenticated membership.
+    /// Presentation only — appointment API ownership hardens in DR-4.
+    /// </summary>
+    public static bool LockDoctorFilterToSelf(IPermissionState permissions) =>
+        permissions.IsDoctor && !permissions.IsPlatformAdmin;
 }
 
 public static class AppointmentDirectoryPageCopy
 {
-    public static string QueueSubtitle(IPermissionState permissions, string? timezoneLabel) =>
-        permissions.IsClinicAdmin
+    public static string QueueSubtitle(IPermissionState permissions, string? timezoneLabel)
+    {
+        if (AppointmentDirectoryPermissionRules.LockDoctorFilterToSelf(permissions))
+        {
+            return string.IsNullOrWhiteSpace(timezoneLabel)
+                ? "Your assigned appointments"
+                : $"Your assigned appointments · times in {timezoneLabel}";
+        }
+
+        return permissions.IsClinicAdmin
             ? (string.IsNullOrWhiteSpace(timezoneLabel)
                 ? "Appointments for your clinic"
                 : $"Your clinic · times in {timezoneLabel}")
@@ -39,18 +54,28 @@ public static class AppointmentDirectoryPageCopy
                     : (string.IsNullOrWhiteSpace(timezoneLabel)
                         ? "Clinic appointment queue"
                         : $"Times shown in {timezoneLabel}");
+    }
 
-    public static string CalendarSubtitle(IPermissionState permissions, string? timezoneLabel) =>
-        permissions.IsClinicAdmin
+    public static string CalendarSubtitle(IPermissionState permissions, string? timezoneLabel)
+    {
+        if (AppointmentDirectoryPermissionRules.LockDoctorFilterToSelf(permissions))
+        {
+            return string.IsNullOrWhiteSpace(timezoneLabel)
+                ? "Your assigned schedule"
+                : $"Your assigned schedule · {timezoneLabel}";
+        }
+
+        return permissions.IsClinicAdmin
             ? (string.IsNullOrWhiteSpace(timezoneLabel)
                 ? "Calendar for your clinic"
                 : $"Your clinic · {timezoneLabel}")
             : (string.IsNullOrWhiteSpace(timezoneLabel)
                 ? "Day and week clinic schedule"
                 : $"Clinic timezone: {timezoneLabel}");
+    }
 
     public static string ClinicCaption(IPermissionState permissions, string? clinicName) =>
-        permissions.IsClinicAdmin
+        permissions.IsClinicAdmin || AppointmentDirectoryPermissionRules.LockDoctorFilterToSelf(permissions)
             ? (string.IsNullOrWhiteSpace(clinicName) ? "Your clinic" : clinicName)
             : (clinicName ?? "Selected clinic");
 
