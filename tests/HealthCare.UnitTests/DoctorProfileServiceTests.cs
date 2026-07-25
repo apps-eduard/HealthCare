@@ -298,6 +298,24 @@ public sealed class DoctorProfileServiceTests
     }
 
     [Fact]
+    public async Task Invalid_ContactPhone_Length_Is_Rejected()
+    {
+        await using var h = await ClinicDashHarness.CreateAsync();
+        var doctor = await h.SeedStaffAsync(AppRoles.Doctor, h.ClinicA.Id, "doc-phone@test.local");
+        var sut = h.CreateDoctorProfileService(doctor);
+
+        await FluentActions.Awaiting(() => sut.UpdateAsync(
+                new UpdateDoctorProfileRequest
+                {
+                    ExpectedVersion = doctor.Staff.Version,
+                    ContactPhone = new string('9', 31),
+                },
+                new DoctorProfileQuery()))
+            .Should().ThrowAsync<DoctorProfileException>()
+            .Where(e => e.ErrorCode == DoctorProfileErrorCodes.InvalidField && e.StatusCode == 400);
+    }
+
+    [Fact]
     public void Validator_Rejects_Invalid_Lengths()
     {
         var validator = new UpdateDoctorProfileRequestValidator();

@@ -153,6 +153,8 @@ public static class DoctorProfileProblemMessages
                 "Doctor was not found.",
             DoctorProfileErrorCodes.EmptyUpdate =>
                 "Provide at least one doctor profile field to update.",
+            DoctorProfileErrorCodes.InvalidField =>
+                string.IsNullOrWhiteSpace(ex.Title) ? "One or more profile fields are invalid." : ex.Title,
             DoctorProfileErrorCodes.ConcurrencyConflict =>
                 "Another change was saved first. Reload the latest profile and try again.",
             "authorization.permission_denied" =>

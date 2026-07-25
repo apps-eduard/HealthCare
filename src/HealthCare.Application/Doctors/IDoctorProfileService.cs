@@ -60,6 +60,9 @@ public sealed class DoctorProfileException : Exception
     public static DoctorProfileException EmptyUpdate() =>
         new(DoctorProfileErrorCodes.EmptyUpdate, "No doctor profile fields were provided to update.", 400);
 
+    public static DoctorProfileException InvalidField(string title) =>
+        new(DoctorProfileErrorCodes.InvalidField, title, 400);
+
     public static DoctorProfileException ConcurrencyConflict() =>
         new(
             DoctorProfileErrorCodes.ConcurrencyConflict,

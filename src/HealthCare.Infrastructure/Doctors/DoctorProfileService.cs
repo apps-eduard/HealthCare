@@ -89,7 +89,13 @@ public sealed class DoctorProfileService : IDoctorProfileService
 
         if (request.DisplayNameSpecified)
         {
-            staff.DisplayName = NormalizeOptional(request.DisplayName);
+            var displayName = NormalizeOptional(request.DisplayName);
+            if (displayName is { Length: > 200 })
+            {
+                throw DoctorProfileException.InvalidField("Display name must be at most 200 characters.");
+            }
+
+            staff.DisplayName = displayName;
             changed.Add(nameof(UpdateDoctorProfileRequest.DisplayName));
         }
 
@@ -100,7 +106,13 @@ public sealed class DoctorProfileService : IDoctorProfileService
                 throw DoctorProfileException.EmptyUpdate();
             }
 
-            staff.FirstName = request.FirstName.Trim();
+            var firstName = request.FirstName.Trim();
+            if (firstName.Length > 100)
+            {
+                throw DoctorProfileException.InvalidField("First name must be at most 100 characters.");
+            }
+
+            staff.FirstName = firstName;
             changed.Add(nameof(UpdateDoctorProfileRequest.FirstName));
         }
 
@@ -111,13 +123,25 @@ public sealed class DoctorProfileService : IDoctorProfileService
                 throw DoctorProfileException.EmptyUpdate();
             }
 
-            staff.LastName = request.LastName.Trim();
+            var lastName = request.LastName.Trim();
+            if (lastName.Length > 100)
+            {
+                throw DoctorProfileException.InvalidField("Last name must be at most 100 characters.");
+            }
+
+            staff.LastName = lastName;
             changed.Add(nameof(UpdateDoctorProfileRequest.LastName));
         }
 
         if (request.JobTitleSpecified)
         {
-            staff.JobTitle = NormalizeOptional(request.JobTitle);
+            var jobTitle = NormalizeOptional(request.JobTitle);
+            if (jobTitle is { Length: > 150 })
+            {
+                throw DoctorProfileException.InvalidField("Job title must be at most 150 characters.");
+            }
+
+            staff.JobTitle = jobTitle;
             changed.Add(nameof(UpdateDoctorProfileRequest.JobTitle));
         }
 
@@ -126,7 +150,13 @@ public sealed class DoctorProfileService : IDoctorProfileService
 
         if (request.ContactPhoneSpecified)
         {
-            user.PhoneNumber = NormalizeOptional(request.ContactPhone);
+            var phone = NormalizeOptional(request.ContactPhone);
+            if (phone is { Length: > 30 })
+            {
+                throw DoctorProfileException.InvalidField("Contact phone must be at most 30 characters.");
+            }
+
+            user.PhoneNumber = phone;
             user.UpdatedAtUtc = _timeProvider.GetUtcNow();
             changed.Add(nameof(UpdateDoctorProfileRequest.ContactPhone));
         }

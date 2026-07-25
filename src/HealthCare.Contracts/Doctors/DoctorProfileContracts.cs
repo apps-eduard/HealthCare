@@ -11,6 +11,7 @@ public static class DoctorProfileErrorCodes
     public const string ClinicNotFound = "doctor_profile.clinic_not_found";
     public const string DoctorNotFound = "doctor_profile.doctor_not_found";
     public const string EmptyUpdate = "doctor_profile.empty_update";
+    public const string InvalidField = "doctor_profile.invalid_field";
     public const string ConcurrencyConflict = "doctor_profile.concurrency_conflict";
 }
 

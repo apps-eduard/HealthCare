@@ -163,6 +163,7 @@ public sealed class DoctorProfileEndpointTests : IAsyncLifetime
                 Encoding.UTF8,
                 "application/json"));
         longPhone.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await longPhone.Content.ReadAsStringAsync()).Should().Contain(DoctorProfileErrorCodes.InvalidField);
 
         await using (var scope = factory.Services.CreateAsyncScope())
         {
