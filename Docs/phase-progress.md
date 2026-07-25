@@ -19,7 +19,7 @@
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Doctor MVP (not started) — Clinic Admin Web MVP CA-1–CA-10 complete
+**Current focus:** Doctor Web MVP DR-1 (not started) — scope **approved** 2026-07-25 (`Docs/mvp-doctor-scope.md`); Clinic Admin Web MVP CA-1–CA-10 complete
 
 ### All phases at a glance
 
@@ -1057,6 +1057,27 @@ Authoritative scope: **`Docs/mvp-clinic-admin-scope.md`** (product-owner approve
 | CA-10 | Hardening + Playwright E2E | Medium | **Delivered** (2026-07-25) |
 
 Clinic Admin Web MVP is complete. Next recommended product track: Doctor MVP (do not start Patient MVP until Doctor MVP is planned).
+
+### Doctor Web MVP (approved scope)
+
+Authoritative scope: **`Docs/mvp-doctor-scope.md`** (**approved** 2026-07-25). Do not start DR-1 until ready to implement; Patient MVP must not start until Doctor MVP completes.
+
+| Phase | Theme | Complexity | Status |
+|-------|--------|------------|--------|
+| DR-1 | Doctor dashboard + navigation | Medium | Not started |
+| DR-2 | Doctor profile | Small | Not started |
+| DR-3 | My availability and schedule | Small | Not started |
+| DR-4 | Appointment ownership and workflows | Medium | Not started |
+| DR-5 | Appointment-linked patient access (Model A) | Large | Not started |
+| DR-6 | Medical notes ownership and lifecycle | Large | Not started |
+| DR-7 | Clinical workflow / completion hardening | Medium | Not started |
+| DR-8 | Doctor reports | — | **Skipped by default** |
+| DR-9 | Cross-role security / negative testing | Medium | Not started |
+| DR-10 | E2E + Doctor MVP completion | Medium | Not started |
+
+**Current→target gaps:** clinic-wide Doctor patients → Model A (DR-5); clinic-wide appointment mutations → own ownership (DR-4); clinic-wide note read/amend → author+own appointment (DR-6).
+
+| 2026-07-25 | — | Doctor Web MVP scope **approved** (Model A, ownership, notes DR-6, DR-8 skipped) |
 
 ---
 

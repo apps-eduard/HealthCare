@@ -127,12 +127,21 @@ Authoritative Clinic Admin Web MVP scope:
 
 ### 4.4 DOCTOR
 
-Allowed:
+Authoritative Doctor Web MVP scope: `Docs/mvp-doctor-scope.md` (**approved** 2026-07-25).
 
-- View patients registered with their clinic.
-- View clinic appointments.
-- Create and read clinical notes within their clinic.
-- Update appointment status where permitted.
+**Approved target (enforce in DR phases):**
+
+- Own assigned appointments only (list/view/mutate).
+- Appointment-linked patient access (Model A) — **not yet enforced**; current APIs remain clinic-wide until DR-5.
+- Own availability (`availability.manage_self`).
+- Medical notes with author + own-appointment ownership (DR-6 tightens today’s broader clinic Doctor read/amend).
+- Doctor dashboard / profile when those permissions ship (DR-1/DR-2).
+
+**Not allowed:**
+
+- Full clinic patient directory; peer appointment mutation; peer note bodies.
+- Clinic / organization administration, clinic reports, clinic audit browsers, staff management, Hangfire, billing.
+- Medical-note body access via admin roles or Platform Admin bypass.
 
 ### 4.5 NURSE
 
