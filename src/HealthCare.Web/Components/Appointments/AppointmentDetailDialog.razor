@@ -177,13 +177,37 @@ else
                         {
                             <div style="display:flex;flex-direction:column;gap:6px;margin-top:0.5rem;">
                                 <label class="hc-caption" for="medical-note-subjective">Subjective</label>
-                                <Input Id="medical-note-subjective" TextArea="@true" Rows="2" Placeholder="Subjective" @bind-Value="_noteSubjective" AriaLabel="Subjective" />
+                                <textarea id="medical-note-subjective"
+                                          class="ant-input"
+                                          rows="2"
+                                          placeholder="Subjective"
+                                          aria-label="Subjective"
+                                          @bind="_noteSubjective"
+                                          @bind:event="oninput"></textarea>
                                 <label class="hc-caption" for="medical-note-objective">Objective</label>
-                                <Input Id="medical-note-objective" TextArea="@true" Rows="2" Placeholder="Objective" @bind-Value="_noteObjective" AriaLabel="Objective" />
+                                <textarea id="medical-note-objective"
+                                          class="ant-input"
+                                          rows="2"
+                                          placeholder="Objective"
+                                          aria-label="Objective"
+                                          @bind="_noteObjective"
+                                          @bind:event="oninput"></textarea>
                                 <label class="hc-caption" for="medical-note-assessment">Assessment</label>
-                                <Input Id="medical-note-assessment" TextArea="@true" Rows="2" Placeholder="Assessment" @bind-Value="_noteAssessment" AriaLabel="Assessment" />
+                                <textarea id="medical-note-assessment"
+                                          class="ant-input"
+                                          rows="2"
+                                          placeholder="Assessment"
+                                          aria-label="Assessment"
+                                          @bind="_noteAssessment"
+                                          @bind:event="oninput"></textarea>
                                 <label class="hc-caption" for="medical-note-plan">Plan</label>
-                                <Input Id="medical-note-plan" TextArea="@true" Rows="2" Placeholder="Plan" @bind-Value="_notePlan" AriaLabel="Plan" />
+                                <textarea id="medical-note-plan"
+                                          class="ant-input"
+                                          rows="2"
+                                          placeholder="Plan"
+                                          aria-label="Plan"
+                                          @bind="_notePlan"
+                                          @bind:event="oninput"></textarea>
                             </div>
                             <Space Style="margin-top:0.5rem;">
                                 <Button Disabled="_busy" OnClick="SaveDraftNoteAsync" AriaLabel="Save medical note draft">Save draft</Button>
@@ -206,9 +230,20 @@ else
                             {
                                 <div style="margin-top:0.5rem;display:flex;flex-direction:column;gap:6px;">
                                     <label class="hc-caption" for="medical-note-amend-reason">Amendment reason</label>
-                                    <Input Id="medical-note-amend-reason" Placeholder="Amendment reason" @bind-Value="_amendReason" AriaLabel="Amendment reason" />
+                                    <input id="medical-note-amend-reason"
+                                           class="ant-input"
+                                           placeholder="Amendment reason"
+                                           aria-label="Amendment reason"
+                                           @bind="_amendReason"
+                                           @bind:event="oninput" />
                                     <label class="hc-caption" for="medical-note-amend-plan">Amendment plan</label>
-                                    <Input Id="medical-note-amend-plan" TextArea="@true" Rows="2" Placeholder="Updated plan (optional)" @bind-Value="_amendPlan" AriaLabel="Amendment plan" />
+                                    <textarea id="medical-note-amend-plan"
+                                              class="ant-input"
+                                              rows="2"
+                                              placeholder="Updated plan (optional)"
+                                              aria-label="Amendment plan"
+                                              @bind="_amendPlan"
+                                              @bind:event="oninput"></textarea>
                                     <Button Disabled="_busy" OnClick="AmendNoteAsync" AriaLabel="Amend medical note">Amend</Button>
                                 </div>
                             }
