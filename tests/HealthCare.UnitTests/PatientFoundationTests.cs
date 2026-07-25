@@ -1,6 +1,7 @@
 using FluentAssertions;
 using HealthCare.Application.Authorization;
 using HealthCare.Application.Patients;
+using HealthCare.Contracts.Identity;
 using HealthCare.Domain.Identity;
 using HealthCare.Domain.Patients;
 using HealthCare.Domain.Staff;
@@ -154,8 +155,9 @@ public sealed class PatientServiceAccessTests
         var sut = harness.CreatePatientService(currentUser, new FakeCurrentStaff(), currentPatient);
 
         var act = () => sut.GetPatientByIdAsync(other.Id);
-        await act.Should().ThrowAsync<AuthorizationException>()
-            .Where(e => e.ErrorCode == "authz.patient_self_scope_denied");
+        var ex = await act.Should().ThrowAsync<AuthorizationException>();
+        ex.Which.ErrorCode.Should().Be(AuthorizationErrorCodes.PatientNotFoundOrDenied);
+        ex.Which.StatusCode.Should().Be(404);
     }
 
     [Fact]

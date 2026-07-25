@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using FluentAssertions;
 using HealthCare.Contracts.Identity;
 using HealthCare.Contracts.Patients;
@@ -139,7 +140,17 @@ public sealed class PatientEndpointTests : IAsyncLifetime
     {
         await AuthenticateAsync(PatientEmail, PatientPassword);
         var response = await _client!.GetAsync($"/api/v1/patients/{_otherPatientId}");
-        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        problem.GetProperty("errorCode").GetString().Should().Be(AuthorizationErrorCodes.PatientNotFoundOrDenied);
+    }
+
+    [Fact]
+    public async Task Patient_Cannot_Access_Unknown_Patient_Id()
+    {
+        await AuthenticateAsync(PatientEmail, PatientPassword);
+        var response = await _client!.GetAsync($"/api/v1/patients/{Guid.NewGuid()}");
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]

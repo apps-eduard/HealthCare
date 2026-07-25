@@ -1,12 +1,12 @@
 # MVP Patient Scope
 
 **Status:** **Approved** by product owner (2026-07-25). Authoritative for the **Patient Mobile MVP**.  
-**Implementation:** **Not started** (PM-0 documentation only). Do not treat PM-0 as PM-1.  
+**Implementation:** **PM-1 delivered** (2026-07-25) — backend contract hardening. PM-2…PM-8 not started.  
 **Authority:** This document overrides informal Patient notes in `Docs/security.md` §4.7 / §5.1, `Docs/architecture.md` §10.1 / §12.2, and `Docs/development-plan.md` Phase 11 where they conflict. Keep matrix and security cross-links in sync when coding.  
 **Related:** `Docs/mvp-organization-admin-scope.md`, `Docs/mvp-clinic-admin-scope.md`, `Docs/mvp-doctor-scope.md`, `Docs/authorization-matrix.md`, `Docs/security.md` §4.7 / patient self-scope.  
 **Do not** copy staff Web capabilities into the Patient app.  
 **Do not** rebuild existing Patient APIs that already match this contract.  
-**Do not** begin mobile UI until PM-1 backend alignment is complete (or explicitly waived).
+**Do not** begin mobile UI (PM-2) until scheduled.
 
 Verified baseline when approved (2026-07-25):
 
@@ -262,14 +262,22 @@ Authenticated patient clinic browse/search API **missing** → **PM-4** (with co
 
 Patient sees **only** their own appointments.
 
-### Shared `AppointmentResponse` note
+### Shared `AppointmentResponse` decision (**PM-1**)
 
-Current response includes organization/clinic/patient/clinicPatient/doctor Guids plus display names. **Acceptable for authenticated self-service in the short term**, but PM-1 must review and either:
+**Retained** shared `AppointmentResponse` for Patient and staff appointment routes (no breaking Patient-specific type in PM-1).
 
-- Document why the shared DTO is patient-safe enough for MVP, or  
-- Introduce a Patient-specific appointment contract in a later hardening milestone  
+| Field | Patient-safe? | Rationale |
+|-------|---------------|-----------|
+| `Id` | Yes | Required |
+| `OrganizationId`, `ClinicId`, `ClinicPatientId`, `PatientId` | Yes (own) | Own appointment scope; needed for multi-clinic client state; not other patients’ data |
+| `DoctorStaffMemberId` | Yes | Required for reschedule |
+| Times / duration / status / source / version | Yes | Required |
+| `Reason`, `PatientNotes`, `CancellationReason` | Yes | Patient-supplied / cancellation info |
+| `DoctorDisplayName`, `ClinicName`, `ClinicSlug`, `ClinicTimeZoneId` | Yes | Patient display |
+| `PatientDisplayName`, `LocalPatientNumber` | Omitted for PATIENT actors | Staff queue helpers only |
+| Medical notes | N/A | Never on this DTO |
 
-Do not expose medical-note data through appointment payloads.
+Staff clients unchanged. Further DTO narrowing can wait for PM-7 if needed.
 
 ---
 
@@ -281,15 +289,16 @@ Do not expose medical-note data through appointment payloads.
 - Resulting status: **`CancelledByPatient`**  
 - Optimistic concurrency via `ExpectedVersion`  
 
-### Product cutoff (**approved**)
+### Product cutoff (**PM-1 delivered**)
 
-| Rule | Approved target | Current code |
-|------|-----------------|--------------|
-| Future start required | Yes | Yes (`InvalidTime` if start ≤ now) |
-| Cancel allowed until **2 hours before** start | **Yes** | **Not implemented** — any future start allowed |
-| Inside 2-hour window | Patient **cannot** cancel in app; must contact clinic | Gap → implement in **PM-1** service rule + **PM-6** mobile UX |
+| Rule | Behavior |
+|------|----------|
+| Allowed when `startUtc - nowUtc >= 2 hours` | **Exactly 2 hours before start: allowed** |
+| Denied when remaining &lt; 2 hours (including past starts) | `409` `appointment.patient_mutation_cutoff` |
+| Staff cancel | **Unchanged** (no patient cutoff) |
+| Out-of-scope appointment | `404` before version/cutoff disclosure |
 
-**Conflict check:** No prior authoritative MVP scope mandated a different cutoff. `security.md` only requires cross-patient cancel denial. The 2-hour rule is a new approved product rule, not a silent override of a conflicting contract.
+Denial does not mutate state and does not emit a cancellation success audit.
 
 ---
 
@@ -305,13 +314,9 @@ Do not expose medical-note data through appointment payloads.
 - Must not leave a duplicate active booking  
 - Reschedule history preserves prior schedule (existing history row pattern)
 
-### Product cutoff (**approved**)
+### Product cutoff (**PM-1 delivered**)
 
-Reschedule must respect the **same 2-hour cutoff** as cancellation.
-
-| Gap | Milestone |
-|-----|-----------|
-| 2-hour cutoff not in code today | PM-1 (API) + PM-6 (mobile) |
+Same **2-hour** rule as cancellation (`appointment.patient_mutation_cutoff` / `409`). Authz/ownership (`404`) precedes version, slot, and cutoff disclosure.
 
 ---
 
@@ -371,16 +376,16 @@ Additional rules:
 |------|---------|
 | `401` | Unauthenticated |
 | `403` | Authenticated Patient lacks permission for a **non-concealed** surface (e.g. staff APIs, medical notes create) |
-| `404` | Another patient’s appointment **or** concealed out-of-scope resource; **also** another patient’s profile by ID (**approved target**) |
-| `409` | Only after authorization + self-scope succeed — concurrency, overlap, slot conflict, invalid transition |
+| `404` | Another patient’s appointment **or** concealed out-of-scope resource; **also** another patient’s profile by ID (**PM-1**) |
+| `409` | Only after authorization + self-scope succeed — concurrency, overlap, slot conflict, invalid transition, **patient mutation cutoff** |
 
 ### Cross-patient profile concealment
 
-| Surface | Current | Approved target | Milestone |
-|---------|---------|-----------------|-----------|
-| `GET /api/v1/patients/{patientId}` as Patient for foreign id | **403** | **404** | **PM-1** |
-| Same endpoint as staff | Staff permissions + tenant scope (unchanged) | Unchanged | — |
-| Foreign appointment | **404** | **404** | Done |
+| Surface | Behavior |
+|---------|----------|
+| `GET /api/v1/patients/{patientId}` as Patient for foreign/unknown id | **`404`** `authz.patient_not_found_or_denied` (**PM-1**) |
+| Same endpoint as staff | Staff permissions + tenant scope (unchanged; typically `403` when out of clinic/org) |
+| Foreign appointment | **404** |
 
 ---
 
@@ -436,8 +441,8 @@ Do not treat permission-catalog-only tests as sufficient for Patient product DoD
 
 | Phase | Theme | Complexity | Status |
 |-------|--------|------------|--------|
-| **PM-0** | Patient MVP scope and contract | Docs | **Delivered** (this document, 2026-07-25) |
-| **PM-1** | Patient contract and backend gap hardening | Medium | Not started |
+| **PM-0** | Patient MVP scope and contract | Docs | **Delivered** (2026-07-25) |
+| **PM-1** | Patient contract and backend gap hardening | Medium | **Delivered** (2026-07-25) |
 | **PM-2** | Patient mobile foundation (MAUI) | Medium | Not started |
 | **PM-3** | Mobile authentication and profile | Medium | Not started |
 | **PM-4** | Clinic and Doctor discovery | Medium | Not started |
@@ -446,14 +451,13 @@ Do not treat permission-catalog-only tests as sufficient for Patient product DoD
 | **PM-7** | Patient security and negative matrix | Medium | Not started |
 | **PM-8** | Patient mobile E2E | Medium | Not started |
 
-### PM-1 — Patient contract and backend gap hardening
+### PM-1 — Patient contract and backend gap hardening — **delivered**
 
-- Align implementation with this scope  
-- Cross-patient profile → **404**  
-- Review Patient-safe DTOs (especially `AppointmentResponse`)  
-- Verify linkage, inactive access, token claims vs DB resolution  
-- Implement **2-hour** cancel/reschedule cutoff in API  
-- Add lower-level regression coverage  
+- Cross-patient profile → **404** (`authz.patient_not_found_or_denied`)
+- Shared `AppointmentResponse` retained; `PatientDisplayName` / `LocalPatientNumber` omitted for PATIENT
+- **2-hour** cancel/reschedule cutoff (`appointment.patient_mutation_cutoff` / 409); exact boundary allowed
+- Authz-before-conflict coverage (foreign + stale version / bad slot → 404)
+- Unit + HTTP integration suites extended
 - **No mobile UI**
 
 ### PM-2 — Patient mobile foundation
@@ -508,15 +512,16 @@ Do not treat permission-catalog-only tests as sufficient for Patient product DoD
 ## 24. Definition of Done (overall Patient MVP)
 
 - [x] Scope approved by product owner (PM-0, 2026-07-25)  
-- [ ] PM-1 … PM-8 complete  
-- [ ] Backend gaps closed (404 concealment, 2-hour cutoff, clinic browse, DTO review)  
+- [x] PM-1 backend gap hardening complete  
+- [ ] PM-2 … PM-8 complete  
+- [x] Backend gaps closed for PM-1 (404 concealment, 2-hour cutoff, DTO review)  
 - [ ] Android MAUI app supports full Patient MVP flow  
 - [ ] Patient security matrix green  
 - [ ] Patient E2E pack green on required host  
 - [ ] Docs updated as phases ship  
 - [ ] No secrets / note bodies in logs or mobile storage  
 
-PM-0 alone does **not** complete the Patient MVP.
+PM-0 alone does **not** complete the Patient MVP. PM-1 does **not** complete mobile.
 
 ---
 
@@ -564,20 +569,20 @@ PM-0 alone does **not** complete the Patient MVP.
 | Capability | Existing implementation | Approved Patient MVP target | Gap | Planned milestone |
 |------------|-------------------------|-----------------------------|-----|-------------------|
 | Registration | `POST /auth/register/patient` + confirm | Keep | None | — (mobile UX PM-3) |
-| Login | Shared `POST /auth/login` | Email/password MVP | Google/OTP deferred (not gaps) | PM-3 mobile |
-| Account linkage | Unique UserId; linker; strip unlinked | Keep | None material | PM-1 verify |
-| Profile | `GET/PATCH /patients/me` | Keep fields + concurrency | Permission name quirk on GET optional | PM-1 / PM-3 |
+| Login | Shared `POST /auth/login` | Email/password MVP | Google/OTP deferred | PM-3 mobile |
+| Account linkage | Unique UserId; linker; strip unlinked | Keep | None material | Verified PM-1 |
+| Profile | `GET/PATCH /patients/me` | Keep fields + concurrency | None | PM-3 mobile |
 | Clinic-code enrollment | `POST /patients/me/clinics/register` | Keep alternate path | None | PM-4 mobile |
-| Clinic browse | Missing (staff directory denies Patient) | Authenticated browse/search | **API missing** | PM-4 (+ PM-1 contract) |
+| Clinic browse | Missing (staff directory denies Patient) | Authenticated browse/search | **API missing** | PM-4 |
 | Doctor discovery | Doctors by clinic code | Keep patient-safe list | None material | PM-4 |
 | Availability | Available-slots API | Keep | None material | PM-4 |
 | Booking | Create → `Requested` | Keep; no auto-confirm | None (status) | PM-5 mobile |
-| Appointment list/detail | Me list + get by id (own) | Keep | DTO review | PM-1 / PM-6 |
-| Cancellation | Future start → `CancelledByPatient` | + **2-hour cutoff** | Cutoff missing | PM-1 / PM-6 |
-| Rescheduling | Own Requested/Confirmed | + **2-hour cutoff** | Cutoff missing | PM-1 / PM-6 |
+| Appointment list/detail | Me list + get by id (own) | Keep | DTO review done PM-1 | PM-6 |
+| Cancellation | Own + **2h cutoff** | Delivered | Mobile UX | PM-6 |
+| Rescheduling | Own Requested/Confirmed + **2h cutoff** | Delivered | Mobile UX | PM-6 |
 | Clinical visibility | Notes staff-only | Remain denied | None (intentional) | — |
 | Notifications | Hangfire infra / NoOp prod | API refresh only | Not a Patient feature yet | Deferred |
-| Cross-patient profile | **403** | **404** | Concealment | **PM-1** |
+| Cross-patient profile | **404** | **404** | Closed PM-1 | — |
 | Mobile application | Class-library placeholder | MAUI Blazor Hybrid | **Not implemented** | PM-2…PM-6 |
 | Patient E2E | Denial/seed only | Full Patient pack | **Missing** | PM-8 |
 
@@ -588,3 +593,4 @@ PM-0 alone does **not** complete the Patient MVP.
 | Date | Note |
 |------|------|
 | 2026-07-25 | **PM-0:** Initial authoritative Patient Mobile MVP scope from API audit + product-owner decisions |
+| 2026-07-25 | **PM-1 delivered:** foreign patient profile `404`; 2-hour cancel/reschedule cutoff; AppointmentResponse retained with patient display scrub; authz-before-conflict tests |

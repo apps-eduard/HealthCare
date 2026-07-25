@@ -27,6 +27,11 @@ public sealed class AppointmentService : IAppointmentService
         AppRoles.Doctor,
     };
 
+    /// <summary>
+    /// Patients may cancel/reschedule when remaining time until start is at least this span (exact boundary allowed).
+    /// </summary>
+    public static readonly TimeSpan PatientScheduleMutationCutoff = TimeSpan.FromHours(2);
+
     private readonly HealthCareDbContext _dbContext;
     private readonly ICurrentUser _currentUser;
     private readonly ICurrentStaff _currentStaff;
@@ -336,11 +341,7 @@ public sealed class AppointmentService : IAppointmentService
         AppointmentStatus target;
         if (_currentUser.IsInRole(AppRoles.Patient) && !_currentStaff.HasActiveMembership)
         {
-            if (appointment.AppointmentDateUtc <= _timeProvider.GetUtcNow())
-            {
-                throw AppointmentException.InvalidTime();
-            }
-
+            EnsurePatientScheduleMutationAllowed(appointment);
             target = AppointmentStatus.CancelledByPatient;
         }
         else
@@ -406,11 +407,14 @@ public sealed class AppointmentService : IAppointmentService
         var isPatientActor = _currentUser.IsInRole(AppRoles.Patient) && !_currentStaff.HasActiveMembership;
         if (isPatientActor)
         {
+            // Ownership already enforced in LoadAccessibleAsync; re-check before disclosing cutoff/slot details.
             if (_currentPatient.PatientId != appointment.PatientId)
             {
                 LogDenied("appointment_reschedule_patient_denied", appointment.Id);
                 throw AppointmentException.NotFoundOrDenied();
             }
+
+            EnsurePatientScheduleMutationAllowed(appointment);
         }
         else
         {
@@ -806,6 +810,26 @@ public sealed class AppointmentService : IAppointmentService
         if (start <= _timeProvider.GetUtcNow())
         {
             throw AppointmentException.InvalidTime();
+        }
+    }
+
+    /// <summary>
+    /// Patient cancel/reschedule: allowed when <c>start - now &gt;= 2 hours</c> (exact 2h allowed).
+    /// Past starts and inside the window → <see cref="AppointmentException.PatientMutationCutoff"/>.
+    /// </summary>
+    private void EnsurePatientScheduleMutationAllowed(Appointment appointment)
+    {
+        var now = _timeProvider.GetUtcNow();
+        var remaining = appointment.AppointmentDateUtc - now;
+        if (remaining < PatientScheduleMutationCutoff)
+        {
+            _logger.LogInformation(
+                "Patient appointment mutation cutoff. UserId={UserId} AppointmentId={AppointmentId} Remaining={Remaining} Operation={Operation}",
+                _currentUser.UserId,
+                appointment.Id,
+                remaining,
+                "appointment_patient_mutation_cutoff");
+            throw AppointmentException.PatientMutationCutoff();
         }
     }
 
@@ -1212,6 +1236,38 @@ public sealed class AppointmentService : IAppointmentService
             .Take(pageSize)
             .ToListAsync(cancellationToken);
 
+        if (_currentUser.IsInRole(AppRoles.Patient) && !_currentStaff.HasActiveMembership)
+        {
+            items = items
+                .Select(a => new AppointmentResponse
+                {
+                    Id = a.Id,
+                    OrganizationId = a.OrganizationId,
+                    ClinicId = a.ClinicId,
+                    PatientId = a.PatientId,
+                    ClinicPatientId = a.ClinicPatientId,
+                    DoctorStaffMemberId = a.DoctorStaffMemberId,
+                    AppointmentDateUtc = a.AppointmentDateUtc,
+                    DurationMinutes = a.DurationMinutes,
+                    EndsAtUtc = a.EndsAtUtc,
+                    Reason = a.Reason,
+                    Status = a.Status,
+                    PatientNotes = a.PatientNotes,
+                    CancellationReason = a.CancellationReason,
+                    Source = a.Source,
+                    Version = a.Version,
+                    CreatedAtUtc = a.CreatedAtUtc,
+                    UpdatedAtUtc = a.UpdatedAtUtc,
+                    PatientDisplayName = null,
+                    LocalPatientNumber = null,
+                    DoctorDisplayName = a.DoctorDisplayName,
+                    ClinicName = a.ClinicName,
+                    ClinicSlug = a.ClinicSlug,
+                    ClinicTimeZoneId = a.ClinicTimeZoneId,
+                })
+                .ToList();
+        }
+
         return PagedResponse<AppointmentResponse>.Create(items, page, pageSize, totalCount);
     }
 
@@ -1270,6 +1326,9 @@ public sealed class AppointmentService : IAppointmentService
                 : doctor.DisplayName;
         }
 
+        var isPatientActor = _currentUser.IsInRole(AppRoles.Patient) && !_currentStaff.HasActiveMembership;
+        var patientDisplayName = patient is null ? null : $"{patient.FirstName} {patient.LastName}".Trim();
+
         return new AppointmentResponse
         {
             Id = a.Id,
@@ -1289,8 +1348,9 @@ public sealed class AppointmentService : IAppointmentService
             Version = a.Version,
             CreatedAtUtc = a.CreatedAtUtc,
             UpdatedAtUtc = a.UpdatedAtUtc,
-            PatientDisplayName = patient is null ? null : $"{patient.FirstName} {patient.LastName}".Trim(),
-            LocalPatientNumber = clinicPatient,
+            // Staff queue helpers — omit for Patient actors (own name comes from profile).
+            PatientDisplayName = isPatientActor ? null : patientDisplayName,
+            LocalPatientNumber = isPatientActor ? null : clinicPatient,
             DoctorDisplayName = doctorName,
             ClinicName = clinic?.Name,
             ClinicSlug = clinic?.Slug,

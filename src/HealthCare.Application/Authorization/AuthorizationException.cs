@@ -45,6 +45,15 @@ public sealed class AuthorizationException : Exception
     public static AuthorizationException PatientSelfScopeDenied() =>
         new(AuthorizationErrorCodes.PatientSelfScopeDenied, "Access to the requested patient record is denied.");
 
+    /// <summary>
+    /// Cross-patient concealment for PATIENT actors (HTTP 404). Do not use for ordinary permission denials.
+    /// </summary>
+    public static AuthorizationException PatientNotFoundOrDenied() =>
+        new(
+            AuthorizationErrorCodes.PatientNotFoundOrDenied,
+            "Patient was not found.",
+            404);
+
     public static AuthorizationException Forbidden() =>
         new(AuthorizationErrorCodes.Forbidden, "Access is denied.");
 

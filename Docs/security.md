@@ -179,14 +179,14 @@ Authoritative Product MVP: **`Docs/mvp-patient-scope.md`** (**approved** 2026-07
 Allowed (Patient Mobile MVP):
 
 - Manage their own profile (approved demographic/contact fields).
-- Discover clinics via clinic-code enrollment **and** authenticated clinic browse/search (browse API is an approved gap until PM-4).
+- Discover clinics via clinic-code enrollment **and** authenticated clinic browse/search (browse API remains an approved gap until PM-4).
 - View Doctors and available slots for active clinics (patient-safe fields only).
 - Book appointments for themselves (initial status **`Requested`**; not auto-confirmed).
-- View, cancel, and reschedule **their own** appointments under approved rules (including **2-hour** cancel/reschedule cutoff — API gap until PM-1).
+- View, cancel, and reschedule **their own** appointments under approved rules (**2-hour** cancel/reschedule cutoff — **PM-1 delivered**).
 
 Not allowed:
 
-- Access another patient's data (foreign appointment → `404`; foreign patient profile by ID → target `404`, currently `403` until PM-1).
+- Access another patient's data (foreign appointment → `404`; foreign patient profile by ID → **`404`** — **PM-1**).
 - Access staff, clinic-admin, organization-admin, or platform endpoints.
 - Select or manipulate another patient ID for self-service identity.
 - View medical-note bodies, amendments, or patient-visible clinical summaries in this MVP (`IsVisibleToPatient` deferred).
@@ -719,7 +719,7 @@ Response semantics under test:
 |------|------|
 | 401 | Unauthenticated caller on protected routes |
 | 403 | Authenticated caller lacks permission/role (e.g. Patient→staff APIs; Doctor→clinic reports; CA/OA/PA→note bodies) |
-| 404 | Concealed out-of-scope (peer/cross-clinic Doctor appointment or note; Patient foreign appointment). **Patient Mobile MVP target:** foreign patient profile by ID also `404` (currently `403` until PM-1 — see `Docs/mvp-patient-scope.md`) |
+| 404 | Concealed out-of-scope (peer/cross-clinic Doctor appointment or note; Patient foreign appointment; **Patient foreign/unknown profile by ID — PM-1**) |
 | 409 | In-scope workflow/concurrency conflict only (DR-7); never used to leak out-of-scope existence |
 
 ### 16.8 Doctor Web MVP E2E pack (DR-10)

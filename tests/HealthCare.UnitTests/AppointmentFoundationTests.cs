@@ -676,6 +676,32 @@ internal sealed class AppointmentHarness : IAsyncDisposable
         return patientId;
     }
 
+    public async Task<(Guid UserId, Guid PatientId)> SeedSecondPatientAsync(SeedData data)
+    {
+        var userId = Guid.NewGuid();
+        var patientId = Guid.NewGuid();
+        Db.Patients.Add(new Patient
+        {
+            Id = patientId,
+            UserId = userId,
+            FirstName = "Second",
+            LastName = "Patient",
+            IsActive = true,
+        });
+        Db.ClinicPatients.Add(new ClinicPatient
+        {
+            Id = Guid.NewGuid(),
+            ClinicId = data.ClinicAId,
+            PatientId = patientId,
+            LocalPatientNumber = "A-PM1",
+            Status = ClinicPatientStatus.Active,
+            RegisteredAtUtc = Now,
+            UpdatedAtUtc = Now,
+        });
+        await Db.SaveChangesAsync();
+        return (userId, patientId);
+    }
+
     public AppointmentService CreatePatientService(Guid userId, Guid patientId)
     {
         var user = new FakeCurrentUser

@@ -143,6 +143,14 @@ public sealed class TenantAccessService : ITenantAccessService
 
         if (!CanAccessPatient(patientId, bypass))
         {
+            // PATIENT actors: conceal foreign/unknown patient IDs as 404 (PM-1).
+            // Staff/other callers continue to receive non-concealed denial codes from PatientService.
+            if (_currentUser.IsInRole(AppRoles.Patient) && !_currentStaff.HasActiveMembership)
+            {
+                LogDenial("patient_not_found_or_denied", "patient");
+                throw AuthorizationException.PatientNotFoundOrDenied();
+            }
+
             LogDenial("patient_self_scope_denied", patientId.ToString());
             throw AuthorizationException.PatientSelfScopeDenied();
         }

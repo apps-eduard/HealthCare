@@ -14,6 +14,8 @@ public static class AuthorizationErrorCodes
     public const string ClinicAccessDenied = "authz.clinic_access_denied";
     public const string MissingPatientLinkage = "authz.missing_patient_linkage";
     public const string PatientSelfScopeDenied = "authz.patient_self_scope_denied";
+    /// <summary>Patient actor denied another patient's record — concealed as not found.</summary>
+    public const string PatientNotFoundOrDenied = "authz.patient_not_found_or_denied";
     public const string Forbidden = "authz.forbidden";
 
     public const string PermissionRequired = "authorization.permission_required";

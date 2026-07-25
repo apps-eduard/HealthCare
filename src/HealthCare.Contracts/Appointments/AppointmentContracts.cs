@@ -15,6 +15,10 @@ public static class AppointmentErrorCodes
     public const string RescheduleNotAllowed = "appointment.reschedule_not_allowed";
     public const string RescheduleSameSlot = "appointment.reschedule_same_slot";
     public const string RescheduleFailed = "appointment.reschedule_failed";
+    /// <summary>
+    /// Patient cancel/reschedule denied inside the two-hour pre-start cutoff (HTTP 409).
+    /// </summary>
+    public const string PatientMutationCutoff = "appointment.patient_mutation_cutoff";
 }
 
 public sealed class RescheduleAppointmentRequest

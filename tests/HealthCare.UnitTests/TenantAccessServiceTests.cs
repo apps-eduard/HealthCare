@@ -1,5 +1,6 @@
 using FluentAssertions;
 using HealthCare.Application.Authorization;
+using HealthCare.Contracts.Identity;
 using HealthCare.Domain.Identity;
 using HealthCare.Infrastructure.Authorization;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -131,8 +132,9 @@ public sealed class TenantAccessServiceTests
         sut.CanAccessPatient(patientId).Should().BeTrue();
         sut.CanAccessPatient(Guid.NewGuid()).Should().BeFalse();
         var act = () => sut.EnsureCanAccessPatient(Guid.NewGuid());
-        act.Should().Throw<AuthorizationException>()
-            .Which.ErrorCode.Should().Be("authz.patient_self_scope_denied");
+        var ex = act.Should().Throw<AuthorizationException>().Which;
+        ex.ErrorCode.Should().Be(AuthorizationErrorCodes.PatientNotFoundOrDenied);
+        ex.StatusCode.Should().Be(404);
     }
 
     [Fact]

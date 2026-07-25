@@ -119,6 +119,15 @@ public sealed class AppointmentException : Exception
     public static AppointmentException InvalidTime() =>
         new(AppointmentErrorCodes.InvalidTime, "The appointment time is invalid.", 400);
 
+    /// <summary>
+    /// Patient may cancel/reschedule only when at least two hours remain before start (boundary inclusive).
+    /// </summary>
+    public static AppointmentException PatientMutationCutoff() =>
+        new(
+            AppointmentErrorCodes.PatientMutationCutoff,
+            "Patients may cancel or reschedule only until two hours before the appointment start. Contact the clinic for changes inside that window.",
+            409);
+
     public static AppointmentException RescheduleNotAllowed() =>
         new(AppointmentErrorCodes.RescheduleNotAllowed, "The appointment cannot be rescheduled in its current status.", 409);
 

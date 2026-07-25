@@ -144,6 +144,12 @@ public sealed class PatientService : IPatientService
 
         if (patient is null)
         {
+            // Soft-hide missing rows for patient actors; staff keep existing denial semantics.
+            if (_currentUser.IsInRole(AppRoles.Patient) && !_currentStaff.HasActiveMembership)
+            {
+                throw AuthorizationException.PatientNotFoundOrDenied();
+            }
+
             throw AuthorizationException.PatientSelfScopeDenied();
         }
 
