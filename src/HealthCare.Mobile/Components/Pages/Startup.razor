@@ -1,0 +1,19 @@
+@page "/"
+@inject NavigationManager Nav
+@inject IAuthSessionService Auth
+
+<LoadingState Message="Starting…" />
+
+@code {
+    protected override void OnInitialized()
+    {
+        if (Auth.IsAuthenticated)
+        {
+            Nav.NavigateTo(PatientRoutes.Home);
+        }
+        else
+        {
+            Nav.NavigateTo(PatientRoutes.Connectivity);
+        }
+    }
+}

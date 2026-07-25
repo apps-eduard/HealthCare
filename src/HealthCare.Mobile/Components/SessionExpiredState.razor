@@ -1,0 +1,16 @@
+@namespace HealthCare.Mobile.Components
+
+<div class="state-panel state-unauthorized" role="alert">
+    <h2>@(Title ?? "Session expired")</h2>
+    <p>@(Message ?? "Your session has expired. Please sign in again.")</p>
+    @if (!string.IsNullOrWhiteSpace(SignInHref))
+    {
+        <a class="btn" href="@SignInHref">Sign in</a>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string? SignInHref { get; set; }
+}

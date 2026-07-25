@@ -1,0 +1,10 @@
+@namespace HealthCare.Mobile.Components
+
+<div class="state-panel" role="status">
+    <h2>@(Title ?? "Nothing here yet")</h2>
+    <p>@(Message ?? "Check back later.")</p>
+</div>
+@code {
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Message { get; set; }
+}

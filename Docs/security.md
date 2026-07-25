@@ -289,9 +289,11 @@ Staff UI authentication mutations are POST-only and antiforgery-protected:
 
 ### 5.5 Mobile token storage
 
-- Use secure platform storage.
+- Use secure platform storage (MAUI `SecureStorage` in PM-2 via `ISecureTokenStore`).
 - Never store tokens in plain preferences or local text files.
-- Clear all tokens on logout.
+- Never fall back silently from secure storage to Preferences for tokens.
+- Clear all tokens on logout and when refresh fails.
+- Never log access or refresh token values.
 - Avoid caching sensitive API responses unnecessarily.
 
 ---
@@ -556,13 +558,15 @@ When added, require:
 
 ## 11. Mobile application security
 
-- Use platform secure storage for tokens.
-- Do not hardcode API secrets.
+- Use platform secure storage for tokens (`HealthCare.Mobile` / PM-2).
+- Do not hardcode API secrets or production base URLs with credentials.
 - Do not include privileged service credentials in the app.
 - Validate TLS certificates normally.
-- Do not disable certificate validation.
+- Do not disable certificate validation globally.
+- Development cleartext HTTP (emulator `10.0.2.2`) is restricted to Dev config + Android network security domain allowlist only.
 - Avoid screenshots containing sensitive data where platform controls are practical.
 - Clear sensitive local state on logout.
+- Do not trust JWT claims alone for Patient identity — call the API (`/auth/me`, patient endpoints).
 
 ---
 

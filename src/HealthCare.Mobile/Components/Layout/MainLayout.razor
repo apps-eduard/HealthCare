@@ -1,0 +1,32 @@
+﻿@inherits LayoutComponentBase
+@inject IAuthSessionService Auth
+@inject NavigationManager Nav
+
+<div class="app-shell">
+    <header class="app-header">
+        <div class="brand">HealthCare</div>
+        <div class="header-meta">Patient</div>
+    </header>
+
+    @if (ShowNav)
+    {
+        <nav class="app-nav" aria-label="Primary">
+            <NavLink href="@PatientRoutes.Home" Match="NavLinkMatch.All">Home</NavLink>
+            <NavLink href="@PatientRoutes.Clinics">Clinics</NavLink>
+            <NavLink href="@PatientRoutes.Appointments">Appointments</NavLink>
+            <NavLink href="@PatientRoutes.Profile">Profile</NavLink>
+            <NavLink href="@PatientRoutes.Connectivity">Status</NavLink>
+        </nav>
+    }
+
+    <main class="app-main">
+        @Body
+    </main>
+</div>
+
+@code {
+    private bool ShowNav =>
+        Auth.IsAuthenticated
+        && !PatientRoutes.Normalize(Nav.ToBaseRelativePath(Nav.Uri))
+            .Equals(PatientRoutes.SignIn, StringComparison.OrdinalIgnoreCase);
+}

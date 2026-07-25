@@ -1,0 +1,76 @@
+@page "/connectivity"
+@inject IHealthCareApiClient Api
+@inject IOptions<MobileAppOptions> Options
+@inject IAuthSessionService Auth
+@inject NavigationManager Nav
+
+<h1>Connectivity</h1>
+<p class="lede">Foundation smoke check against the configured API. This is not the Patient product home screen.</p>
+
+<dl class="meta">
+    <dt>Environment</dt>
+    <dd>@Options.Value.EnvironmentName</dd>
+    <dt>API base URL</dt>
+    <dd><code>@Options.Value.ApiBaseUrl</code></dd>
+</dl>
+
+@if (_busy)
+{
+    <LoadingState Message="Checking API health…" />
+}
+else if (_problem is not null && _problem.Kind is ApiErrorKind.Network or ApiErrorKind.Timeout)
+{
+    <OfflineState Message="@_problem.UserMessage" OnRetry="RunCheckAsync" />
+}
+else if (_problem is not null && _problem.Kind == ApiErrorKind.Unauthorized)
+{
+    <SessionExpiredState SignInHref="@PatientRoutes.SignIn" />
+}
+else if (_problem is not null)
+{
+    <ErrorState Problem="@_problem" OnRetry="RunCheckAsync" />
+}
+else if (_health is not null)
+{
+    <div class="state-panel state-ok" role="status">
+        <h2>API reachable</h2>
+        <p>Health status: <strong>@(_health.Status ?? "unknown")</strong></p>
+    </div>
+}
+
+<div class="actions">
+    <button type="button" class="btn" disabled="@_busy" @onclick="RunCheckAsync">Check again</button>
+    <a class="btn btn-secondary" href="@PatientRoutes.SignIn">Dev sign-in</a>
+    @if (Auth.IsAuthenticated)
+    {
+        <a class="btn btn-secondary" href="@PatientRoutes.Home">Home</a>
+    }
+</div>
+
+@code {
+    private bool _busy;
+    private HealthStatusDto? _health;
+    private ApiProblem? _problem;
+
+    protected override async Task OnInitializedAsync() => await RunCheckAsync();
+
+    private async Task RunCheckAsync()
+    {
+        _busy = true;
+        _problem = null;
+        _health = null;
+        StateHasChanged();
+
+        var result = await Api.GetHealthAsync();
+        if (result.IsSuccess)
+        {
+            _health = result.Value;
+        }
+        else
+        {
+            _problem = result.Error;
+        }
+
+        _busy = false;
+    }
+}

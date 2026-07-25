@@ -1,6 +1,7 @@
 <Project>
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <!-- MAUI multi-targets its own TFMs; do not force net10.0 onto HealthCare.Mobile. -->
+    <TargetFramework Condition="'$(MSBuildProjectName)' != 'HealthCare.Mobile'">net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>

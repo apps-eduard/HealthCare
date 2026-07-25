@@ -1,0 +1,33 @@
+﻿@page "/home"
+@inject IAuthSessionService Auth
+@inject IHealthCareApiClient Api
+@inject NavigationManager Nav
+
+<h1>Home</h1>
+<p class="lede">Authenticated foundation shell. Patient journeys arrive in later milestones.</p>
+
+@if (Auth.Current.CurrentUser is { } user)
+{
+    <dl class="meta">
+        <dt>Email</dt>
+        <dd>@(user.Email ?? "—")</dd>
+        <dt>Linked patient</dt>
+        <dd>@(user.HasLinkedPatient ? "Yes" : "No")</dd>
+    </dl>
+}
+else
+{
+    <EmptyState Message="Session restored without /auth/me details yet." />
+}
+
+<div class="actions">
+    <button type="button" class="btn btn-secondary" @onclick="SignOutAsync">Sign out</button>
+</div>
+
+@code {
+    private async Task SignOutAsync()
+    {
+        await Api.LogoutAsync();
+        Nav.NavigateTo(PatientRoutes.SignIn);
+    }
+}

@@ -92,12 +92,13 @@ The MVP must follow these principles:
 ### 4.2 Patient mobile application
 
 - .NET MAUI Blazor Hybrid
-- Android first
-- iOS later
-- Shared Razor components where practical
-- Secure token storage
-- REST API communication
+- Android first (`net10.0-android`; iOS later)
+- Projects: `HealthCare.Mobile` + `HealthCare.Mobile.Core` (PM-2 foundation delivered)
+- Secure token storage (MAUI `SecureStorage` via `ISecureTokenStore`)
+- Typed REST client with bearer + one refresh retry
+- Shared contracts only (`HealthCare.Contracts`) — no Web/Application/Infrastructure references
 - Authoritative product scope: **`Docs/mvp-patient-scope.md`** (approved 2026-07-25; PM-0…PM-8)
+- App README: `src/HealthCare.Mobile/README.md`
 
 ### 4.3 Backend
 
@@ -449,6 +450,7 @@ HealthCare/
 │   ├── HealthCare.Api/
 │   ├── HealthCare.Web/
 │   ├── HealthCare.Mobile/
+│   ├── HealthCare.Mobile.Core/
 │   ├── HealthCare.Domain/
 │   ├── HealthCare.Application/
 │   ├── HealthCare.Infrastructure/
@@ -456,7 +458,10 @@ HealthCare/
 ├── tests/
 │   ├── HealthCare.UnitTests/
 │   ├── HealthCare.IntegrationTests/
-│   └── HealthCare.ArchitectureTests/
+│   ├── HealthCare.ArchitectureTests/
+│   ├── HealthCare.Web.Tests/
+│   ├── HealthCare.EndToEndTests/
+│   └── HealthCare.Mobile.Tests/
 ├── docs/
 │   ├── architecture.md
 │   ├── development-plan.md
@@ -633,7 +638,9 @@ Use Ant Design Blazor to build:
 
 Authoritative scope: **`Docs/mvp-patient-scope.md`**.
 
-The patient app should provide:
+**PM-2 (delivered):** MAUI Blazor Hybrid Android-first foundation — DI, config, secure tokens, typed API client, navigation shell, shared error/loading states, `/connectivity` health smoke. See `src/HealthCare.Mobile/README.md`.
+
+The full patient app (PM-3…PM-6) should provide:
 
 - Email/password registration and login (Google deferred)
 - Authenticated clinic discovery (name / city / optional specialty string)

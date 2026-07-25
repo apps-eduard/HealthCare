@@ -11,13 +11,13 @@ Authoritative design documents:
 - [Organization Admin MVP scope](Docs/mvp-organization-admin-scope.md)
 - [Clinic Admin MVP scope](Docs/mvp-clinic-admin-scope.md) *(approved — **CA-1–CA-10 complete**)*
 - [Doctor MVP scope](Docs/mvp-doctor-scope.md) *(approved — **complete**; DR-8 skipped)*
-- [Patient MVP scope](Docs/mvp-patient-scope.md) *(approved — **PM-0 + PM-1**; PM-2…PM-8 not started)*
+- [Patient MVP scope](Docs/mvp-patient-scope.md) *(approved — **PM-0 + PM-1 + PM-2**; PM-3…PM-8 not started)*
 
 ## Prerequisites
 
 - [.NET SDK 10](https://dotnet.microsoft.com/download/dotnet/10.0) (`dotnet --version` should report `10.x`)
 - Docker Desktop (for local PostgreSQL and Testcontainers)
-- Optional for Patient Mobile (PM-2+): .NET MAUI workload for `HealthCare.Mobile`
+- Optional for Patient Mobile (PM-2+): .NET MAUI Android workload + Android SDK / JDK for `HealthCare.Mobile` (see `src/HealthCare.Mobile/README.md`)
 
 ## Quick start
 
@@ -133,7 +133,8 @@ HealthCare/
 ├── src/
 │   ├── HealthCare.Api/              # ASP.NET Core Web API host
 │   ├── HealthCare.Web/              # Staff Blazor + Ant Design web app
-│   ├── HealthCare.Mobile/           # Patient MAUI placeholder → PM-2 (see mvp-patient-scope.md)
+│   ├── HealthCare.Mobile/           # Patient MAUI Blazor Hybrid (PM-2 foundation)
+│   ├── HealthCare.Mobile.Core/      # Mobile foundation services (testable)
 │   ├── HealthCare.Domain/           # Domain entities by module
 │   ├── HealthCare.Application/      # Use cases, validators, DI
 │   ├── HealthCare.Infrastructure/   # EF Core, PostgreSQL, Identity storage
@@ -141,7 +142,10 @@ HealthCare/
 ├── tests/
 │   ├── HealthCare.UnitTests/
 │   ├── HealthCare.IntegrationTests/
-│   └── HealthCare.ArchitectureTests/
+│   ├── HealthCare.ArchitectureTests/
+│   ├── HealthCare.Web.Tests/
+│   ├── HealthCare.EndToEndTests/
+│   └── HealthCare.Mobile.Tests/     # Patient mobile foundation unit tests
 ├── Docs/
 ├── docker-compose.yml
 ├── Directory.Build.props

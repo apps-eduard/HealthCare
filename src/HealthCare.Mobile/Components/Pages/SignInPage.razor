@@ -1,0 +1,76 @@
+@page "/sign-in"
+@inject IHealthCareApiClient Api
+@inject IAuthSessionService Auth
+@inject NavigationManager Nav
+@inject ILogger<SignInPage> Logger
+
+<h1>Sign in</h1>
+<p class="lede">
+    Development-only connectivity for the PM-2 foundation. Full registration and email-confirmation UX ships in PM-3.
+</p>
+
+@if (_problem is not null)
+{
+    <ErrorState Problem="@_problem" />
+}
+
+<EditForm Model="_model" OnValidSubmit="SubmitAsync">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+    <div class="field">
+        <label for="email">Email</label>
+        <InputText id="email" @bind-Value="_model.Email" autocomplete="username" />
+    </div>
+    <div class="field">
+        <label for="password">Password</label>
+        <InputText id="password" @bind-Value="_model.Password" type="password" autocomplete="current-password" />
+    </div>
+    <button class="btn" type="submit" disabled="@_busy">@(_busy ? "Signing in…" : "Sign in")</button>
+</EditForm>
+
+<p class="hint"><a href="@PatientRoutes.Connectivity">Back to connectivity</a></p>
+
+@code {
+    private readonly SignInModel _model = new();
+    private bool _busy;
+    private ApiProblem? _problem;
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        _problem = null;
+        Logger.LogInformation("Dev sign-in attempted.");
+
+        var result = await Api.LoginAsync(new LoginRequest
+        {
+            Email = _model.Email.Trim(),
+            Password = _model.Password,
+        });
+
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _problem = result.Error ?? new ApiProblem { Kind = ApiErrorKind.Unknown, Title = "Sign-in failed" };
+            _busy = false;
+            return;
+        }
+
+        var me = await Api.GetMeAsync();
+        if (me.IsSuccess && me.Value is not null)
+        {
+            await Auth.UpdateCurrentUserAsync(me.Value);
+        }
+
+        _busy = false;
+        Nav.NavigateTo(PatientRoutes.Home);
+    }
+
+    private sealed class SignInModel
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.EmailAddress]
+        public string Email { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required]
+        public string Password { get; set; } = string.Empty;
+    }
+}

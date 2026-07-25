@@ -1,0 +1,17 @@
+@namespace HealthCare.Mobile.Components
+@using HealthCare.Mobile.Core.Api
+
+<div class="state-panel state-error" role="alert">
+    <h2>@(Title ?? Problem?.Title ?? "Something went wrong")</h2>
+    <p>@(Message ?? Problem?.UserMessage ?? "Please try again.")</p>
+    @if (OnRetry.HasDelegate)
+    {
+        <button type="button" class="btn" @onclick="OnRetry">Retry</button>
+    }
+</div>
+@code {
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public ApiProblem? Problem { get; set; }
+    [Parameter] public EventCallback OnRetry { get; set; }
+}

@@ -1,0 +1,16 @@
+@namespace HealthCare.Mobile.Components
+
+<div class="state-panel state-offline" role="status">
+    <h2>@(Title ?? "Offline")</h2>
+    <p>@(Message ?? "Unable to reach the server. Check your connection and try again.")</p>
+    @if (OnRetry.HasDelegate)
+    {
+        <button type="button" class="btn" @onclick="OnRetry">Retry</button>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public EventCallback OnRetry { get; set; }
+}

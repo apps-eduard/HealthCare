@@ -1,12 +1,12 @@
 # MVP Patient Scope
 
 **Status:** **Approved** by product owner (2026-07-25). Authoritative for the **Patient Mobile MVP**.  
-**Implementation:** **PM-1 delivered** (2026-07-25) — backend contract hardening. PM-2…PM-8 not started.  
+**Implementation:** **PM-0 + PM-1 + PM-2 delivered** (2026-07-25). PM-3…PM-8 not started.  
 **Authority:** This document overrides informal Patient notes in `Docs/security.md` §4.7 / §5.1, `Docs/architecture.md` §10.1 / §12.2, and `Docs/development-plan.md` Phase 11 where they conflict. Keep matrix and security cross-links in sync when coding.  
 **Related:** `Docs/mvp-organization-admin-scope.md`, `Docs/mvp-clinic-admin-scope.md`, `Docs/mvp-doctor-scope.md`, `Docs/authorization-matrix.md`, `Docs/security.md` §4.7 / patient self-scope.  
 **Do not** copy staff Web capabilities into the Patient app.  
 **Do not** rebuild existing Patient APIs that already match this contract.  
-**Do not** begin mobile UI (PM-2) until scheduled.
+**Do not** begin PM-3 (full auth/profile UX) until scheduled.
 
 Verified baseline when approved (2026-07-25):
 
@@ -443,7 +443,7 @@ Do not treat permission-catalog-only tests as sufficient for Patient product DoD
 |-------|--------|------------|--------|
 | **PM-0** | Patient MVP scope and contract | Docs | **Delivered** (2026-07-25) |
 | **PM-1** | Patient contract and backend gap hardening | Medium | **Delivered** (2026-07-25) |
-| **PM-2** | Patient mobile foundation (MAUI) | Medium | Not started |
+| **PM-2** | Patient mobile foundation (MAUI) | Medium | **Delivered** (2026-07-25) |
 | **PM-3** | Mobile authentication and profile | Medium | Not started |
 | **PM-4** | Clinic and Doctor discovery | Medium | Not started |
 | **PM-5** | Appointment booking (mobile) | Medium | Not started |
@@ -462,10 +462,13 @@ Do not treat permission-catalog-only tests as sufficient for Patient product DoD
 
 ### PM-2 — Patient mobile foundation
 
-- Convert/replace `HealthCare.Mobile` placeholder with MAUI Blazor Hybrid  
-- Android-first configuration  
-- DI, typed API client, environment config, secure token storage, navigation shell, shared errors  
-- Connectivity/auth smoke only — **no booking UI yet**
+**Delivered (2026-07-25).** See `src/HealthCare.Mobile/README.md`.
+
+- Converted `HealthCare.Mobile` placeholder to MAUI Blazor Hybrid (`net10.0-android`)
+- `HealthCare.Mobile.Core` + `HealthCare.Mobile.Tests` foundation library/tests
+- DI, typed API client, environment config, secure token storage, navigation shell, shared UI/error states
+- Connectivity smoke (`/health`) + development-only sign-in to prove token wiring — **not** completed PM-3 UX
+- **No** booking, discovery, profile, or appointments product screens
 
 ### PM-3 — Mobile authentication and profile
 
@@ -513,7 +516,8 @@ Do not treat permission-catalog-only tests as sufficient for Patient product DoD
 
 - [x] Scope approved by product owner (PM-0, 2026-07-25)  
 - [x] PM-1 backend gap hardening complete  
-- [ ] PM-2 … PM-8 complete  
+- [x] PM-2 mobile foundation complete  
+- [ ] PM-3 … PM-8 complete  
 - [x] Backend gaps closed for PM-1 (404 concealment, 2-hour cutoff, DTO review)  
 - [ ] Android MAUI app supports full Patient MVP flow  
 - [ ] Patient security matrix green  
@@ -583,7 +587,7 @@ PM-0 alone does **not** complete the Patient MVP. PM-1 does **not** complete mob
 | Clinical visibility | Notes staff-only | Remain denied | None (intentional) | — |
 | Notifications | Hangfire infra / NoOp prod | API refresh only | Not a Patient feature yet | Deferred |
 | Cross-patient profile | **404** | **404** | Closed PM-1 | — |
-| Mobile application | Class-library placeholder | MAUI Blazor Hybrid | **Not implemented** | PM-2…PM-6 |
+| Mobile application | MAUI Blazor Hybrid Android foundation (`HealthCare.Mobile` + `.Core`) | Full Patient journeys | Auth/profile/discovery/booking UX | PM-3…PM-6 |
 | Patient E2E | Denial/seed only | Full Patient pack | **Missing** | PM-8 |
 
 ---
@@ -594,3 +598,4 @@ PM-0 alone does **not** complete the Patient MVP. PM-1 does **not** complete mob
 |------|------|
 | 2026-07-25 | **PM-0:** Initial authoritative Patient Mobile MVP scope from API audit + product-owner decisions |
 | 2026-07-25 | **PM-1 delivered:** foreign patient profile `404`; 2-hour cancel/reschedule cutoff; AppointmentResponse retained with patient display scrub; authz-before-conflict tests |
+| 2026-07-25 | **PM-2 delivered:** MAUI Blazor Hybrid Android-first foundation; typed API client; secure storage; auth-state; navigation shell; connectivity smoke; foundation unit tests |

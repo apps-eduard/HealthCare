@@ -19,7 +19,7 @@
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Patient Mobile MVP **PM-1 complete** (backend hardening). Next: **PM-2** (MAUI foundation) when scheduled. Do not start PM-2 until explicitly scheduled.
+**Current focus:** Patient Mobile MVP **PM-2 complete** (MAUI foundation). Next: **PM-3** (mobile auth + profile) when scheduled. Do not start PM-3 until explicitly scheduled.
 
 ### All phases at a glance
 
@@ -156,7 +156,7 @@ Authoritative design docs:
 
 ### Deferred / risks
 
-- Full MAUI mobile project deferred to Patient Mobile MVP (**PM-2…PM-8**; scope `Docs/mvp-patient-scope.md`; class library placeholder today)
+- Full MAUI mobile project: **PM-2 foundation delivered**; Patient journeys continue in **PM-3…PM-8** (scope `Docs/mvp-patient-scope.md`)
 - Integration tests require Docker Desktop running for Testcontainers
 
 ---
@@ -957,9 +957,8 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 - Patient appointment list omits staff display helpers
 - Focused unit + HTTP integration coverage
 
-### Remaining (PM-2…PM-8)
+### Remaining (PM-3…PM-8)
 
-- PM-2: Replace Mobile placeholder with .NET MAUI Blazor Hybrid (Android first)
 - PM-3…PM-6: Auth/profile, discovery (incl. clinic browse API), booking, my appointments UX
 - PM-7…PM-8: Security matrix + Patient E2E
 
@@ -1118,18 +1117,19 @@ Authoritative scope: **`Docs/mvp-doctor-scope.md`** (**approved** 2026-07-25). *
 | 2026-07-25 | — | Patient API readiness audit accepted (partially complete; no `mvp-patient-scope` yet) |
 | 2026-07-25 | — | **PM-0:** Patient Mobile MVP scope approved — `Docs/mvp-patient-scope.md`; baseline `c1e036a` |
 | 2026-07-25 | — | **PM-1:** Patient API contract hardening — profile `404`, 2h cancel/reschedule cutoff, DTO scrub |
+| 2026-07-25 | — | **PM-2:** Patient MAUI Blazor Hybrid foundation — Android-first shell, typed client, secure storage |
 
 ### Patient Mobile MVP (approved scope)
 
-Authoritative scope: **`Docs/mvp-patient-scope.md`** (**approved** 2026-07-25). **Status: PM-0 + PM-1 complete; PM-2…PM-8 not started.**
+Authoritative scope: **`Docs/mvp-patient-scope.md`** (**approved** 2026-07-25). **Status: PM-0 + PM-1 + PM-2 complete; PM-3…PM-8 not started.**
 
-Patient-facing app: **.NET MAUI Blazor Hybrid** (Android first). No separate Patient Web app in the initial MVP. Existing Patient APIs retained; PM-1 closed 404 concealment + 2-hour cancel/reschedule cutoff + DTO review.
+Patient-facing app: **.NET MAUI Blazor Hybrid** (Android first). No separate Patient Web app in the initial MVP. Existing Patient APIs retained; PM-1 closed 404 concealment + 2-hour cancel/reschedule cutoff + DTO review. PM-2 delivered app shell, DI, typed client, secure storage, navigation placeholders, connectivity smoke.
 
 | Phase | Theme | Complexity | Status |
 |-------|--------|------------|--------|
 | PM-0 | Patient MVP scope and contract | Docs | **Delivered** (2026-07-25) |
 | PM-1 | Backend gap hardening (404 concealment, 2h cutoff, DTO review) | Medium | **Delivered** (2026-07-25) |
-| PM-2 | MAUI mobile foundation | Medium | Not started |
+| PM-2 | MAUI mobile foundation | Medium | **Delivered** (2026-07-25) |
 | PM-3 | Mobile auth + profile | Medium | Not started |
 | PM-4 | Clinic browse + Doctor discovery | Medium | Not started |
 | PM-5 | Appointment booking (mobile) | Medium | Not started |
@@ -1137,9 +1137,9 @@ Patient-facing app: **.NET MAUI Blazor Hybrid** (Android first). No separate Pat
 | PM-7 | Patient security negative matrix | Medium | Not started |
 | PM-8 | Patient mobile E2E | Medium | Not started |
 
-**Remaining gaps after PM-1:** authenticated patient clinic browse/search (PM-4); mobile app (PM-2…); Patient E2E (PM-8).
+**Remaining gaps after PM-2:** full auth/profile UX (PM-3); authenticated patient clinic browse/search (PM-4); booking/appointments mobile UX (PM-5–PM-6); Patient security matrix (PM-7); Patient E2E (PM-8).
 
-**Do not** treat PM-1 as mobile delivery. **Do not** start PM-2 until scheduled.
+**Do not** treat PM-2 as auth or booking delivery. **Do not** start PM-3 until scheduled.
 
 ---
 

@@ -1,0 +1,19 @@
+@namespace HealthCare.Mobile.Components
+
+@if (Errors is { Count: > 0 })
+{
+    <div class="validation-summary" role="alert">
+        <p>@(Title ?? "Please correct the following:")</p>
+        <ul>
+            @foreach (var error in Errors)
+            {
+                <li>@error</li>
+            }
+        </ul>
+    </div>
+}
+
+@code {
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public IReadOnlyList<string>? Errors { get; set; }
+}

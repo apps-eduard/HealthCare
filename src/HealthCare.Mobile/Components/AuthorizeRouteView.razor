@@ -1,0 +1,32 @@
+@using HealthCare.Mobile.Core.Authentication
+@using HealthCare.Mobile.Core.Navigation
+@inject IAuthSessionService Auth
+@inject NavigationManager Nav
+
+@if (_ready)
+{
+    <RouteView RouteData="RouteData" DefaultLayout="DefaultLayout" />
+}
+
+@code {
+    [Parameter]
+    public RouteData RouteData { get; set; } = default!;
+
+    [Parameter]
+    public Type DefaultLayout { get; set; } = default!;
+
+    private bool _ready;
+
+    protected override void OnParametersSet()
+    {
+        var path = PatientRoutes.Normalize(Nav.ToBaseRelativePath(Nav.Uri));
+        if (PatientRoutes.RequiresAuthentication(path) && !Auth.IsAuthenticated)
+        {
+            Nav.NavigateTo(PatientRoutes.SignIn);
+            _ready = false;
+            return;
+        }
+
+        _ready = true;
+    }
+}
