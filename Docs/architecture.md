@@ -644,12 +644,14 @@ Authoritative scope: **`Docs/mvp-patient-scope.md`**.
 
 **PM-4 (delivered):** Authenticated Patient clinic browse/search + details; clinic-code enrollment UI; Doctor list; available-slot browse and in-memory selection.
 
-**PM-5 (delivered):** Booking review/submit via existing Patient create API; status **`Requested`**; enrollment + conflict UX; no My Appointments UI.
+**PM-5 (delivered):** Booking review/submit via existing Patient create API; status **`Requested`**; enrollment + conflict UX.
 
-The remaining patient app (PM-6) should provide:
+**PM-6 (delivered):** My Appointments (Upcoming/Previous), detail, Patient cancel → `CancelledByPatient`, reschedule (same clinic/Doctor via discovery slots), 2-hour cutoff UX, `ExpectedVersion` concurrency reload without auto-resubmit. Shared `AppointmentResponse` retained with Patient display scrub (PM-1).
 
-- My appointments (upcoming + past), cancel and reschedule with 2-hour cutoff
-- Status via refreshed API data (no notification inbox in first release)
+Remaining Patient Mobile work (PM-7 / PM-8):
+
+- Full Patient security negative matrix
+- Patient mobile E2E pack
 
 Patient-visible clinical records grouped by clinic are **deferred**. Medical-note bodies remain staff-only.
 

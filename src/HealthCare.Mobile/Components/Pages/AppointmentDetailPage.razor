@@ -1,0 +1,280 @@
+@page "/appointments/{AppointmentId:guid}"
+@inject IPatientAppointmentService Appointments
+@inject NavigationManager Nav
+@inject ILogger<AppointmentDetailPage> Logger
+
+<h1>Appointment</h1>
+
+@if (_busy && _appointment is null)
+{
+    <LoadingState Message="Loading appointment…" />
+}
+else if (_unavailable)
+{
+    <EmptyState Message="This appointment is not available." />
+    <div class="actions">
+        <a class="btn" href="@PatientRoutes.Appointments">My Appointments</a>
+        <a class="btn btn-secondary" href="@PatientRoutes.Home">Home</a>
+    </div>
+}
+else if (_problem is not null && _appointment is null)
+{
+    @if (_problem.Kind is ApiErrorKind.Network or ApiErrorKind.Timeout)
+    {
+        <OfflineState Message="@_problem.UserMessage" OnRetry="LoadAsync" />
+    }
+    else if (_problem.Kind == ApiErrorKind.Unauthorized)
+    {
+        <SessionExpiredState SignInHref="@PatientRoutes.SignIn" />
+    }
+    else if (_problem.Kind == ApiErrorKind.NotFound)
+    {
+        <EmptyState Message="This appointment is not available." />
+        <div class="actions">
+            <a class="btn" href="@PatientRoutes.Appointments">My Appointments</a>
+        </div>
+    }
+    else
+    {
+        <ErrorState Problem="@_problem" OnRetry="LoadAsync" />
+    }
+}
+else if (_appointment is not null)
+{
+    <dl class="meta">
+        <dt>Clinic</dt>
+        <dd>@(string.IsNullOrWhiteSpace(_appointment.ClinicName) ? "—" : _appointment.ClinicName)</dd>
+        <dt>Doctor</dt>
+        <dd>@(string.IsNullOrWhiteSpace(_appointment.DoctorDisplayName) ? "—" : _appointment.DoctorDisplayName)</dd>
+        <dt>When</dt>
+        <dd>@AppointmentTimeDisplay.FormatRange(_appointment)</dd>
+        <dt>Status</dt>
+        <dd>@PatientAppointmentStatuses.DisplayStatus(_appointment.Status)</dd>
+        <dt>Reason</dt>
+        <dd>@(string.IsNullOrWhiteSpace(_appointment.Reason) ? "—" : _appointment.Reason)</dd>
+        @if (!string.IsNullOrWhiteSpace(_appointment.CancellationReason))
+        {
+            <dt>Cancellation</dt>
+            <dd>@_appointment.CancellationReason</dd>
+        }
+    </dl>
+
+    @if (_appointment.Status == PatientAppointmentStatuses.Requested)
+    {
+        <p class="hint">Requested means the clinic still needs to confirm this appointment.</p>
+    }
+    else if (_appointment.Status == PatientAppointmentStatuses.Confirmed)
+    {
+        <p class="hint">Confirmed by the clinic. Arrive on time for your visit.</p>
+    }
+
+    @if (_statusMessage is not null)
+    {
+        <div class="state-panel state-ok" role="status">
+            <p>@_statusMessage</p>
+        </div>
+    }
+
+    @if (_actionProblem is not null)
+    {
+        @if (_actionProblem.Kind is ApiErrorKind.Network)
+        {
+            <OfflineState Message="@_actionProblem.UserMessage" />
+        }
+        else if (_actionProblem.Kind == ApiErrorKind.Timeout)
+        {
+            <ErrorState
+                Title="Request may still be processing"
+                Message="We could not confirm the result. Do not submit again yet. Reload this appointment to see the latest status."
+                OnRetry="LoadAsync" />
+        }
+        else if (_actionProblem.Kind == ApiErrorKind.Unauthorized)
+        {
+            <SessionExpiredState SignInHref="@PatientRoutes.SignIn" />
+        }
+        else
+        {
+            <ErrorState Message="@_actionMessage" OnRetry="LoadAsync" />
+        }
+    }
+
+    @if (_confirmCancel)
+    {
+        <div class="state-panel state-error" role="alertdialog" aria-labelledby="cancel-title">
+            <h2 id="cancel-title">Cancel appointment</h2>
+            <p>This action cannot be undone.</p>
+            <p>@AppointmentTimeDisplay.FormatShort(_appointment)</p>
+            <div class="actions">
+                <button type="button" class="btn" disabled="@_mutating" @onclick="CancelAsync">
+                    @(_mutating ? "Cancelling…" : "Confirm cancel")
+                </button>
+                <button type="button" class="btn btn-secondary" disabled="@_mutating" @onclick="() => _confirmCancel = false">
+                    Keep appointment
+                </button>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="actions">
+            @if (_canCancel)
+            {
+                <button type="button" class="btn" disabled="@_mutating" @onclick="() => _confirmCancel = true">
+                    Cancel appointment
+                </button>
+            }
+            else if (PatientAppointmentStatuses.CanCancelStatus(_appointment.Status)
+                     && !PatientAppointmentStatuses.IsOutsideMutationCutoff(_appointment, _asOfUtc))
+            {
+                <p class="hint">Changes must be made at least two hours before the appointment. Please contact the clinic.</p>
+            }
+
+            @if (_canReschedule)
+            {
+                <a class="btn btn-secondary" href="@PatientRoutes.AppointmentReschedule(AppointmentId)">Reschedule</a>
+            }
+
+            <button type="button" class="btn btn-secondary" disabled="@_busy" @onclick="LoadAsync">Reload</button>
+            <a class="btn btn-secondary" href="@PatientRoutes.Appointments">My Appointments</a>
+        </div>
+    }
+}
+
+@code {
+    [Parameter]
+    public Guid AppointmentId { get; set; }
+
+    private AppointmentResponse? _appointment;
+    private ApiProblem? _problem;
+    private ApiProblem? _actionProblem;
+    private string? _actionMessage;
+    private string? _statusMessage;
+    private bool _busy;
+    private bool _mutating;
+    private bool _unavailable;
+    private bool _confirmCancel;
+    private bool _uncertainOutcome;
+    private DateTimeOffset _asOfUtc = DateTimeOffset.UtcNow;
+    private CancellationTokenSource? _cts;
+
+    private bool _canCancel =>
+        _appointment is not null
+        && !_uncertainOutcome
+        && PatientAppointmentStatuses.CanCancel(_appointment, _asOfUtc);
+
+    private bool _canReschedule =>
+        _appointment is not null
+        && !_uncertainOutcome
+        && PatientAppointmentStatuses.CanReschedule(_appointment, _asOfUtc)
+        && !string.IsNullOrWhiteSpace(_appointment.ClinicSlug);
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        var token = _cts.Token;
+
+        _busy = true;
+        _problem = null;
+        _actionProblem = null;
+        _actionMessage = null;
+        _unavailable = false;
+        _confirmCancel = false;
+        _uncertainOutcome = false;
+        _asOfUtc = DateTimeOffset.UtcNow;
+        StateHasChanged();
+
+        var result = await Appointments.GetAsync(AppointmentId, token);
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _appointment = null;
+            _problem = result.Error;
+            if (_problem?.Kind == ApiErrorKind.NotFound
+                || string.Equals(_problem?.ErrorCode, AppointmentErrorCodes.NotFoundOrDenied, StringComparison.Ordinal))
+            {
+                _unavailable = true;
+            }
+
+            _busy = false;
+            return;
+        }
+
+        _appointment = result.Value;
+        _busy = false;
+        Logger.LogInformation("Patient appointment detail loaded.");
+    }
+
+    private async Task CancelAsync()
+    {
+        if (_appointment is null || _mutating || _uncertainOutcome)
+        {
+            return;
+        }
+
+        _mutating = true;
+        _actionProblem = null;
+        _actionMessage = null;
+        _statusMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var version = _appointment.Version;
+            var result = await Appointments.CancelAsync(_appointment.Id, version);
+            if (!result.IsSuccess || result.Value is null)
+            {
+                _actionProblem = result.Error
+                    ?? new ApiProblem { Kind = ApiErrorKind.Unknown, Title = "Cancellation failed" };
+                if (_actionProblem.Kind == ApiErrorKind.Timeout)
+                {
+                    _uncertainOutcome = true;
+                    Logger.LogInformation("Patient cancellation timed out; outcome uncertain.");
+                }
+                else if (string.Equals(
+                             _actionProblem.ErrorCode,
+                             AppointmentErrorCodes.ConcurrencyConflict,
+                             StringComparison.Ordinal)
+                         || string.Equals(
+                             _actionProblem.ErrorCode,
+                             AppointmentErrorCodes.PatientMutationCutoff,
+                             StringComparison.Ordinal)
+                         || string.Equals(
+                             _actionProblem.ErrorCode,
+                             AppointmentErrorCodes.InvalidTransition,
+                             StringComparison.Ordinal))
+                {
+                    _actionMessage = Appointments.MapMutationError(_actionProblem);
+                    await LoadAsync();
+                }
+                else if (_actionProblem.Kind == ApiErrorKind.NotFound
+                         || string.Equals(
+                             _actionProblem.ErrorCode,
+                             AppointmentErrorCodes.NotFoundOrDenied,
+                             StringComparison.Ordinal))
+                {
+                    _unavailable = true;
+                    _appointment = null;
+                }
+                else
+                {
+                    _actionMessage = Appointments.MapMutationError(_actionProblem);
+                }
+
+                return;
+            }
+
+            _appointment = result.Value;
+            _confirmCancel = false;
+            _statusMessage = "Appointment cancelled. Status: Cancelled by you.";
+            _asOfUtc = DateTimeOffset.UtcNow;
+            Logger.LogInformation("Patient appointment cancelled.");
+        }
+        finally
+        {
+            _mutating = false;
+        }
+    }
+}

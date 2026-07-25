@@ -1,12 +1,12 @@
 # MVP Patient Scope
 
 **Status:** **Approved** by product owner (2026-07-25). Authoritative for the **Patient Mobile MVP**.  
-**Implementation:** **PM-0 + PM-1 + PM-2 + PM-3 + PM-4 + PM-5 delivered** (2026-07-25). PM-6…PM-8 not started.  
+**Implementation:** **PM-0 + PM-1 + PM-2 + PM-3 + PM-4 + PM-5 + PM-6 delivered** (2026-07-25). PM-7…PM-8 not started.  
 **Authority:** This document overrides informal Patient notes in `Docs/security.md` §4.7 / §5.1, `Docs/architecture.md` §10.1 / §12.2, and `Docs/development-plan.md` Phase 11 where they conflict. Keep matrix and security cross-links in sync when coding.  
 **Related:** `Docs/mvp-organization-admin-scope.md`, `Docs/mvp-clinic-admin-scope.md`, `Docs/mvp-doctor-scope.md`, `Docs/authorization-matrix.md`, `Docs/security.md` §4.7 / patient self-scope.  
 **Do not** copy staff Web capabilities into the Patient app.  
 **Do not** rebuild existing Patient APIs that already match this contract.  
-**Do not** begin PM-6 (My Appointments / cancel / reschedule UI) until scheduled.
+**Do not** begin PM-7 (Patient security matrix) or PM-8 (Patient E2E) until scheduled.
 
 Verified baseline when approved (2026-07-25):
 
@@ -458,7 +458,7 @@ Do not treat permission-catalog-only tests as sufficient for Patient product DoD
 | **PM-3** | Mobile authentication and profile | Medium | **Delivered** (2026-07-25) |
 | **PM-4** | Clinic and Doctor discovery | Medium | **Delivered** (2026-07-25) |
 | **PM-5** | Appointment booking (mobile) | Medium | **Delivered** (2026-07-25) |
-| **PM-6** | My Appointments, cancel, reschedule | Medium | Not started |
+| **PM-6** | My Appointments, cancel, reschedule | Medium | **Delivered** (2026-07-25) |
 | **PM-7** | Patient security and negative matrix | Medium | Not started |
 | **PM-8** | Patient mobile E2E | Medium | Not started |
 
@@ -513,12 +513,19 @@ Do not treat permission-catalog-only tests as sufficient for Patient product DoD
 - Success receipt screen (no resubmit on navigation)
 - Backend booking lifecycle unchanged
 
-### PM-6 — My Appointments, cancellation, and rescheduling
+### PM-6 — My Appointments, cancellation, and rescheduling — **delivered**
 
-- Upcoming/past/detail  
-- Cancel + reschedule with 2-hour cutoff UX  
-- Terminal-state action rules  
-- Conflict refresh (`409`)  
+**Delivered (2026-07-25).** See `src/HealthCare.Mobile/README.md`.
+
+- My Appointments list with **Upcoming** / **Previous** views (paged via `GET /api/v1/patients/me/appointments`)
+- Upcoming: non-terminal and not ended; Previous: terminal **or** ended
+- Appointment detail (`GET /api/v1/appointments/{id}`) with Patient-safe fields only
+- Cancel (`POST …/cancel`) → `CancelledByPatient`; confirmation dialog; `ExpectedVersion`; no auto-retry after timeout
+- Reschedule (`POST …/reschedule`) same clinic/Doctor slot selection via PM-4 discovery; same appointment identity
+- Two-hour cutoff UX (`appointment.patient_mutation_cutoff`); exact two hours allowed; “Please contact the clinic”
+- Status-aware actions (Requested/Confirmed only); concurrency reload without auto-resubmit
+- Booking success links to My Appointments
+- **Android runtime smoke:** not verified in this delivery (build + automated tests only)
 
 ### PM-7 — Patient security and negative matrix
 
@@ -544,9 +551,10 @@ Do not treat permission-catalog-only tests as sufficient for Patient product DoD
 - [x] PM-3 authentication and profile complete  
 - [x] PM-4 clinic and Doctor discovery complete  
 - [x] PM-5 appointment booking complete  
-- [ ] PM-6 … PM-8 complete  
+- [x] PM-6 My Appointments / cancel / reschedule complete  
+- [ ] PM-7 … PM-8 complete  
 - [x] Backend gaps closed for PM-1 (404 concealment, 2-hour cutoff, DTO review)  
-- [ ] Android MAUI app supports full Patient MVP flow  
+- [ ] Android MAUI app supports full Patient MVP flow (PM-8 E2E pending)  
 - [ ] Patient security matrix green  
 - [ ] Patient E2E pack green on required host  
 - [ ] Docs updated as phases ship  
@@ -608,13 +616,13 @@ PM-0 alone does **not** complete the Patient MVP. PM-1 does **not** complete mob
 | Doctor discovery | Doctors by clinic code | Keep patient-safe list | None material | **PM-4 delivered** |
 | Availability | Available-slots API | Keep | None material | **PM-4 delivered** |
 | Booking | Create → `Requested` | Keep; no auto-confirm | Closed PM-5 mobile | **PM-5 delivered** |
-| Appointment list/detail | Me list + get by id (own) | Keep | DTO review done PM-1 | PM-6 |
-| Cancellation | Own + **2h cutoff** | Delivered | Mobile UX | PM-6 |
-| Rescheduling | Own Requested/Confirmed + **2h cutoff** | Delivered | Mobile UX | PM-6 |
+| Appointment list/detail | Me list + get by id (own) | Keep | Closed PM-6 mobile | **PM-6 delivered** |
+| Cancellation | Own + **2h cutoff** | Delivered | Closed PM-6 mobile | **PM-6 delivered** |
+| Rescheduling | Own Requested/Confirmed + **2h cutoff** | Delivered | Closed PM-6 mobile | **PM-6 delivered** |
 | Clinical visibility | Notes staff-only | Remain denied | None (intentional) | — |
 | Notifications | Hangfire infra / NoOp prod | API refresh only | Not a Patient feature yet | Deferred |
 | Cross-patient profile | **404** | **404** | Closed PM-1 | — |
-| Mobile application | Auth + profile + discovery + booking on MAUI Android | My Appointments UX | Appointments list/cancel/reschedule | PM-6 |
+| Mobile application | Auth + profile + discovery + booking + My Appointments on MAUI Android | Full MVP UX | Security matrix + E2E | PM-7 / PM-8 |
 | Patient E2E | Denial/seed only | Full Patient pack | **Missing** | PM-8 |
 
 ---
@@ -627,3 +635,6 @@ PM-0 alone does **not** complete the Patient MVP. PM-1 does **not** complete mob
 | 2026-07-25 | **PM-1 delivered:** foreign patient profile `404`; 2-hour cancel/reschedule cutoff; AppointmentResponse retained with patient display scrub; authz-before-conflict tests |
 | 2026-07-25 | **PM-2 delivered:** MAUI Blazor Hybrid Android-first foundation; typed API client; secure storage; auth-state; navigation shell; connectivity smoke; foundation unit tests |
 | 2026-07-25 | **PM-3 delivered:** Patient registration, email confirmation UX, login + `/auth/me` linkage, session restore, logout, profile view/edit + concurrency UX |
+| 2026-07-25 | **PM-4 delivered:** Authenticated clinic browse/search, clinic-code enrollment UI, Doctor list, availability selection |
+| 2026-07-25 | **PM-5 delivered:** Mobile booking review/submit → `Requested`; enrollment + conflict UX |
+| 2026-07-25 | **PM-6 delivered:** My Appointments (upcoming/previous), detail, cancel, reschedule; 2-hour cutoff UX; concurrency conflict refresh |

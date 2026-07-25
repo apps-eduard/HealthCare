@@ -1,0 +1,417 @@
+@page "/appointments/{AppointmentId:guid}/reschedule"
+@inject IPatientAppointmentService Appointments
+@inject IPatientDiscoveryService Discovery
+@inject IDiscoveryStateService Selection
+@inject NavigationManager Nav
+@inject ILogger<AppointmentReschedulePage> Logger
+
+<h1>Reschedule appointment</h1>
+<p class="lede">
+    Choose a new available slot with the same clinic and Doctor. The appointment identity stays the same —
+    this does not create a second booking.
+</p>
+
+@if (_busy && _appointment is null)
+{
+    <LoadingState Message="Loading appointment…" />
+}
+else if (_unavailable)
+{
+    <EmptyState Message="This appointment is not available." />
+    <div class="actions">
+        <a class="btn" href="@PatientRoutes.Appointments">My Appointments</a>
+    </div>
+}
+else if (_problem is not null && _appointment is null)
+{
+    @if (_problem.Kind is ApiErrorKind.Network or ApiErrorKind.Timeout)
+    {
+        <OfflineState Message="@_problem.UserMessage" OnRetry="LoadAppointmentAsync" />
+    }
+    else if (_problem.Kind == ApiErrorKind.Unauthorized)
+    {
+        <SessionExpiredState SignInHref="@PatientRoutes.SignIn" />
+    }
+    else
+    {
+        <ErrorState Problem="@_problem" OnRetry="LoadAppointmentAsync" />
+    }
+}
+else if (_appointment is not null && !_eligible)
+{
+    <EmptyState Message="@_ineligibleMessage" />
+    <div class="actions">
+        <a class="btn" href="@PatientRoutes.AppointmentDetails(AppointmentId)">Back to appointment</a>
+    </div>
+}
+else if (_appointment is not null)
+{
+    <dl class="meta">
+        <dt>Clinic</dt>
+        <dd>@(string.IsNullOrWhiteSpace(_appointment.ClinicName) ? "—" : _appointment.ClinicName)</dd>
+        <dt>Doctor</dt>
+        <dd>@(string.IsNullOrWhiteSpace(_appointment.DoctorDisplayName) ? "—" : _appointment.DoctorDisplayName)</dd>
+        <dt>Current time</dt>
+        <dd>@AppointmentTimeDisplay.FormatRange(_appointment)</dd>
+        <dt>Status</dt>
+        <dd>@PatientAppointmentStatuses.DisplayStatus(_appointment.Status)</dd>
+    </dl>
+
+    @if (!_reviewMode)
+    {
+        <div class="field">
+            <label for="rescheduleDate">New date</label>
+            <InputDate id="rescheduleDate" @bind-Value="_dateValue" @bind-Value:after="LoadSlotsAsync" />
+        </div>
+
+        @if (_slotsBusy)
+        {
+            <LoadingState Message="Loading availability…" />
+        }
+        else if (_slotsProblem is not null)
+        {
+            @if (_slotsProblem.Kind is ApiErrorKind.Network or ApiErrorKind.Timeout)
+            {
+                <OfflineState Message="@_slotsProblem.UserMessage" OnRetry="LoadSlotsAsync" />
+            }
+            else if (_slotsProblem.Kind == ApiErrorKind.Unauthorized)
+            {
+                <SessionExpiredState SignInHref="@PatientRoutes.SignIn" />
+            }
+            else
+            {
+                <ErrorState Problem="@_slotsProblem" OnRetry="LoadSlotsAsync" />
+            }
+        }
+        else if (_slots.Count == 0)
+        {
+            <EmptyState Message="No available slots on this date." />
+        }
+        else
+        {
+            <ul class="slot-list" aria-label="Available slots">
+                @foreach (var slot in _slots)
+                {
+                    var selected = _selectedSlot is not null
+                        && _selectedSlot.StartUtc == slot.StartUtc
+                        && _selectedSlot.EndUtc == slot.EndUtc;
+                    <li>
+                        <button type="button"
+                                class="@(selected ? "btn" : "btn btn-secondary")"
+                                @onclick="() => SelectSlot(slot)">
+                            @SlotDisplay.FormatRange(slot)
+                        </button>
+                    </li>
+                }
+            </ul>
+        }
+
+        @if (_selectedSlot is not null)
+        {
+            <div class="actions">
+                <button type="button" class="btn" @onclick="() => _reviewMode = true">Review new time</button>
+            </div>
+        }
+    }
+    else if (_selectedSlot is not null)
+    {
+        <div class="state-panel" role="status">
+            <h2>Review reschedule</h2>
+            <dl class="meta">
+                <dt>Current</dt>
+                <dd>@AppointmentTimeDisplay.FormatRange(_appointment)</dd>
+                <dt>New</dt>
+                <dd>@SlotDisplay.FormatRange(_selectedSlot)</dd>
+                <dt>Timezone</dt>
+                <dd>@(string.IsNullOrWhiteSpace(_appointment.ClinicTimeZoneId) ? "device local" : _appointment.ClinicTimeZoneId)</dd>
+                <dt>Status</dt>
+                <dd>@PatientAppointmentStatuses.DisplayStatus(_appointment.Status)</dd>
+            </dl>
+            <p class="hint">Confirming updates this appointment. It does not create a duplicate.</p>
+        </div>
+
+        @if (_actionProblem is not null)
+        {
+            @if (_actionProblem.Kind is ApiErrorKind.Network)
+            {
+                <OfflineState Message="@_actionProblem.UserMessage" />
+            }
+            else if (_actionProblem.Kind == ApiErrorKind.Timeout)
+            {
+                <ErrorState
+                    Title="Request may still be processing"
+                    Message="We could not confirm the result. Do not submit again yet. Open the appointment to check the latest time."
+                    OnRetry="LoadAppointmentAsync" />
+            }
+            else if (_actionProblem.Kind == ApiErrorKind.Unauthorized)
+            {
+                <SessionExpiredState SignInHref="@PatientRoutes.SignIn" />
+            }
+            else
+            {
+                <ErrorState Message="@_actionMessage" />
+            }
+        }
+
+        <div class="actions">
+            <button type="button" class="btn" disabled="@(_mutating || _uncertainOutcome)" @onclick="SubmitAsync">
+                @(_mutating ? "Rescheduling…" : "Confirm reschedule")
+            </button>
+            <button type="button" class="btn btn-secondary" disabled="@_mutating" @onclick="BackToSlots">
+                Change slot
+            </button>
+            <a class="btn btn-secondary" href="@PatientRoutes.AppointmentDetails(AppointmentId)">Cancel</a>
+        </div>
+    }
+}
+
+@code {
+    [Parameter]
+    public Guid AppointmentId { get; set; }
+
+    private AppointmentResponse? _appointment;
+    private ApiProblem? _problem;
+    private ApiProblem? _slotsProblem;
+    private ApiProblem? _actionProblem;
+    private string? _actionMessage;
+    private string _ineligibleMessage = "This appointment cannot be rescheduled.";
+    private bool _busy;
+    private bool _slotsBusy;
+    private bool _mutating;
+    private bool _unavailable;
+    private bool _eligible;
+    private bool _reviewMode;
+    private bool _uncertainOutcome;
+    private DateTime _dateValue = DateTime.Today;
+    private readonly List<AvailableSlotResponse> _slots = [];
+    private AvailableSlotResponse? _selectedSlot;
+    private DateTimeOffset _asOfUtc = DateTimeOffset.UtcNow;
+    private CancellationTokenSource? _cts;
+
+    protected override async Task OnParametersSetAsync() => await LoadAppointmentAsync();
+
+    private async Task LoadAppointmentAsync()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        var token = _cts.Token;
+
+        _busy = true;
+        _problem = null;
+        _actionProblem = null;
+        _unavailable = false;
+        _uncertainOutcome = false;
+        _reviewMode = false;
+        _selectedSlot = null;
+        Selection.ClearSlot();
+        _asOfUtc = DateTimeOffset.UtcNow;
+        StateHasChanged();
+
+        var result = await Appointments.GetAsync(AppointmentId, token);
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _appointment = null;
+            _eligible = false;
+            _problem = result.Error;
+            if (_problem?.Kind == ApiErrorKind.NotFound
+                || string.Equals(_problem?.ErrorCode, AppointmentErrorCodes.NotFoundOrDenied, StringComparison.Ordinal))
+            {
+                _unavailable = true;
+            }
+
+            _busy = false;
+            return;
+        }
+
+        _appointment = result.Value;
+        _eligible = PatientAppointmentStatuses.CanReschedule(_appointment, _asOfUtc)
+                    && !string.IsNullOrWhiteSpace(_appointment.ClinicSlug);
+        if (!_eligible)
+        {
+            if (!PatientAppointmentStatuses.CanRescheduleStatus(_appointment.Status))
+            {
+                _ineligibleMessage = "This appointment cannot be rescheduled from its current status.";
+            }
+            else if (!PatientAppointmentStatuses.IsOutsideMutationCutoff(_appointment, _asOfUtc))
+            {
+                _ineligibleMessage =
+                    "Changes must be made at least two hours before the appointment. Please contact the clinic.";
+            }
+            else
+            {
+                _ineligibleMessage = "This appointment cannot be rescheduled.";
+            }
+
+            _busy = false;
+            return;
+        }
+
+        Selection.SelectClinic(_appointment.ClinicSlug!, _appointment.ClinicName);
+        Selection.SelectDoctor(_appointment.DoctorStaffMemberId, _appointment.DoctorDisplayName);
+        _busy = false;
+        await LoadSlotsAsync();
+    }
+
+    private async Task LoadSlotsAsync()
+    {
+        if (_appointment is null || string.IsNullOrWhiteSpace(_appointment.ClinicSlug))
+        {
+            return;
+        }
+
+        _slotsBusy = true;
+        _slotsProblem = null;
+        _slots.Clear();
+        _selectedSlot = null;
+        Selection.ClearSlot();
+        StateHasChanged();
+
+        var date = DateOnly.FromDateTime(_dateValue.Date);
+        var result = await Discovery.GetSlotsAsync(
+            _appointment.ClinicSlug,
+            _appointment.DoctorStaffMemberId,
+            date);
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _slotsProblem = result.Error;
+            _slotsBusy = false;
+            return;
+        }
+
+        _slots.AddRange(result.Value);
+        _slotsBusy = false;
+        Logger.LogInformation("Reschedule availability loaded.");
+    }
+
+    private void SelectSlot(AvailableSlotResponse slot)
+    {
+        if (_appointment is null)
+        {
+            return;
+        }
+
+        // Same wall-clock as current appointment is not useful.
+        if (slot.StartUtc == _appointment.AppointmentDateUtc
+            && slot.EndUtc == PatientAppointmentStatuses.EndsAt(_appointment))
+        {
+            return;
+        }
+
+        var date = DateOnly.FromDateTime(_dateValue.Date);
+        Selection.SelectSlot(date, slot);
+        _selectedSlot = slot;
+    }
+
+    private void BackToSlots()
+    {
+        _reviewMode = false;
+        _actionProblem = null;
+        _actionMessage = null;
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_appointment is null || _selectedSlot is null || _mutating || _uncertainOutcome)
+        {
+            return;
+        }
+
+        _mutating = true;
+        _actionProblem = null;
+        _actionMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var duration = (int)Math.Round((_selectedSlot.EndUtc - _selectedSlot.StartUtc).TotalMinutes);
+            if (duration < 1)
+            {
+                duration = _appointment.DurationMinutes;
+            }
+
+            var request = new RescheduleAppointmentRequest
+            {
+                DoctorStaffMemberId = _appointment.DoctorStaffMemberId,
+                AppointmentDateUtc = _selectedSlot.StartUtc,
+                DurationMinutes = duration,
+                ExpectedVersion = _appointment.Version,
+                Reason = _appointment.Reason,
+            };
+
+            var result = await Appointments.RescheduleAsync(_appointment.Id, request);
+            if (!result.IsSuccess || result.Value is null)
+            {
+                _actionProblem = result.Error
+                    ?? new ApiProblem { Kind = ApiErrorKind.Unknown, Title = "Reschedule failed" };
+                if (_actionProblem.Kind == ApiErrorKind.Timeout)
+                {
+                    _uncertainOutcome = true;
+                    Logger.LogInformation("Patient reschedule timed out; outcome uncertain.");
+                }
+                else if (string.Equals(
+                             _actionProblem.ErrorCode,
+                             AppointmentErrorCodes.SlotConflict,
+                             StringComparison.Ordinal)
+                         || string.Equals(
+                             _actionProblem.ErrorCode,
+                             AppointmentErrorCodes.RescheduleSameSlot,
+                             StringComparison.Ordinal)
+                         || string.Equals(
+                             _actionProblem.ErrorCode,
+                             AppointmentErrorCodes.InvalidTime,
+                             StringComparison.Ordinal))
+                {
+                    _actionMessage = Appointments.MapMutationError(_actionProblem);
+                    _selectedSlot = null;
+                    Selection.ClearSlot();
+                    _reviewMode = false;
+                    await LoadSlotsAsync();
+                }
+                else if (string.Equals(
+                             _actionProblem.ErrorCode,
+                             AppointmentErrorCodes.ConcurrencyConflict,
+                             StringComparison.Ordinal)
+                         || string.Equals(
+                             _actionProblem.ErrorCode,
+                             AppointmentErrorCodes.PatientMutationCutoff,
+                             StringComparison.Ordinal)
+                         || string.Equals(
+                             _actionProblem.ErrorCode,
+                             AppointmentErrorCodes.InvalidTransition,
+                             StringComparison.Ordinal)
+                         || string.Equals(
+                             _actionProblem.ErrorCode,
+                             AppointmentErrorCodes.RescheduleNotAllowed,
+                             StringComparison.Ordinal))
+                {
+                    _actionMessage = Appointments.MapMutationError(_actionProblem);
+                    await LoadAppointmentAsync();
+                }
+                else if (_actionProblem.Kind == ApiErrorKind.NotFound
+                         || string.Equals(
+                             _actionProblem.ErrorCode,
+                             AppointmentErrorCodes.NotFoundOrDenied,
+                             StringComparison.Ordinal))
+                {
+                    _unavailable = true;
+                    _appointment = null;
+                }
+                else
+                {
+                    _actionMessage = Appointments.MapMutationError(_actionProblem);
+                }
+
+                return;
+            }
+
+            Selection.ClearSlot();
+            Logger.LogInformation("Patient appointment rescheduled.");
+            Nav.NavigateTo(PatientRoutes.AppointmentDetails(result.Value.Id));
+        }
+        finally
+        {
+            _mutating = false;
+        }
+    }
+}

@@ -2,7 +2,7 @@
 
 Android-first **.NET MAUI Blazor Hybrid** app for the Patient Mobile MVP.
 
-**Status:** **PM-2 + PM-3 + PM-4 + PM-5 delivered.** PM-6 (My Appointments) through PM-8 are **not** started.
+**Status:** **PM-2 + PM-3 + PM-4 + PM-5 + PM-6 delivered.** PM-7 (security matrix) and PM-8 (Patient E2E) are **not** started.
 
 Authoritative product scope: [`Docs/mvp-patient-scope.md`](../../Docs/mvp-patient-scope.md).
 
@@ -68,7 +68,7 @@ Shared contracts only: `HealthCare.Contracts`. The mobile app does **not** refer
 
 ### Home
 
-- Minimal Patient home with display name, profile prompt, Clinics entry, and **coming soon** for My Appointments (PM-6)
+- Minimal Patient home with display name, profile prompt, Clinics entry, and My Appointments entry
 
 ### Navigation guards
 
@@ -102,15 +102,18 @@ Search: trimmed, case-insensitive contains on name/city/address text; optional s
 | `/clinics/{code}/doctors` | Doctor list |
 | `/clinics/{code}/doctors/{id}/availability` | Date + slots; select slot (not reserved) |
 | `/discovery/booking-review` | Booking review + submit (`Requested`) |
-| `/discovery/booking-success` | Success receipt (no resubmit) |
+| `/discovery/booking-success` | Success receipt (no resubmit); links to My Appointments |
+| `/appointments` | My Appointments — Upcoming / Previous |
+| `/appointments/{id}` | Appointment detail + cancel |
+| `/appointments/{id}/reschedule` | Reschedule via same clinic/Doctor availability |
 
 ### Timezone
 
-Prefer API clinic-local slot strings + `TimeZoneId`. Fallback: device-local conversion of UTC labeled “(device local)”.
+Prefer API clinic-local slot strings + `TimeZoneId`. Fallback: device-local conversion of UTC labeled “(device local)”. List, detail, cancel confirm, and reschedule review use the same display helpers.
 
 ### Discovery state
 
-`IDiscoveryStateService` holds selected clinic/Doctor/date/slot in memory. Cleared when clinic/Doctor changes and on logout. Not a reservation until PM-5 submit succeeds.
+`IDiscoveryStateService` holds selected clinic/Doctor/date/slot in memory. Cleared when clinic/Doctor changes and on logout. Not a reservation until PM-5 submit succeeds. Reschedule reuses the same slot selection for the current appointment’s clinic/Doctor.
 
 ## PM-5 appointment booking
 
@@ -130,6 +133,52 @@ Prefer API clinic-local slot strings + `TimeZoneId`. Fallback: device-local conv
 - Busy/disabled submit prevents double-tap
 - Receipt store survives navigation without calling create again
 - Logout clears discovery + receipt
+
+## PM-6 My Appointments, cancellation, and rescheduling
+
+### List
+
+- `GET /api/v1/patients/me/appointments` (paged)
+- **Upcoming:** non-terminal and end time ≥ now (nearest first)
+- **Previous:** terminal **or** ended (most recent first)
+- Loading / empty / offline / retry / load-more; session expiry → sign-in
+
+### Detail
+
+- `GET /api/v1/appointments/{id}` (own only; foreign → unavailable/`404`)
+- Shows clinic, Doctor, time (+ timezone), status, reason, cancellation info when present
+- Does **not** show medical notes, internal IDs, staff-only fields, or audit trail
+
+### Cancel
+
+- `POST /api/v1/appointments/{id}/cancel` with `ExpectedVersion`
+- Eligible: `Requested` / `Confirmed` and ≥ 2 hours before start (exact 2 hours allowed)
+- Confirmation: “Cancel appointment” / “This action cannot be undone”
+- Inside cutoff: “Please contact the clinic”
+- Success status: `CancelledByPatient`
+- Concurrency `409`: reload; no auto-resubmit
+- Timeout: uncertain outcome; reload to check; no automatic retry
+
+### Reschedule
+
+- Same clinic (from `ClinicSlug`); same Doctor preselected; fresh availability via PM-4 APIs
+- Review current vs new time; confirm updates **the same appointment id**
+- `POST /api/v1/appointments/{id}/reschedule` with `ExpectedVersion`
+- Slot conflict: clear new slot and refresh availability
+- Concurrency/cutoff/invalid status: reload appointment; no auto-resubmit
+
+### Status-aware actions
+
+| Status | Cancel / Reschedule |
+|--------|---------------------|
+| Requested / Confirmed | May show when outside 2h cutoff |
+| CheckedIn / InProgress / terminal | Hidden |
+
+Patient confirm, check-in, complete, no-show, and staff cancel are never exposed.
+
+### Android runtime
+
+PM-6 Android emulator/device smoke was **not** executed in this delivery. Android **build** + mobile automated tests are required.
 
 ## Configuration
 
@@ -170,8 +219,9 @@ Start the API, then deploy/run on an emulator or device. Seeded Patient accounts
 
 - Deep-link App Links for confirmation emails are not registered (manual token / browser confirm + return to app)
 - Emulator runtime smoke may be unavailable in CI; Android **build** is required
-- My Appointments, cancel/reschedule, Google/OTP, notifications: PM-6…PM-8
+- Google/OTP, notifications, Patient security matrix, Patient E2E: PM-7…PM-8
 - No specialty catalog (clinic specialty string only); no maps/ratings/public photo subsystem
 - `ClinicDoctorResponse` still includes `StaffMemberId` / `ClinicId` for API navigation; IDs are not shown in UI
-- No Blazor bUnit package in-repo; booking UI logic covered via Core services + route/state tests
+- Reschedule keeps the same clinic and Doctor (backend clinic is fixed; UI does not offer Doctor change)
+- No Blazor bUnit package in-repo; appointment UI logic covered via Core services + route/state tests
 - Android runtime smoke: not verified unless emulator executed

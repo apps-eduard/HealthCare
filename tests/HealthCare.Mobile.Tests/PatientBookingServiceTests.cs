@@ -290,5 +290,27 @@ public sealed class PatientBookingServiceTests
             CreateCallCount++;
             return Task.FromResult(CreateResult);
         }
+
+        public Task<ApiResult<PagedResponse<AppointmentResponse>>> ListPatientAppointmentsAsync(
+            AppointmentListQuery query,
+            CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
+
+        public Task<ApiResult<AppointmentResponse>> GetAppointmentAsync(
+            Guid appointmentId,
+            CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
+
+        public Task<ApiResult<AppointmentResponse>> CancelAppointmentAsync(
+            Guid appointmentId,
+            AppointmentActionRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
+
+        public Task<ApiResult<AppointmentResponse>> RescheduleAppointmentAsync(
+            Guid appointmentId,
+            RescheduleAppointmentRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
     }
 }

@@ -1,2 +1,230 @@
 @page "/appointments"
-<PlaceholderState Title="My Appointments" Message="Appointment list, booking, cancel, and reschedule are planned for later milestones." />
+@inject IPatientAppointmentService Appointments
+@inject NavigationManager Nav
+@inject ILogger<AppointmentsPage> Logger
+
+<h1>My Appointments</h1>
+<p class="lede">Upcoming and previous visits for your account. Pull refresh or use Reload after booking, cancel, or reschedule.</p>
+
+<div class="tab-row" role="tablist" aria-label="Appointment views">
+    <button type="button"
+            class="@(_tab == ListTab.Upcoming ? "btn" : "btn btn-secondary")"
+            role="tab"
+            aria-selected="@(_tab == ListTab.Upcoming)"
+            disabled="@_busy"
+            @onclick="() => SwitchTabAsync(ListTab.Upcoming)">
+        Upcoming
+    </button>
+    <button type="button"
+            class="@(_tab == ListTab.Previous ? "btn" : "btn btn-secondary")"
+            role="tab"
+            aria-selected="@(_tab == ListTab.Previous)"
+            disabled="@_busy"
+            @onclick="() => SwitchTabAsync(ListTab.Previous)">
+        Previous
+    </button>
+    <button type="button" class="btn btn-secondary" disabled="@_busy" @onclick="RefreshAsync">
+        @(_busy ? "Loading…" : "Reload")
+    </button>
+</div>
+
+@if (_busy && _visible.Count == 0)
+{
+    <LoadingState Message="Loading appointments…" />
+}
+else if (_problem is not null && _visible.Count == 0)
+{
+    @if (_problem.Kind is ApiErrorKind.Network or ApiErrorKind.Timeout)
+    {
+        <OfflineState Message="@_problem.UserMessage" OnRetry="RefreshAsync" />
+    }
+    else if (_problem.Kind == ApiErrorKind.Unauthorized)
+    {
+        <SessionExpiredState SignInHref="@PatientRoutes.SignIn" />
+    }
+    else
+    {
+        <ErrorState Problem="@_problem" OnRetry="RefreshAsync" />
+    }
+}
+else if (!_busy && _visible.Count == 0)
+{
+    <EmptyState Message="@(_tab == ListTab.Upcoming
+        ? "No upcoming appointments. Browse clinics to book a visit."
+        : "No previous appointments yet.")" />
+    @if (_tab == ListTab.Upcoming)
+    {
+        <div class="actions">
+            <a class="btn" href="@PatientRoutes.Clinics">Browse clinics</a>
+        </div>
+    }
+}
+else
+{
+    <ul class="clinic-list" aria-label="@(_tab == ListTab.Upcoming ? "Upcoming appointments" : "Previous appointments")">
+        @foreach (var item in _visible)
+        {
+            <li class="clinic-row">
+                <button type="button" class="clinic-row-btn" @onclick="() => OpenDetails(item.Id)">
+                    <span class="clinic-name">@(string.IsNullOrWhiteSpace(item.ClinicName) ? "Clinic" : item.ClinicName)</span>
+                    <span class="clinic-meta">
+                        @(string.IsNullOrWhiteSpace(item.DoctorDisplayName) ? "Doctor" : item.DoctorDisplayName)
+                    </span>
+                    <span class="clinic-meta">@AppointmentTimeDisplay.FormatShort(item)</span>
+                    <span class="badge">@PatientAppointmentStatuses.DisplayStatus(item.Status)</span>
+                    @if (!string.IsNullOrWhiteSpace(item.Reason))
+                    {
+                        <span class="clinic-meta">@item.Reason</span>
+                    }
+                </button>
+            </li>
+        }
+    </ul>
+
+    @if (_page < _totalPages)
+    {
+        <button type="button" class="btn btn-secondary" disabled="@_busy" @onclick="LoadMoreAsync">
+            @(_busy ? "Loading…" : "Load more")
+        </button>
+    }
+
+    @if (_problem is not null)
+    {
+        <ErrorState Problem="@_problem" OnRetry="RefreshAsync" />
+    }
+}
+
+@code {
+    private enum ListTab
+    {
+        Upcoming,
+        Previous,
+    }
+
+    private ListTab _tab = ListTab.Upcoming;
+    private readonly List<AppointmentResponse> _raw = [];
+    private readonly List<AppointmentResponse> _visible = [];
+    private readonly HashSet<Guid> _seen = [];
+    private int _page = 1;
+    private int _totalPages = 1;
+    private int _loadVersion;
+    private bool _busy;
+    private ApiProblem? _problem;
+    private CancellationTokenSource? _cts;
+    private DateTimeOffset _asOfUtc = DateTimeOffset.UtcNow;
+
+    protected override async Task OnInitializedAsync() => await RefreshAsync();
+
+    private async Task SwitchTabAsync(ListTab tab)
+    {
+        if (_tab == tab && _visible.Count > 0)
+        {
+            return;
+        }
+
+        _tab = tab;
+        await RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        _page = 1;
+        _raw.Clear();
+        _seen.Clear();
+        _visible.Clear();
+        await LoadPageAsync(reset: true);
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        _page++;
+        await LoadPageAsync(reset: false);
+    }
+
+    private async Task LoadPageAsync(bool reset)
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        var token = _cts.Token;
+        var version = ++_loadVersion;
+        var now = DateTimeOffset.UtcNow;
+        _asOfUtc = now;
+
+        _busy = true;
+        _problem = null;
+        StateHasChanged();
+
+        var query = _tab == ListTab.Upcoming
+            ? new AppointmentListQuery
+            {
+                FromUtc = now.AddDays(-1),
+                Page = _page,
+                PageSize = 20,
+                SortBy = "appointmentDateUtc",
+                SortDirection = "asc",
+            }
+            : new AppointmentListQuery
+            {
+                ToUtc = now.AddDays(1),
+                Page = _page,
+                PageSize = 20,
+                SortBy = "appointmentDateUtc",
+                SortDirection = "desc",
+            };
+
+        var result = await Appointments.ListAsync(query, token);
+        if (version != _loadVersion)
+        {
+            return;
+        }
+
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _problem = result.Error;
+            if (reset)
+            {
+                _raw.Clear();
+                _seen.Clear();
+                _visible.Clear();
+            }
+
+            _busy = false;
+            return;
+        }
+
+        if (reset)
+        {
+            _raw.Clear();
+            _seen.Clear();
+        }
+
+        foreach (var item in result.Value.Items)
+        {
+            if (_seen.Add(item.Id))
+            {
+                _raw.Add(item);
+            }
+        }
+
+        _totalPages = Math.Max(1, result.Value.TotalPages);
+        RebuildVisible();
+        _busy = false;
+        Logger.LogInformation("Patient appointments list loaded.");
+    }
+
+    private void RebuildVisible()
+    {
+        _visible.Clear();
+        IEnumerable<AppointmentResponse> filtered = _tab == ListTab.Upcoming
+            ? _raw.Where(a => PatientAppointmentStatuses.IsUpcoming(a, _asOfUtc))
+                .OrderBy(a => a.AppointmentDateUtc)
+            : _raw.Where(a => PatientAppointmentStatuses.IsPrevious(a, _asOfUtc))
+                .OrderByDescending(a => a.AppointmentDateUtc);
+
+        _visible.AddRange(filtered);
+    }
+
+    private void OpenDetails(Guid appointmentId) =>
+        Nav.NavigateTo(PatientRoutes.AppointmentDetails(appointmentId));
+}

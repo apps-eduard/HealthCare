@@ -66,6 +66,14 @@ public sealed class ApiProblem
                         "The selected time is no longer valid.",
                     AppointmentErrorCodes.ConcurrencyConflict =>
                         "Your selection is out of date. Choose a slot again.",
+                    AppointmentErrorCodes.PatientMutationCutoff =>
+                        "Changes must be made at least two hours before the appointment. Please contact the clinic.",
+                    AppointmentErrorCodes.InvalidTransition =>
+                        "This appointment can no longer be changed.",
+                    AppointmentErrorCodes.RescheduleNotAllowed =>
+                        "This appointment cannot be rescheduled.",
+                    AppointmentErrorCodes.RescheduleSameSlot =>
+                        "Choose a different time than the current appointment.",
                     "patient.linkage_required" =>
                         Detail ?? "This account is not linked to a Patient profile and cannot use the Patient app.",
                     _ => null,

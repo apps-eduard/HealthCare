@@ -30,10 +30,21 @@ public static class PatientRoutes
     public static string DoctorAvailability(string clinicCode, Guid staffMemberId) =>
         $"{Clinics}/{Uri.EscapeDataString(clinicCode)}/doctors/{staffMemberId:D}/availability";
 
+    public static string AppointmentDetails(Guid appointmentId) =>
+        $"{Appointments}/{appointmentId:D}";
+
+    public static string AppointmentReschedule(Guid appointmentId) =>
+        $"{Appointments}/{appointmentId:D}/reschedule";
+
     public static bool RequiresAuthentication(string relativePath)
     {
         var path = Normalize(relativePath);
         if (path is Home or Profile or ProfileEdit or Appointments)
+        {
+            return true;
+        }
+
+        if (path.StartsWith(Appointments + "/", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }

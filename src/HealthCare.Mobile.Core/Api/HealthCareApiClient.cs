@@ -66,6 +66,24 @@ public interface IHealthCareApiClient
     Task<ApiResult<AppointmentResponse>> CreatePatientAppointmentAsync(
         CreatePatientAppointmentRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<ApiResult<PagedResponse<AppointmentResponse>>> ListPatientAppointmentsAsync(
+        AppointmentListQuery query,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResult<AppointmentResponse>> GetAppointmentAsync(
+        Guid appointmentId,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResult<AppointmentResponse>> CancelAppointmentAsync(
+        Guid appointmentId,
+        AppointmentActionRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResult<AppointmentResponse>> RescheduleAppointmentAsync(
+        Guid appointmentId,
+        RescheduleAppointmentRequest request,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class HealthStatusDto
@@ -329,6 +347,47 @@ public sealed class HealthCareApiClient : IHealthCareApiClient
             request,
             cancellationToken);
 
+    public Task<ApiResult<PagedResponse<AppointmentResponse>>> ListPatientAppointmentsAsync(
+        AppointmentListQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        var path = BuildAppointmentListPath(query);
+        return SendAuthenticatedAsync<PagedResponse<AppointmentResponse>>(
+            HttpMethod.Get,
+            path,
+            null,
+            cancellationToken);
+    }
+
+    public Task<ApiResult<AppointmentResponse>> GetAppointmentAsync(
+        Guid appointmentId,
+        CancellationToken cancellationToken = default) =>
+        SendAuthenticatedAsync<AppointmentResponse>(
+            HttpMethod.Get,
+            $"api/v1/appointments/{appointmentId:D}",
+            null,
+            cancellationToken);
+
+    public Task<ApiResult<AppointmentResponse>> CancelAppointmentAsync(
+        Guid appointmentId,
+        AppointmentActionRequest request,
+        CancellationToken cancellationToken = default) =>
+        SendAuthenticatedAsync<AppointmentResponse>(
+            HttpMethod.Post,
+            $"api/v1/appointments/{appointmentId:D}/cancel",
+            request,
+            cancellationToken);
+
+    public Task<ApiResult<AppointmentResponse>> RescheduleAppointmentAsync(
+        Guid appointmentId,
+        RescheduleAppointmentRequest request,
+        CancellationToken cancellationToken = default) =>
+        SendAuthenticatedAsync<AppointmentResponse>(
+            HttpMethod.Post,
+            $"api/v1/appointments/{appointmentId:D}/reschedule",
+            request,
+            cancellationToken);
+
     internal static string BuildClinicSearchPath(PatientClinicSearchRequest request)
     {
         var path = new StringBuilder("api/v1/patients/me/clinics?");
@@ -342,6 +401,41 @@ public sealed class HealthCareApiClient : IHealthCareApiClient
         if (!string.IsNullOrWhiteSpace(request.Specialty))
         {
             path.Append("&specialty=").Append(Uri.EscapeDataString(request.Specialty.Trim()));
+        }
+
+        return path.ToString();
+    }
+
+    internal static string BuildAppointmentListPath(AppointmentListQuery query)
+    {
+        var path = new StringBuilder("api/v1/patients/me/appointments?");
+        var page = query.Page < 1 ? 1 : query.Page;
+        var pageSize = query.PageSize < 1 ? 20 : Math.Min(query.PageSize, 100);
+        path.Append("page=").Append(page);
+        path.Append("&pageSize=").Append(pageSize);
+        if (!string.IsNullOrWhiteSpace(query.SortBy))
+        {
+            path.Append("&sortBy=").Append(Uri.EscapeDataString(query.SortBy.Trim()));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.SortDirection))
+        {
+            path.Append("&sortDirection=").Append(Uri.EscapeDataString(query.SortDirection.Trim()));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Status))
+        {
+            path.Append("&status=").Append(Uri.EscapeDataString(query.Status.Trim()));
+        }
+
+        if (query.FromUtc is { } from)
+        {
+            path.Append("&fromUtc=").Append(Uri.EscapeDataString(from.ToString("o", CultureInfo.InvariantCulture)));
+        }
+
+        if (query.ToUtc is { } to)
+        {
+            path.Append("&toUtc=").Append(Uri.EscapeDataString(to.ToString("o", CultureInfo.InvariantCulture)));
         }
 
         return path.ToString();

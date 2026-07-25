@@ -561,11 +561,11 @@ Authoritative product contract: **`Docs/mvp-patient-scope.md`** (PM-0 approved 2
 
 Deliver Patient Mobile via milestones **PM-1…PM-8** (do not treat Phase 11 as a single unstructured drop).
 
-**Progress:** PM-1…**PM-5** delivered (hardening, MAUI foundation, auth/profile, discovery, booking). PM-6…PM-8 not started.
+**Progress:** PM-1…**PM-6** delivered (hardening, MAUI foundation, auth/profile, discovery, booking, My Appointments). PM-7…PM-8 not started.
 
 ### Objectives
 
-Build the Android-first patient experience on existing Patient APIs through discovery and booking; My Appointments follows in PM-6.
+Build the Android-first patient experience on existing Patient APIs through My Appointments management; security matrix and E2E follow in PM-7 / PM-8.
 
 ### Screens (by milestone)
 
@@ -573,7 +573,7 @@ Build the Android-first patient experience on existing Patient APIs through disc
 - PM-3: register / confirm-email / login / logout / profile (**delivered**)
 - PM-4: clinic browse + code enroll / doctors / slots (**delivered**)
 - PM-5: book appointment (`Requested`) (**delivered**)
-- PM-6: my appointments / cancel / reschedule (2-hour cutoff)
+- PM-6: my appointments / cancel / reschedule (2-hour cutoff) (**delivered**)
 - PM-7 / PM-8: security matrix + E2E
 
 ### Security requirements

@@ -1,4 +1,5 @@
 using HealthCare.Mobile.Core.Api;
+using HealthCare.Mobile.Core.Appointments;
 using HealthCare.Mobile.Core.Authentication;
 using HealthCare.Mobile.Core.Booking;
 using HealthCare.Mobile.Core.Configuration;
@@ -36,6 +37,7 @@ public static class MobileCoreServiceCollectionExtensions
         services.TryAddSingleton<IPatientProfileService, PatientProfileService>();
         services.TryAddSingleton<IPatientDiscoveryService, PatientDiscoveryService>();
         services.TryAddSingleton<IPatientBookingService, PatientBookingService>();
+        services.TryAddSingleton<IPatientAppointmentService, PatientAppointmentService>();
 
         services.AddHttpClient(MobileHttpClientNames.Anonymous, (sp, client) =>
         {
