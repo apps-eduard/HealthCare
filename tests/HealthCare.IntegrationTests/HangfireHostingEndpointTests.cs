@@ -16,6 +16,13 @@ using Testcontainers.PostgreSql;
 
 namespace HealthCare.IntegrationTests;
 
+[CollectionDefinition(nameof(HangfireHostingEndpointTests), DisableParallelization = true)]
+public sealed class HangfireHostingEndpointTestsCollection : ICollectionFixture<object>;
+
+/// <summary>
+/// Hangfire uses process-wide JobStorage.Current; keep this class serialized against other hosts.
+/// </summary>
+[Collection(nameof(HangfireHostingEndpointTests))]
 public sealed class HangfireHostingEndpointTests : IAsyncLifetime
 {
     private PostgreSqlContainer? _postgres;
