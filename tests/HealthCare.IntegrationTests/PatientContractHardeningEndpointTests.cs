@@ -108,7 +108,11 @@ public sealed class PatientContractHardeningEndpointTests : IAsyncLifetime
         await AuthenticateAsync(PatientEmail, PatientPassword);
         var doctorId = await GetClinicADoctorStaffIdAsync();
         var created = await CreatePatientAppointmentAsync(doctorId);
-        await SetAppointmentStartAsync(created.Id, DateTimeOffset.UtcNow.Add(AppointmentService.PatientScheduleMutationCutoff));
+        // Unit tests cover the exact equality boundary with a frozen clock.
+        // HTTP uses a small buffer so request latency cannot push remaining under 2h.
+        await SetAppointmentStartAsync(
+            created.Id,
+            DateTimeOffset.UtcNow.Add(AppointmentService.PatientScheduleMutationCutoff).AddMinutes(1));
 
         var cancel = await _client!.PostAsJsonAsync($"/api/v1/appointments/{created.Id}/cancel", new
         {
@@ -175,7 +179,9 @@ public sealed class PatientContractHardeningEndpointTests : IAsyncLifetime
         await AuthenticateAsync(PatientEmail, PatientPassword);
         var doctorId = await GetClinicADoctorStaffIdAsync();
         var created = await CreatePatientAppointmentAsync(doctorId);
-        await SetAppointmentStartAsync(created.Id, DateTimeOffset.UtcNow.Add(AppointmentService.PatientScheduleMutationCutoff));
+        await SetAppointmentStartAsync(
+            created.Id,
+            DateTimeOffset.UtcNow.Add(AppointmentService.PatientScheduleMutationCutoff).AddMinutes(1));
 
         var reschedule = await _client!.PostAsJsonAsync($"/api/v1/appointments/{created.Id}/reschedule", new
         {
