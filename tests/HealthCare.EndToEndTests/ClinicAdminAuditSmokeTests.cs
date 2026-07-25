@@ -44,19 +44,20 @@ public sealed class ClinicAdminAuditSmokeTests : E2ePageTestBase
 
             await Expect(Page.GetByRole(AriaRole.Table, new() { Name = "Clinic audit logs" }))
                 .ToBeVisibleAsync(new() { Timeout = 30_000 });
-            await Expect(Page.GetByText("clinic_profile_update", new() { Exact = false }))
+            var table = Page.GetByRole(AriaRole.Table, new() { Name = "Clinic audit logs" });
+            await Expect(table.GetByRole(AriaRole.Cell, new() { Name = "clinic_profile_update" }).First)
                 .ToBeVisibleAsync(new() { Timeout = 15_000 });
-            await Expect(Page.GetByText("Clinic profile updated", new() { Exact = false }))
+            await Expect(table.GetByText("Clinic profile updated", new() { Exact = false }).First)
                 .ToBeVisibleAsync();
 
-            await Page.GetByRole(AriaRole.Button, new() { Name = "View clinic audit event detail" }).First.ClickAsync();
-            await Expect(Page.GetByText("Clinic audit event", new() { Exact = false }))
-                .ToBeVisibleAsync(new() { Timeout = 15_000 });
-            await Expect(Page.GetByText("Clinic profile updated", new() { Exact = false })).ToBeVisibleAsync();
-            await Expect(Page.GetByText("Raw metadata, passwords, tokens, and clinical content are not available."))
+            await table.GetByRole(AriaRole.Button, new() { Name = "View clinic audit event detail" }).First.ClickAsync();
+            var detail = Page.Locator(".ant-drawer").Filter(new() { HasText = "Clinic audit event" });
+            await Expect(detail).ToBeVisibleAsync(new() { Timeout = 15_000 });
+            await Expect(detail.GetByText("Clinic profile updated", new() { Exact = false })).ToBeVisibleAsync();
+            await Expect(detail.GetByText("Raw metadata, passwords, tokens, and clinical content are not available."))
                 .ToBeVisibleAsync();
-            await Expect(Page.GetByText("Password", new() { Exact = true })).ToHaveCountAsync(0);
-            await Expect(Page.GetByText("Export CSV", new() { Exact = false })).ToHaveCountAsync(0);
+            await Expect(detail.GetByText("Password", new() { Exact = true })).ToHaveCountAsync(0);
+            await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Export CSV" })).ToHaveCountAsync(0);
             await Expect(Page.Locator("label", new() { HasText = "Clinic filter" })).ToHaveCountAsync(0);
         }
         catch
