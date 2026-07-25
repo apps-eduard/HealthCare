@@ -231,7 +231,7 @@ public sealed class ClinicReportsEndpointTests : IAsyncLifetime
             var patient = new Patient
             {
                 Id = Guid.NewGuid(),
-                UserId = Guid.NewGuid(),
+                UserId = null,
                 FirstName = "Report",
                 LastName = "Seed",
                 IsActive = true,
