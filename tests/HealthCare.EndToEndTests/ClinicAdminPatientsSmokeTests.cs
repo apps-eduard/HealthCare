@@ -44,9 +44,7 @@ public sealed class ClinicAdminPatientsSmokeTests : E2ePageTestBase
             await Expect(drawer.GetByRole(AriaRole.Button, new() { Name = "Enroll in clinic" })).ToHaveCountAsync(0);
 
             await drawer.Locator("#patient-enrollment-status").ClickAsync();
-            await Page.Locator(".ant-select-dropdown:visible .ant-select-item-option")
-                .Filter(new() { HasText = "Inactive" })
-                .ClickAsync();
+            await Page.GetByRole(AriaRole.Option, new() { Name = "Inactive", Exact = true }).ClickAsync();
             await Expect(drawer.GetByRole(AriaRole.Button, new() { Name = "Update enrollment status" }))
                 .ToBeVisibleAsync(new() { Timeout = 10_000 });
             await drawer.GetByRole(AriaRole.Button, new() { Name = "Update enrollment status" }).ClickAsync();
@@ -68,9 +66,7 @@ public sealed class ClinicAdminPatientsSmokeTests : E2ePageTestBase
 
             // Restore Active for other tests.
             await drawer.Locator("#patient-enrollment-status").ClickAsync();
-            await Page.Locator(".ant-select-dropdown:visible .ant-select-item-option")
-                .Filter(new() { HasText = "Active" })
-                .ClickAsync();
+            await Page.GetByRole(AriaRole.Option, new() { Name = "Active", Exact = true }).ClickAsync();
             await Expect(drawer.GetByRole(AriaRole.Button, new() { Name = "Update enrollment status" }))
                 .ToBeVisibleAsync(new() { Timeout = 10_000 });
             await drawer.GetByRole(AriaRole.Button, new() { Name = "Update enrollment status" }).ClickAsync();
