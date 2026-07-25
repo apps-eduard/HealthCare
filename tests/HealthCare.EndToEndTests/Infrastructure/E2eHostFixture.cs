@@ -218,7 +218,7 @@ public sealed class DotNetAppProcess : IAsyncDisposable
         var start = new ProcessStartInfo
         {
             FileName = "dotnet",
-            Arguments = $"run --project \"{projectPath}\" --no-launch-profile --no-build",
+            Arguments = $"run --project \"{projectPath}\" --no-launch-profile",
             WorkingDirectory = Path.GetDirectoryName(projectPath)!,
             RedirectStandardOutput = true,
             RedirectStandardError = true,

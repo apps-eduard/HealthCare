@@ -33,6 +33,8 @@ Separate processes are used so Blazor Server SignalR and BFF cookie auth behave 
 
 Never point E2E at `app-postgres`. The fixture always creates a disposable PostgreSQL container.
 
+`E2eHostFixture` starts API/Web via `dotnet run` **without** `--no-build` so Web/API binaries match the checked-out source (medical-note UI and workflow actions). Prefer a full `dotnet build` before the first E2E run on a machine.
+
 ## Windows
 
 Do **not** run Playwright/Testcontainers E2E on Windows. Run unit / architecture / web tests only.

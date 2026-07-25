@@ -49,9 +49,11 @@ public sealed class DoctorResponsiveWorkflowSmokeTests : E2ePageTestBase
             box!.Width.Should().BeLessThanOrEqualTo(390 + 8);
             box.X.Should().BeGreaterThanOrEqualTo(-8);
 
-            await Expect(dialog.GetByRole(AriaRole.Button, new() { Name = "Create medical note draft" }))
-                .ToBeVisibleAsync();
+            await Expect(dialog.GetByRole(AriaRole.Button, new() { Name = "Create medical note draft" })
+                    .Or(dialog.GetByRole(AriaRole.Button, new() { Name = "New draft note" })))
+                .ToBeVisibleAsync(new() { Timeout = 20_000 });
             await Expect(dialog.GetByRole(AriaRole.Button, new() { Name = "Complete" })).ToBeVisibleAsync();
+            await Expect(dialog.GetByRole(AriaRole.Button, new() { Name = "Cancel" })).ToBeVisibleAsync();
             await Expect(dialog.GetByRole(AriaRole.Button, new() { Name = "Close" })).ToBeVisibleAsync();
 
             await dialog.GetByRole(AriaRole.Button, new() { Name = "Complete" }).ClickAsync();

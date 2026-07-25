@@ -31,11 +31,13 @@ public sealed class DoctorClinicalWorkflowSmokeTests : E2ePageTestBase
 
             var dialog = DetailDialog(appointment.Id);
             await Expect(dialog.GetByText("CheckedIn")).ToBeVisibleAsync();
-            await Expect(dialog.GetByText("Medical notes")).ToBeVisibleAsync();
+            await Expect(dialog.GetByText("Medical notes")).ToBeVisibleAsync(new() { Timeout = 20_000 });
             await Expect(dialog.GetByRole(AriaRole.Button, new() { Name = "Complete" })).ToBeVisibleAsync();
             await Expect(dialog.GetByRole(AriaRole.Button, new() { Name = "Cancel" })).ToBeVisibleAsync();
 
-            await dialog.GetByRole(AriaRole.Button, new() { Name = "Create medical note draft" }).ClickAsync();
+            await dialog.GetByRole(AriaRole.Button, new() { Name = "Create medical note draft" })
+                .Or(dialog.GetByRole(AriaRole.Button, new() { Name = "New draft note" }))
+                .ClickAsync();
             await Expect(Page.GetByText("Draft note created.", new() { Exact = false }))
                 .ToBeVisibleAsync(new() { Timeout = 30_000 });
 

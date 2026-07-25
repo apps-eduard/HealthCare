@@ -173,7 +173,8 @@ internal static class DoctorE2eApi
             }
         }
 
-        var minuteOfDay = 14 * 60 + ((n - 1) % 16) * 15;
+        // 30-minute slots (matches default availability) to avoid overlap 409 conflicts.
+        var minuteOfDay = 14 * 60 + ((n - 1) % 12) * 30;
         var hour = minuteOfDay / 60;
         var minute = minuteOfDay % 60;
         return new DateTimeOffset(
