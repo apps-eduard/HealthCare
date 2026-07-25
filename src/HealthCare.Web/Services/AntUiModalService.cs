@@ -44,7 +44,7 @@ public sealed class AntUiModalService(ModalService modalService, ConfirmService 
 
     public async Task<bool> ConfirmAsync(string title, string content)
     {
-        var result = await confirmService.Show(content, title, ConfirmButtons.YesNo, ConfirmIcon.Warning);
-        return result is ConfirmResult.Yes or ConfirmResult.OK;
+        var result = await confirmService.Show(content, title, ConfirmButtons.OKCancel, ConfirmIcon.Warning);
+        return result is ConfirmResult.OK or ConfirmResult.Yes;
     }
 }
