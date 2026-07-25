@@ -65,11 +65,11 @@ else
                               PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
                               Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)" />
             }
-            else if (Permissions.Has(WebPermissions.ClinicsRead) || _clinicId is not null)
+            else if (_clinicId is not null)
             {
                 <div>
-                    <ClinicPicker Label="Clinic" AllowClear="false" Required="false" Disabled="true" />
-                    <div class="hc-caption">@(_clinicName ?? "Your clinic")</div>
+                    <div class="hc-filter-label">Clinic</div>
+                    <div class="hc-caption" data-testid="availability-clinic-caption">@(_clinicName ?? "Your clinic")</div>
                 </div>
             }
 
@@ -357,6 +357,9 @@ else
     private DateTime? _rangeTo = DateTime.Today.AddDays(6);
     private int _previewDuration = 30;
 
+    [SupplyParameterFromQuery(Name = "doctorId")]
+    public Guid? InitialDoctorId { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         if (Permissions.IsPatientOnly || !AvailabilityPermissionRules.CanView(Permissions))
@@ -416,6 +419,20 @@ else
         else if (_clinicId is not null)
         {
             await LoadDoctorsAsync();
+            await ApplyInitialDoctorAsync();
+        }
+    }
+
+    private async Task ApplyInitialDoctorAsync()
+    {
+        if (_selfOnly || InitialDoctorId is not Guid preferred)
+        {
+            return;
+        }
+
+        if (_doctors.Any(d => d.StaffMemberId == preferred))
+        {
+            await OnDoctorChanged(preferred);
         }
     }
 

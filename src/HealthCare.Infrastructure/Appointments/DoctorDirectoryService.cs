@@ -139,6 +139,9 @@ public sealed class DoctorDirectoryService : IDoctorDirectoryService
             .Select(s => new
             {
                 s.Id,
+                s.DisplayName,
+                s.FirstName,
+                s.LastName,
                 s.JobTitle,
                 HasAvailability = _dbContext.DoctorAvailabilities.Any(a =>
                     a.DoctorStaffMemberId == s.Id
@@ -152,7 +155,7 @@ public sealed class DoctorDirectoryService : IDoctorDirectoryService
             .Select(d => new ClinicDoctorResponse
             {
                 StaffMemberId = d.Id,
-                DisplayName = string.IsNullOrWhiteSpace(d.JobTitle) ? "Doctor" : d.JobTitle!,
+                DisplayName = FormatDoctorDisplayName(d.DisplayName, d.FirstName, d.LastName, d.JobTitle),
                 Specialty = specialty,
                 ClinicCode = clinicSlug,
                 ClinicId = clinicId,
@@ -161,5 +164,30 @@ public sealed class DoctorDirectoryService : IDoctorDirectoryService
             })
             .OrderBy(d => d.DisplayName)
             .ToList();
+    }
+
+    public static string FormatDoctorDisplayName(
+        string? displayName,
+        string? firstName,
+        string? lastName,
+        string? jobTitle)
+    {
+        if (!string.IsNullOrWhiteSpace(displayName))
+        {
+            return displayName.Trim();
+        }
+
+        var composed = $"{firstName?.Trim()} {lastName?.Trim()}".Trim();
+        if (!string.IsNullOrWhiteSpace(composed))
+        {
+            return composed;
+        }
+
+        if (!string.IsNullOrWhiteSpace(jobTitle))
+        {
+            return jobTitle.Trim();
+        }
+
+        return "Doctor";
     }
 }

@@ -191,10 +191,11 @@ Pages:
 - `/dashboard` — authenticated shell home; Organization Admin operational dashboard (`organization_dashboard.read`)
 - `/clinics` — organization clinic directory + management (`clinics.read` for list; create/update/activate/deactivate gated separately)
 - `/staff` — staff list/management (`staff.read` required); tabs `/staff/clinic-admins`, `/staff/doctors`, `/staff/nurses`, `/staff/receptionists`
+- `/doctors` — operational doctor directory (`staff.read` or `availability.read`); Clinic Admin clinic-scoped (no clinic picker); links to availability/appointments
 - `/patients` — patient directory + enrollment management (`patients.search` list; `patients.read` detail; `patients.update_clinic_status` for status/enroll)
-- `/appointments` — appointment queue (`appointments.read`; mutations gated per action permission)
+- `/appointments` — appointment queue (`appointments.read`; mutations gated per action permission); optional `?doctorId=` filter
 - `/appointments/calendar` — day/week calendar (`appointments.read`)
-- `/availability` — doctor availability management
+- `/availability` — doctor availability management; optional `?doctorId=` deep-link
 
 Organization Admin working clinic context uses circuit-scoped `IClinicWorkingContext` (cleared on logout). PLATFORM_ADMIN continues to use `IPlatformTenantContext`.
 

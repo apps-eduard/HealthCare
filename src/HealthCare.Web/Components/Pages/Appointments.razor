@@ -212,6 +212,9 @@ else
     private bool _subscribedPlatform;
     private bool _subscribedClinic;
 
+    [SupplyParameterFromQuery(Name = "doctorId")]
+    public Guid? InitialDoctorId { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         if (Permissions.IsPatientOnly || !Permissions.Has(WebPermissions.AppointmentsRead))
@@ -246,6 +249,11 @@ else
         }
 
         await LoadDoctorsForFilterAsync();
+        if (InitialDoctorId is Guid preferred && _doctors.Any(d => d.StaffMemberId == preferred))
+        {
+            _doctorId = preferred;
+        }
+
         await LoadAsync();
         StartPolling();
     }

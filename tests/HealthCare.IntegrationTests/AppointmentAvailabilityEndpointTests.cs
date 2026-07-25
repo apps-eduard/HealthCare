@@ -24,6 +24,10 @@ public sealed class AppointmentAvailabilityEndpointTests : IAsyncLifetime
     private const string StaffAPassword = "ChangeMe_DoctorA_1!";
     private const string StaffBEmail = "doctor.b@healthcare.local";
     private const string StaffBPassword = "ChangeMe_DoctorB_1!";
+    private const string ClinicAdminEmail = "clinicadmin@healthcare.local";
+    private const string ClinicAdminPassword = "ChangeMe_ClinicAdmin_1!";
+    private const string PlatformAdminEmail = "admin@healthcare.local";
+    private const string PlatformAdminPassword = "ChangeMe_Admin_1!";
 
     private PostgreSqlContainer? _postgres;
     private WebApplicationFactory<Program>? _factory;
@@ -64,6 +68,8 @@ public sealed class AppointmentAvailabilityEndpointTests : IAsyncLifetime
                 builder.UseSetting("DevelopmentSeed:Patient:StaffPassword", StaffAPassword);
                 builder.UseSetting("DevelopmentSeed:Patient:OtherClinicStaffEmail", StaffBEmail);
                 builder.UseSetting("DevelopmentSeed:Patient:OtherClinicStaffPassword", StaffBPassword);
+                builder.UseSetting("DevelopmentSeed:Patient:ClinicAdminEmail", ClinicAdminEmail);
+                builder.UseSetting("DevelopmentSeed:Patient:ClinicAdminPassword", ClinicAdminPassword);
                 builder.UseSetting("DevelopmentSeed:Patient:ClinicSlug", "dev-clinic-a");
 
                 builder.ConfigureServices(services =>
@@ -303,6 +309,217 @@ public sealed class AppointmentAvailabilityEndpointTests : IAsyncLifetime
             durationMinutes = 30,
         });
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task Clinic_Admin_Lists_Only_Own_Clinic_Doctors()
+    {
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
+        var me = await _client!.GetFromJsonAsync<CurrentUserResponse>("/api/v1/auth/me");
+        var clinicId = me!.ClinicId!.Value;
+
+        var byId = await _client!.GetAsync($"/api/v1/staff/clinics/{clinicId}/doctors");
+        byId.StatusCode.Should().Be(HttpStatusCode.OK);
+        var doctors = await byId.Content.ReadFromJsonAsync<List<ClinicDoctorResponse>>();
+        doctors.Should().NotBeNull();
+        doctors!.Should().OnlyContain(d => d.ClinicId == clinicId);
+
+        var doctorA = await GetClinicADoctorStaffIdAsync();
+        var doctorB = await GetClinicBDoctorStaffIdAsync();
+        doctors.Should().Contain(d => d.StaffMemberId == doctorA);
+        doctors.Should().NotContain(d => d.StaffMemberId == doctorB);
+
+        var staffDoctors = await _client!.GetFromJsonAsync<Contracts.Common.PagedResponse<Contracts.Staff.StaffSummaryResponse>>(
+            "/api/v1/staff-management/staff?role=DOCTOR");
+        staffDoctors!.Items.Should().OnlyContain(i => i.ClinicId == clinicId && i.Role == AppRoles.Doctor);
+        staffDoctors.Items.Should().NotContain(i => i.StaffMemberId == doctorB);
+    }
+
+    [Fact]
+    public async Task Clinic_Admin_Doctor_Detail_And_Availability_Round_Trip()
+    {
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
+        var doctorId = await GetClinicADoctorStaffIdAsync();
+
+        var detail = await _client!.GetAsync($"/api/v1/staff-management/staff/{doctorId}");
+        detail.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var list = await _client!.GetAsync($"/api/v1/staff/doctors/{doctorId}/availability");
+        list.StatusCode.Should().Be(HttpStatusCode.OK);
+        var windows = await list.Content.ReadFromJsonAsync<List<DoctorAvailabilityResponse>>();
+        windows.Should().NotBeEmpty();
+
+        await ClearDayAsync(doctorId, DayOfWeek.Saturday);
+        var create = await _client!.PostAsJsonAsync(
+            $"/api/v1/staff/doctors/{doctorId}/availability",
+            new CreateDoctorAvailabilityRequest
+            {
+                DayOfWeek = "Saturday",
+                StartLocalTime = "10:00",
+                EndLocalTime = "12:00",
+                SlotDurationMinutes = 30,
+                EffectiveFrom = new DateOnly(2026, 1, 1),
+            });
+        create.StatusCode.Should().Be(HttpStatusCode.OK);
+        var created = await create.Content.ReadFromJsonAsync<DoctorAvailabilityResponse>();
+        created!.StartLocalTime.Should().Be("10:00");
+
+        var reload = await _client!.GetFromJsonAsync<List<DoctorAvailabilityResponse>>(
+            $"/api/v1/staff/doctors/{doctorId}/availability");
+        reload!.Should().Contain(w => w.Id == created.Id && w.StartLocalTime == "10:00");
+    }
+
+    [Fact]
+    public async Task Clinic_Admin_Creates_Full_Day_And_Range_Exceptions()
+    {
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
+        var doctorId = await GetClinicADoctorStaffIdAsync();
+        var date = new DateOnly(2026, 11, 3);
+
+        var fullDay = await _client!.PostAsJsonAsync(
+            $"/api/v1/staff/doctors/{doctorId}/availability-exceptions",
+            new CreateDoctorAvailabilityExceptionRequest
+            {
+                Date = date,
+                ExceptionType = "UnavailableFullDay",
+                Reason = "Clinic training",
+            });
+        fullDay.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var invalidRange = await _client!.PostAsJsonAsync(
+            $"/api/v1/staff/doctors/{doctorId}/availability-exceptions",
+            new CreateDoctorAvailabilityExceptionRequest
+            {
+                Date = date.AddDays(1),
+                ExceptionType = "UnavailableRange",
+                StartLocalTime = "15:00",
+                EndLocalTime = "10:00",
+            });
+        invalidRange.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var range = await _client!.PostAsJsonAsync(
+            $"/api/v1/staff/doctors/{doctorId}/availability-exceptions",
+            new CreateDoctorAvailabilityExceptionRequest
+            {
+                Date = date.AddDays(2),
+                ExceptionType = "UnavailableRange",
+                StartLocalTime = "11:00",
+                EndLocalTime = "13:00",
+                Reason = "Meeting",
+            });
+        range.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Clinic_Admin_Cross_Clinic_Doctor_And_Exception_Denied()
+    {
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
+        var foreignDoctor = await GetClinicBDoctorStaffIdAsync();
+        using var scope = _factory!.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+        var clinicBId = await db.Clinics.Where(c => c.Slug == "dev-clinic-b").Select(c => c.Id).SingleAsync();
+
+        (await _client!.GetAsync($"/api/v1/staff/clinics/{clinicBId}/doctors"))
+            .StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.NotFound);
+
+        (await _client!.GetAsync($"/api/v1/staff-management/staff/{foreignDoctor}"))
+            .StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.NotFound);
+
+        var exception = await _client!.PostAsJsonAsync(
+            $"/api/v1/staff/doctors/{foreignDoctor}/availability-exceptions",
+            new CreateDoctorAvailabilityExceptionRequest
+            {
+                Date = new DateOnly(2026, 12, 1),
+                ExceptionType = "UnavailableFullDay",
+            });
+        exception.StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Clinic_Admin_Stale_Version_And_Audit_For_Availability_Mutation()
+    {
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
+        var doctorId = await GetClinicADoctorStaffIdAsync();
+        var list = await _client!.GetFromJsonAsync<List<DoctorAvailabilityResponse>>(
+            $"/api/v1/staff/doctors/{doctorId}/availability");
+        var row = list!.First();
+
+        var stale = await _client!.PatchAsJsonAsync(
+            $"/api/v1/staff/doctors/{doctorId}/availability/{row.Id}",
+            new UpdateDoctorAvailabilityRequest
+            {
+                ExpectedVersion = row.Version + 50,
+                IsActive = false,
+            });
+        stale.StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        await ClearDayAsync(doctorId, DayOfWeek.Sunday);
+        var create = await _client!.PostAsJsonAsync(
+            $"/api/v1/staff/doctors/{doctorId}/availability",
+            new CreateDoctorAvailabilityRequest
+            {
+                DayOfWeek = "Sunday",
+                StartLocalTime = "08:00",
+                EndLocalTime = "09:00",
+                SlotDurationMinutes = 30,
+                EffectiveFrom = new DateOnly(2026, 1, 1),
+            });
+        create.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var scope = _factory!.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+        var audit = await db.OrganizationAuditEvents
+            .AsNoTracking()
+            .Where(e => e.Category == "availability" && e.ResourceId == doctorId)
+            .OrderByDescending(e => e.OccurredAtUtc)
+            .Take(5)
+            .ToListAsync();
+        audit.Should().NotBeEmpty();
+        var auditJson = System.Text.Json.JsonSerializer.Serialize(audit);
+        auditJson.ToLowerInvariant().Should().NotContain("password");
+        auditJson.ToLowerInvariant().Should().NotContain("token");
+        auditJson.ToLowerInvariant().Should().NotContain("secret");
+    }
+
+    [Fact]
+    public async Task Clinic_Admin_Inactive_Membership_Denied()
+    {
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
+        var me = await _client!.GetFromJsonAsync<CurrentUserResponse>("/api/v1/auth/me");
+        using (var scope = _factory!.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+            var membership = await db.StaffMembers.SingleAsync(s => s.Id == me!.StaffMemberId);
+            membership.IsActive = false;
+            await db.SaveChangesAsync();
+        }
+
+        var doctorId = await GetClinicADoctorStaffIdAsync();
+        var response = await _client!.GetAsync($"/api/v1/staff/doctors/{doctorId}/availability");
+        response.StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.Unauthorized);
+
+        using (var scope = _factory!.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+            var membership = await db.StaffMembers.SingleAsync(s => s.Id == me!.StaffMemberId);
+            membership.IsActive = true;
+            await db.SaveChangesAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Platform_Admin_Without_Bypass_Denied_Clinic_Doctors()
+    {
+        await AuthenticateAsync(PlatformAdminEmail, PlatformAdminPassword);
+        using var scope = _factory!.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+        var clinicAId = await db.Clinics.Where(c => c.Slug == "dev-clinic-a").Select(c => c.Id).SingleAsync();
+
+        var denied = await _client!.GetAsync($"/api/v1/staff/clinics/{clinicAId}/doctors");
+        denied.StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.Unauthorized, HttpStatusCode.NotFound);
+
+        var allowed = await _client!.GetAsync($"/api/v1/staff/clinics/{clinicAId}/doctors?platformAdminBypass=true");
+        allowed.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]

@@ -49,6 +49,13 @@
                     <span>Patients</span>
                 </MenuItem>
             }
+            @if (DoctorDirectoryPermissionRules.CanView(Permissions))
+            {
+                <MenuItem Key="doctors" RouterLink="/doctors" RouterMatch="NavLinkMatch.Prefix">
+                    <Icon Type="idcard" Theme="IconThemeType.Outline" />
+                    <span>Doctors</span>
+                </MenuItem>
+            }
             @if (AvailabilityPermissionRules.CanView(Permissions))
             {
                 <MenuItem Key="availability" RouterLink="/availability" RouterMatch="NavLinkMatch.Prefix">
@@ -284,6 +291,7 @@
                 "/appointments" => "appointments",
                 var p when p.StartsWith("/appointments/calendar", StringComparison.Ordinal) => "calendar",
                 var p when p.StartsWith("/patients", StringComparison.Ordinal) => "patients",
+                var p when p.StartsWith("/doctors", StringComparison.Ordinal) => "doctors",
                 var p when p.StartsWith("/availability", StringComparison.Ordinal) => "availability",
                 var p when p.StartsWith("/operations/reminders", StringComparison.Ordinal) => "ops-reminders",
                 var p when p.StartsWith("/operations/clinic-summaries", StringComparison.Ordinal) => "ops-summaries",

@@ -1,5 +1,6 @@
 @using HealthCare.Contracts.Clinics
 @using HealthCare.Web.Availability
+@using HealthCare.Web.Doctors
 @using HealthCare.Web.Operations
 @inject IClinicDashboardApiClient ClinicDashboardApi
 @inject IPermissionState Permissions
@@ -158,6 +159,12 @@ else
             {
                 <Button Type="@ButtonType.Primary" OnClick='() => Navigation.NavigateTo("/appointments")' AriaLabel="Open appointments">
                     <Icon Type="unordered-list" Theme="IconThemeType.Outline" /> Appointments
+                </Button>
+            }
+            @if (DoctorDirectoryPermissionRules.CanView(Permissions))
+            {
+                <Button Type="@ButtonType.Primary" OnClick='() => Navigation.NavigateTo("/doctors")' AriaLabel="Open doctors">
+                    <Icon Type="medicine-box" Theme="IconThemeType.Outline" /> Doctors
                 </Button>
             }
             @if (AvailabilityPermissionRules.CanView(Permissions))

@@ -372,7 +372,11 @@ Backend **implemented**. Web `/staff` **implemented** and **CA-3 actor-aware har
 
 ## 11. Doctor directory
 
-List doctors for membership clinic; use for appointments/availability. Backend + Web **implemented**. Polish in CA-4.
+List doctors for membership clinic; use for appointments/availability. Backend + Web **implemented**.
+
+### Status
+
+**CA-4 delivered:** dedicated `/doctors` directory (staff `role=DOCTOR` when `staff.read`; booking directory fallback when only `availability.read`); clinic-scoped for Clinic Admin (no clinic picker); summary drawer with links to `/availability?doctorId=` and `/appointments?doctorId=`; activation remains on `/staff`.
 
 ---
 
@@ -390,7 +394,11 @@ Queue/calendar + confirm/check-in/cancel/reschedule/complete/no-show. Backend + 
 
 ## 14. Doctor availability
 
-`availability.manage_clinic` for own clinic. Backend + Web **implemented** (CA-4 verify).
+`availability.manage_clinic` for own clinic. Backend + Web **implemented**.
+
+### Status
+
+**CA-4 delivered:** Clinic Admin uses fixed clinic caption (no disabled clinic picker); deep-link `?doctorId=` from `/doctors`; weekly windows + exceptions + ExpectedVersion concurrency unchanged.
 
 ---
 
@@ -555,7 +563,7 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 | CA-1 | Nav + clinic dashboard API/UI | Medium | **Delivered** (2026-07-24) |
 | CA-2 | Clinic profile settings | Medium | **Delivered** (2026-07-24) |
 | CA-3 | Staff UI hardening | Small | **Delivered** (2026-07-24) |
-| CA-4 | Doctor directory + availability verify | Small | After CA-1 |
+| CA-4 | Doctor directory + availability verify | Small | **Delivered** (2026-07-25) |
 | CA-5 | Patients verify | Small | After CA-1 |
 | CA-6 | Appointments verify (Complete for CA) | Small | After CA-1 |
 | CA-7 | Operations verify | Small | After CA-1 |
@@ -581,7 +589,7 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 | Clinic dashboard | Approved | `clinic_dashboard.read` | **Done** | **Done** (`/dashboard`) | — | CA-1 |
 | Clinic profile | Approved | `clinic_profile.*` | **Done** | **Done** (`/clinic/settings`) | — | CA-2 |
 | Staff ops | Matrix | existing staff.* | Done | **Done** (CA-3 actor-aware) | — | CA-3 |
-| Doctors / availability | Matrix | availability.* | Done | Done | Verify | CA-4 |
+| Doctors / availability | Matrix | availability.* + staff.read | Done | **Done** (`/doctors` + `/availability`) | — | CA-4 |
 | Patients | Matrix | patients.* | Done | Done | Hide cross-clinic enroll | CA-5 |
 | Appointments | Matrix | appointments.* | Done | Done | Complete for CA | CA-6 |
 | Ops | Matrix | reminders/summaries | Done | Done | Verify | CA-7 |
@@ -603,3 +611,4 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 | 2026-07-24 | **CA-1 delivered:** `clinic_dashboard.read`, `GET /api/v1/clinic/dashboard`, Clinic Dashboard UI, E2E smoke |
 | 2026-07-24 | **CA-2 delivered:** `clinic_profile.read` / `clinic_profile.update`, `GET`/`PATCH /api/v1/clinic/settings`, Clinic Profile UI, E2E smoke |
 | 2026-07-24 | **CA-3 delivered:** Clinic Admin actor-aware `/staff` (no clinic picker/change-clinic; clinic role filter); E2E staff smoke |
+| 2026-07-25 | **CA-4 delivered:** `/doctors` directory + availability deep-link/actor polish; doctor DisplayName fix; Clinic Admin E2E doctors smoke |

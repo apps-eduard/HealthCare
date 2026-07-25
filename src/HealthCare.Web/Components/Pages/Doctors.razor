@@ -1,0 +1,609 @@
+@page "/doctors"
+@attribute [Authorize]
+@implements IDisposable
+@using HealthCare.Contracts.Appointments
+@using HealthCare.Contracts.Staff
+@using HealthCare.Web.Components.Clinics
+@using HealthCare.Web.Doctors
+@inject IStaffManagementApiClient StaffApi
+@inject IDoctorAvailabilityApiClient AvailabilityApi
+@inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
+@inject IClinicWorkingContext ClinicContext
+@inject NavigationManager Navigation
+@inject IClinicDirectoryApiClient ClinicsApi
+
+<PageTitle>Doctors</PageTitle>
+
+@if (Permissions.IsPatientOnly)
+{
+    <Alert Type="@AlertType.Error" Message="Patient accounts cannot use the staff application." ShowIcon="true" />
+}
+else if (!DoctorDirectoryPermissionRules.CanView(Permissions))
+{
+    <PermissionDeniedState Message="You do not have permission to view the doctor directory." />
+}
+else
+{
+    <HcPageHeader Title="Doctors"
+                  Subtitle="@DoctorDirectoryPageCopy.Subtitle(Permissions)">
+        <Breadcrumb>
+            <Breadcrumb>
+                <BreadcrumbItem Href="/dashboard">Home</BreadcrumbItem>
+                <BreadcrumbItem>Doctors</BreadcrumbItem>
+            </Breadcrumb>
+        </Breadcrumb>
+        <ChildContent>
+            <Button OnClick="RefreshAsync" Disabled="_loading" AriaLabel="Refresh doctor list">
+                <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
+            </Button>
+        </ChildContent>
+    </HcPageHeader>
+
+    @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)
+    {
+        <Alert Type="@AlertType.Info"
+               Message="Select an organization in the platform banner before loading doctors. Global doctor load is not allowed."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
+    }
+    else if (Permissions.IsPlatformAdmin && !PlatformTenant.HasClinic)
+    {
+        <Alert Type="@AlertType.Info"
+               Message="Select a clinic in the platform banner (or below) before loading doctors for the selected organization."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
+    }
+
+    <div class="hc-card">
+        <div class="hc-filter-grid">
+            <div>
+                <label class="hc-filter-label" for="doctors-search">Search</label>
+                <Input Id="doctors-search"
+                       @bind-Value="_search"
+                       Disabled="_loading"
+                       Style="width:100%;"
+                       AriaLabel="Search doctors by name"
+                       @onkeyup="OnSearchKeyUp" />
+            </div>
+            <div>
+                <label class="hc-filter-label" for="doctors-status">Status</label>
+                <Select Id="doctors-status"
+                        TItemValue="string"
+                        TItem="string"
+                        @bind-Value="_activeFilter"
+                        Style="width:100%;"
+                        AllowClear
+                        AriaLabel="Filter doctors by active status">
+                    <SelectOptions>
+                        <SelectOption TItemValue="string" TItem="string" Value="@("active")" Label="Active" />
+                        <SelectOption TItemValue="string" TItem="string" Value="@("inactive")" Label="Inactive" />
+                    </SelectOptions>
+                </Select>
+            </div>
+            @if (DoctorDirectoryPermissionRules.ShowClinicPicker(Permissions))
+            {
+                <ClinicPicker Value="_clinicId"
+                              ValueChanged="OnClinicFilterChanged"
+                              Label="Clinic filter"
+                              AllowClear="@(!Permissions.IsPlatformAdmin)"
+                              Required="@(Permissions.IsPlatformAdmin)"
+                              ActiveOnly="null"
+                              PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
+                              PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
+                              Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)" />
+            }
+            else if (_clinicId is not null)
+            {
+                <div>
+                    <div class="hc-filter-label">Clinic</div>
+                    <div class="hc-caption" data-testid="doctors-clinic-caption">
+                        @DoctorDirectoryPageCopy.ClinicCaption(Permissions, _clinicName)
+                    </div>
+                </div>
+            }
+            <div style="display:flex;gap:8px;align-items:flex-end;">
+                <Button Type="@ButtonType.Primary"
+                        OnClick="RefreshAsync"
+                        Disabled="@(Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !_clinicId.HasValue))"
+                        AriaLabel="Search doctors">
+                    Search
+                </Button>
+                <Button OnClick="ResetFiltersAsync" Disabled="_loading" AriaLabel="Reset doctor filters">Reset</Button>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <ErrorState Message="@_error" />
+    }
+
+    @if (_loading)
+    {
+        <PageLoading />
+    }
+    else if (_staffRows.Count == 0 && _directoryRows.Count == 0)
+    {
+        <EmptyState Title="No doctors found" Message="No doctors matched your filters for this clinic." />
+    }
+    else if (_useStaffDirectory)
+    {
+        <div class="hc-table-wrap">
+            <table class="hc-table" aria-label="Clinic doctors">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Job title</th>
+                        <th>Clinic</th>
+                        <th>Status</th>
+                        <th class="hc-actions">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _staffRows)
+                    {
+                        <tr>
+                            <td>@DoctorDirectoryDisplay.Name(row)</td>
+                            <td>@(row.JobTitle ?? "—")</td>
+                            <td>@(row.ClinicName ?? row.ClinicId.ToString("D")[..8])</td>
+                            <td>
+                                <StatusBadge Text="@(row.MembershipIsActive ? "Active" : "Inactive")"
+                                             Tone="@(row.MembershipIsActive ? StatusTone.Success : StatusTone.Default)" />
+                            </td>
+                            <td class="hc-actions">
+                                <Space Wrap>
+                                    <Button Type="@ButtonType.Link"
+                                            OnClick="@(() => OpenDetail(row))"
+                                            AriaLabel="@($"Open summary for {DoctorDirectoryDisplay.Name(row)}")">
+                                        Summary
+                                    </Button>
+                                    @if (DoctorDirectoryPermissionRules.CanOpenAvailability(Permissions) && row.MembershipIsActive)
+                                    {
+                                        <Button Type="@ButtonType.Link"
+                                                OnClick="@(() => Navigation.NavigateTo(DoctorDirectoryDisplay.AvailabilityHref(row.StaffMemberId)))"
+                                                AriaLabel="@($"Manage availability for {DoctorDirectoryDisplay.Name(row)}")">
+                                            Availability
+                                        </Button>
+                                    }
+                                    @if (DoctorDirectoryPermissionRules.CanOpenAppointments(Permissions))
+                                    {
+                                        <Button Type="@ButtonType.Link"
+                                                OnClick="@(() => Navigation.NavigateTo(DoctorDirectoryDisplay.AppointmentsHref(row.StaffMemberId)))"
+                                                AriaLabel="@($"Open appointments for {DoctorDirectoryDisplay.Name(row)}")">
+                                            Appointments
+                                        </Button>
+                                    }
+                                </Space>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_totalPages > 1)
+        {
+            <div style="display:flex;align-items:center;gap:12px;margin-top:0.75rem;flex-wrap:wrap;">
+                <Button Disabled="@(_page <= 1 || _loading)" OnClick="@(() => OnPageChanged(_page - 1))" AriaLabel="Previous doctor page">Previous</Button>
+                <span class="hc-caption">Page @_page / @_totalPages</span>
+                <Button Disabled="@(_page >= _totalPages || _loading)" OnClick="@(() => OnPageChanged(_page + 1))" AriaLabel="Next doctor page">Next</Button>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="hc-table-wrap">
+            <table class="hc-table" aria-label="Clinic doctors">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Specialty</th>
+                        <th>Availability</th>
+                        <th class="hc-actions">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _directoryRows)
+                    {
+                        <tr>
+                            <td>@row.DisplayName</td>
+                            <td>@(row.Specialty ?? "—")</td>
+                            <td>
+                                <StatusBadge Text="@(row.AcceptsBookings ? "Accepts bookings" : "No active window")"
+                                             Tone="@(row.AcceptsBookings ? StatusTone.Success : StatusTone.Default)" />
+                            </td>
+                            <td class="hc-actions">
+                                <Space Wrap>
+                                    <Button Type="@ButtonType.Link"
+                                            OnClick="@(() => OpenDirectoryDetail(row))"
+                                            AriaLabel="@($"Open summary for {row.DisplayName}")">
+                                        Summary
+                                    </Button>
+                                    @if (DoctorDirectoryPermissionRules.CanOpenAvailability(Permissions))
+                                    {
+                                        <Button Type="@ButtonType.Link"
+                                                OnClick="@(() => Navigation.NavigateTo(DoctorDirectoryDisplay.AvailabilityHref(row.StaffMemberId)))"
+                                                AriaLabel="@($"Manage availability for {row.DisplayName}")">
+                                            Availability
+                                        </Button>
+                                    }
+                                    @if (DoctorDirectoryPermissionRules.CanOpenAppointments(Permissions))
+                                    {
+                                        <Button Type="@ButtonType.Link"
+                                                OnClick="@(() => Navigation.NavigateTo(DoctorDirectoryDisplay.AppointmentsHref(row.StaffMemberId)))"
+                                                AriaLabel="@($"Open appointments for {row.DisplayName}")">
+                                            Appointments
+                                        </Button>
+                                    }
+                                </Space>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <Drawer Title="@(_detailTitle)"
+            Visible="_detailVisible"
+            OnClose="CloseDetail"
+            Width="440">
+        @if (_detailStaff is not null)
+        {
+            <div style="display:flex;flex-direction:column;gap:10px;">
+                <div><strong>Name:</strong> @DoctorDirectoryDisplay.Name(_detailStaff)</div>
+                <div><strong>Email:</strong> @_detailStaff.Email</div>
+                <div><strong>Job title:</strong> @(_detailStaff.JobTitle ?? "—")</div>
+                <div><strong>Clinic:</strong> @(_detailStaff.ClinicName ?? _detailStaff.ClinicId.ToString("D"))</div>
+                <div>
+                    <strong>Status:</strong>
+                    <StatusBadge Text="@(_detailStaff.MembershipIsActive ? "Active" : "Inactive")"
+                                 Tone="@(_detailStaff.MembershipIsActive ? StatusTone.Success : StatusTone.Default)" />
+                </div>
+                <div class="hc-caption">Account activation, roles, and password reset remain on Staff Management.</div>
+                <Space Wrap>
+                    @if (DoctorDirectoryPermissionRules.CanOpenAvailability(Permissions) && _detailStaff.MembershipIsActive)
+                    {
+                        <Button Type="@ButtonType.Primary"
+                                OnClick="@(() => Navigation.NavigateTo(DoctorDirectoryDisplay.AvailabilityHref(_detailStaff.StaffMemberId)))"
+                                AriaLabel="Open doctor availability">
+                            Availability
+                        </Button>
+                    }
+                    @if (DoctorDirectoryPermissionRules.CanOpenAppointments(Permissions))
+                    {
+                        <Button OnClick="@(() => Navigation.NavigateTo(DoctorDirectoryDisplay.AppointmentsHref(_detailStaff.StaffMemberId)))"
+                                AriaLabel="Open doctor appointments">
+                            Appointments
+                        </Button>
+                    }
+                    @if (DoctorDirectoryPermissionRules.CanOpenStaffAccount(Permissions))
+                    {
+                        <Button OnClick='() => Navigation.NavigateTo("/staff/doctors")' AriaLabel="Open staff management for doctors">
+                            Staff account
+                        </Button>
+                    }
+                </Space>
+            </div>
+        }
+        else if (_detailDirectory is not null)
+        {
+            <div style="display:flex;flex-direction:column;gap:10px;">
+                <div><strong>Name:</strong> @_detailDirectory.DisplayName</div>
+                <div><strong>Specialty:</strong> @(_detailDirectory.Specialty ?? "—")</div>
+                <div><strong>Clinic:</strong> @_detailDirectory.ClinicCode</div>
+                <div><strong>Timezone:</strong> @(_detailDirectory.ClinicTimeZoneId ?? "—")</div>
+                <div>
+                    <strong>Bookings:</strong>
+                    <StatusBadge Text="@(_detailDirectory.AcceptsBookings ? "Accepts bookings" : "No active window")"
+                                 Tone="@(_detailDirectory.AcceptsBookings ? StatusTone.Success : StatusTone.Default)" />
+                </div>
+                <Space Wrap>
+                    @if (DoctorDirectoryPermissionRules.CanOpenAvailability(Permissions))
+                    {
+                        <Button Type="@ButtonType.Primary"
+                                OnClick="@(() => Navigation.NavigateTo(DoctorDirectoryDisplay.AvailabilityHref(_detailDirectory.StaffMemberId)))"
+                                AriaLabel="Open doctor availability">
+                            Availability
+                        </Button>
+                    }
+                    @if (DoctorDirectoryPermissionRules.CanOpenAppointments(Permissions))
+                    {
+                        <Button OnClick="@(() => Navigation.NavigateTo(DoctorDirectoryDisplay.AppointmentsHref(_detailDirectory.StaffMemberId)))"
+                                AriaLabel="Open doctor appointments">
+                            Appointments
+                        </Button>
+                    }
+                </Space>
+            </div>
+        }
+    </Drawer>
+}
+
+@code {
+    private readonly List<StaffSummaryResponse> _staffRows = [];
+    private readonly List<ClinicDoctorResponse> _directoryRows = [];
+    private bool _useStaffDirectory;
+    private bool _loading;
+    private bool _subscribedPlatform;
+    private bool _subscribedClinic;
+    private string? _error;
+    private string? _search;
+    private string? _activeFilter = "active";
+    private Guid? _clinicId;
+    private string? _clinicName;
+    private int _page = 1;
+    private int _pageSize = 20;
+    private int _totalPages = 1;
+    private bool _detailVisible;
+    private string _detailTitle = "Doctor summary";
+    private StaffSummaryResponse? _detailStaff;
+    private ClinicDoctorResponse? _detailDirectory;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Permissions.IsPatientOnly || !DoctorDirectoryPermissionRules.CanView(Permissions))
+        {
+            return;
+        }
+
+        _useStaffDirectory = DoctorDirectoryPermissionRules.UseStaffDirectory(Permissions);
+
+        if (Permissions.IsPlatformAdmin)
+        {
+            PlatformTenant.Changed += OnPlatformTenantChanged;
+            _subscribedPlatform = true;
+            if (PlatformTenant.HasClinic)
+            {
+                _clinicId = PlatformTenant.SelectedClinicId;
+            }
+        }
+        else if (Permissions.IsOrganizationAdmin)
+        {
+            ClinicContext.Changed += OnClinicContextChanged;
+            _subscribedClinic = true;
+            if (ClinicContext.HasClinic)
+            {
+                _clinicId = ClinicContext.SelectedClinicId;
+            }
+        }
+
+        if (!Permissions.CanFilterByClinic && Permissions.CurrentUser?.ClinicId is Guid membershipClinic)
+        {
+            _clinicId = membershipClinic;
+            await ResolveClinicNameAsync(membershipClinic);
+        }
+        else if (_clinicId is Guid selected)
+        {
+            await ResolveClinicNameAsync(selected);
+        }
+
+        if (Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !_clinicId.HasValue))
+        {
+            return;
+        }
+
+        await RefreshAsync();
+    }
+
+    public void Dispose()
+    {
+        if (_subscribedPlatform)
+        {
+            PlatformTenant.Changed -= OnPlatformTenantChanged;
+        }
+
+        if (_subscribedClinic)
+        {
+            ClinicContext.Changed -= OnClinicContextChanged;
+        }
+    }
+
+    private void OnPlatformTenantChanged() => InvokeAsync(async () =>
+    {
+        _clinicId = PlatformTenant.HasClinic ? PlatformTenant.SelectedClinicId : null;
+        _staffRows.Clear();
+        _directoryRows.Clear();
+        _error = null;
+        if (_clinicId is Guid id)
+        {
+            await ResolveClinicNameAsync(id);
+            await RefreshAsync();
+        }
+        else
+        {
+            _clinicName = null;
+        }
+
+        StateHasChanged();
+    });
+
+    private void OnClinicContextChanged() => InvokeAsync(async () =>
+    {
+        _clinicId = ClinicContext.SelectedClinicId;
+        if (_clinicId is Guid id)
+        {
+            await ResolveClinicNameAsync(id);
+        }
+        else
+        {
+            _clinicName = null;
+        }
+
+        await RefreshAsync();
+        StateHasChanged();
+    });
+
+    private async Task ResolveClinicNameAsync(Guid clinicId)
+    {
+        try
+        {
+            var clinic = await ClinicsApi.GetByIdAsync(clinicId, Permissions.IsPlatformAdmin);
+            _clinicName = clinic.Name;
+        }
+        catch
+        {
+            _clinicName = null;
+        }
+    }
+
+    private async Task OnClinicFilterChanged(Guid? clinicId)
+    {
+        _clinicId = clinicId;
+        _page = 1;
+        if (clinicId is Guid id)
+        {
+            await ResolveClinicNameAsync(id);
+        }
+        else
+        {
+            _clinicName = null;
+        }
+
+        await RefreshAsync();
+    }
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            _page = 1;
+            await RefreshAsync();
+        }
+    }
+
+    private async Task ResetFiltersAsync()
+    {
+        _search = null;
+        _activeFilter = "active";
+        _page = 1;
+        if (Permissions.CanFilterByClinic && !Permissions.IsPlatformAdmin)
+        {
+            _clinicId = null;
+            _clinicName = null;
+        }
+
+        await RefreshAsync();
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        _page = page;
+        await RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (Permissions.IsPlatformAdmin && (!PlatformTenant.HasOrganization || !_clinicId.HasValue))
+        {
+            return;
+        }
+
+        _loading = true;
+        _error = null;
+        try
+        {
+            if (_useStaffDirectory)
+            {
+                await LoadStaffDoctorsAsync();
+            }
+            else
+            {
+                await LoadDirectoryDoctorsAsync();
+            }
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = DoctorDirectoryProblemMessages.ToUserMessage(ex);
+            _staffRows.Clear();
+            _directoryRows.Clear();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadStaffDoctorsAsync()
+    {
+        bool? isActive = _activeFilter switch
+        {
+            "active" => true,
+            "inactive" => false,
+            _ => null,
+        };
+
+        var result = await StaffApi.SearchAsync(
+            new StaffSearchRequest
+            {
+                Search = string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(),
+                ClinicId = _clinicId,
+                Role = "DOCTOR",
+                IsActive = isActive,
+                Page = _page,
+                PageSize = _pageSize,
+                SortBy = "lastname",
+                SortDirection = "asc",
+            },
+            platformAdminBypass: Permissions.IsPlatformAdmin);
+
+        _staffRows.Clear();
+        _staffRows.AddRange(result.Items);
+        _totalPages = Math.Max(1, result.TotalPages);
+        _page = result.Page < 1 ? 1 : result.Page;
+        _directoryRows.Clear();
+    }
+
+    private async Task LoadDirectoryDoctorsAsync()
+    {
+        if (_clinicId is not Guid clinicId)
+        {
+            _directoryRows.Clear();
+            return;
+        }
+
+        var doctors = await AvailabilityApi.ListClinicDoctorsByIdAsync(clinicId, Permissions.IsPlatformAdmin);
+        var filtered = doctors.AsEnumerable();
+        if (!string.IsNullOrWhiteSpace(_search))
+        {
+            var term = _search.Trim();
+            filtered = filtered.Where(d =>
+                d.DisplayName.Contains(term, StringComparison.OrdinalIgnoreCase)
+                || (d.Specialty?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false));
+        }
+
+        if (_activeFilter == "inactive")
+        {
+            // Booking directory is active-only; inactive filter yields empty.
+            filtered = [];
+        }
+
+        _directoryRows.Clear();
+        _directoryRows.AddRange(filtered.OrderBy(d => d.DisplayName));
+        _staffRows.Clear();
+        _totalPages = 1;
+    }
+
+    private void OpenDetail(StaffSummaryResponse row)
+    {
+        _detailStaff = row;
+        _detailDirectory = null;
+        _detailTitle = DoctorDirectoryDisplay.Name(row);
+        _detailVisible = true;
+    }
+
+    private void OpenDirectoryDetail(ClinicDoctorResponse row)
+    {
+        _detailDirectory = row;
+        _detailStaff = null;
+        _detailTitle = row.DisplayName;
+        _detailVisible = true;
+    }
+
+    private void CloseDetail()
+    {
+        _detailVisible = false;
+        _detailStaff = null;
+        _detailDirectory = null;
+    }
+}
