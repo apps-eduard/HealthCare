@@ -432,13 +432,9 @@ else
         }
 
         var preferred = InitialDoctorId ?? TryReadDoctorIdFromUri();
-        if (preferred is not Guid doctorId)
+        if (preferred is Guid doctorId)
         {
-            return;
-        }
-
-        if (_doctors.Any(d => d.StaffMemberId == doctorId))
-        {
+            // Apply even if the picker list is still empty — availability APIs are keyed by doctor id.
             await OnDoctorChanged(doctorId);
         }
     }
