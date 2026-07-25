@@ -1,7 +1,7 @@
 # MVP Doctor Scope
 
 **Status:** **Approved** by product owner (2026-07-25). Authoritative for the `DOCTOR` Web MVP.  
-**Implementation:** Doctor Web MVP **DR-1 delivered** (2026-07-25). Later DR phases not started. Permissions ship with their phase.  
+**Implementation:** Doctor Web MVP **DR-1 and DR-2 delivered** (2026-07-25). Later DR phases not started. Permissions ship with their phase.  
 **Authority:** This document overrides informal notes in `Docs/security.md` §4.4 where they conflict; keep matrix and security cross-links in sync when coding.  
 **Related:** `Docs/mvp-clinic-admin-scope.md`, `Docs/mvp-organization-admin-scope.md`, `Docs/authorization-matrix.md`, `Docs/security.md` §4.4 / medical-notes.  
 **Do not** copy Clinic Admin or Organization Admin capabilities into Doctor without validating ownership and clinical least-privilege.  
@@ -75,7 +75,7 @@ Clinical ownership key: StaffMemberId
 | Medical-note read | Any clinic Doctor/Nurse with permission | Author + authorized own appointment only | **DR-6** |
 | Medical-note amend | Any clinic Doctor | Author-only append | **DR-6** |
 | Doctor dashboard | Missing | `GET /api/v1/doctor/dashboard` | **DR-1** |
-| Doctor profile | Admin staff APIs only | Self `GET/PATCH /api/v1/doctor/profile` | **DR-2** |
+| Doctor profile | Admin staff APIs only | Self `GET/PATCH /api/v1/doctor/profile` | **DR-2 delivered** |
 | Medical-notes Web | Missing | Appointment-detail entry | **DR-6** |
 | Doctor E2E | None | Full pack | **DR-10** |
 
@@ -84,7 +84,7 @@ Clinical ownership key: StaffMemberId
 | # | Capability | Approved | Backend today | Web today | Phase |
 |---|------------|----------|---------------|-----------|-------|
 | 1 | Doctor dashboard | Yes | Missing | Generic `/dashboard` | DR-1 |
-| 2 | Doctor profile | Yes | Missing self API | Missing | DR-2 |
+| 2 | Doctor profile | Yes | Delivered | Delivered | DR-2 |
 | 3 | My clinic caption | Read-only | Partial | Partial | DR-1/DR-2 |
 | 4–5 | Own availability + exceptions | Yes | Self-enforced | `/availability` | DR-3 |
 | 6–8 | Own schedule / list / detail | Yes | Clinic-wide (**gap**) | Shared pages | DR-3/DR-4 |
@@ -483,7 +483,8 @@ Covering-doctor / care-team; InProgress API; note-before-complete policy; specia
 | Phase | Theme | Complexity | Status |
 |-------|--------|------------|--------|
 | DR-1 | Doctor dashboard + navigation foundation | Medium | **Delivered** (2026-07-25) |
-| DR-2 | Doctor profile | Small | Not started |
+| DR-2 | Doctor profile | Small | **Delivered** (2026-07-25) |
+| DR-3 | My availability and schedule | Small | Not started |
 | DR-3 | My availability and schedule | Small | Not started |
 | DR-4 | My appointment ownership and workflows | Medium | Not started |
 | DR-5 | Appointment-linked patient access | Large | Not started |
@@ -611,3 +612,4 @@ Covering-doctor / care-team; InProgress API; note-before-complete policy; specia
 | 2026-07-25 | Initial draft from repository inspection |
 | 2026-07-25 | **Approved** by product owner: Model A patients; appointment ownership; medical-note tighten; profile/dashboard permissions; DR-8 skipped; no Doctor create UI |
 | 2026-07-25 | **DR-1 delivered:** `doctor_dashboard.read`, `GET /api/v1/doctor/dashboard`, Doctor Dashboard UI + Doctor console nav (Patients hidden until DR-5; appointment ownership remains DR-4) |
+| 2026-07-25 | **DR-2 delivered:** `doctor_profile.read` / `doctor_profile.update`, `GET/PATCH /api/v1/doctor/profile`, `/doctor/profile` My Profile UI; Specialty remains Clinic Admin–controlled |

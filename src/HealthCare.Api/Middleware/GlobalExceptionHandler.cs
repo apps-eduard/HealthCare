@@ -203,6 +203,18 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
                 cancellationToken);
         }
 
+        if (exception is DoctorProfileException doctorProfileException)
+        {
+            return await WriteAuthProblemAsync(
+                httpContext,
+                doctorProfileException.StatusCode,
+                doctorProfileException.Title,
+                doctorProfileException.ErrorCode,
+                correlationId,
+                "Doctor profile denied",
+                cancellationToken);
+        }
+
         if (exception is ClinicSettingsException clinicSettingsException)
         {
             return await WriteAuthProblemAsync(

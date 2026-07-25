@@ -91,3 +91,4 @@ E2E tests share one host fixture and use an xUnit collection with `DisableParall
 - Clinic Admin CA-9: login → update clinic profile → Clinic Audit Logs → `clinic_profile_update` / safe summary Details; no picker / export / metadata / org settings (`ClinicAdminAuditSmokeTests`)
 - Clinic Admin CA-10 hardening (`ClinicAdminHardeningSmokeTests`)
 - Doctor DR-1: login → Doctor Dashboard → org settings denied → logout (`DoctorDashboardSmokeTests`)
+- Doctor DR-2: login → My Profile → update display name → reload persistence; identity fields read-only; admin nav absent (`DoctorProfileSmokeTests`)

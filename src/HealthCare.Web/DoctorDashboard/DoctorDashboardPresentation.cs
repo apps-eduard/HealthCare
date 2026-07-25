@@ -20,6 +20,9 @@ public static class DoctorConsoleNavigation
         permissions.IsDoctor
         && permissions.Has(WebPermissions.DoctorDashboardRead);
 
+    public static bool ShowMyProfileLink(IPermissionState permissions) =>
+        IsDoctorConsoleActor(permissions) && permissions.Has(WebPermissions.DoctorProfileRead);
+
     public static bool ShowPatientsLink(IPermissionState permissions) =>
         !IsDoctorConsoleActor(permissions) && permissions.Has(WebPermissions.PatientsSearch);
 

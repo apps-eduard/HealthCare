@@ -102,7 +102,8 @@ public sealed class DoctorDashboardUiTests
         source.Should().Contain("DoctorConsoleNavigation.ShowPatientsLink");
         source.Should().Contain("DoctorConsoleNavigation.ShowOperations");
         source.Should().Contain("DoctorConsoleNavigation.ShowClinicsDirectory");
-        source.Should().NotContain("/doctor/profile");
+        source.Should().Contain("DoctorConsoleNavigation.ShowMyProfileLink");
+        source.Should().Contain("/doctor/profile");
     }
 
     [Fact]

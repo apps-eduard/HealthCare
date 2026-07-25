@@ -24,6 +24,8 @@ public static class WebPermissions
     public const string ClinicReportsRead = "clinic_reports.read";
     public const string ClinicAuditLogsRead = "clinic_audit_logs.read";
     public const string DoctorDashboardRead = "doctor_dashboard.read";
+    public const string DoctorProfileRead = "doctor_profile.read";
+    public const string DoctorProfileUpdate = "doctor_profile.update";
     public const string OrganizationsRead = "organizations.read";
     public const string OrganizationsSelect = "organizations.select";
     public const string OrganizationDashboardRead = "organization_dashboard.read";

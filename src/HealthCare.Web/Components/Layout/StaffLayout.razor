@@ -67,6 +67,13 @@
                     <span>@(DoctorConsoleNavigation.IsDoctorConsoleActor(Permissions) ? "Availability" : "Doctor Availability")</span>
                 </MenuItem>
             }
+            @if (DoctorConsoleNavigation.ShowMyProfileLink(Permissions))
+            {
+                <MenuItem Key="doctor-profile" RouterLink="/doctor/profile" RouterMatch="NavLinkMatch.Prefix">
+                    <Icon Type="user" Theme="IconThemeType.Outline" />
+                    <span>My Profile</span>
+                </MenuItem>
+            }
             @if (DoctorConsoleNavigation.ShowOperations(Permissions)
                  && OperationsPermissionRules.CanViewAnyOperations(Permissions))
             {
@@ -315,6 +322,7 @@
                 var p when p.StartsWith("/patients", StringComparison.Ordinal) => "patients",
                 var p when p.StartsWith("/doctors", StringComparison.Ordinal) => "doctors",
                 var p when p.StartsWith("/availability", StringComparison.Ordinal) => "availability",
+                var p when p.StartsWith("/doctor/profile", StringComparison.Ordinal) => "doctor-profile",
                 var p when p.StartsWith("/operations/reminders", StringComparison.Ordinal) => "ops-reminders",
                 var p when p.StartsWith("/operations/clinic-summaries", StringComparison.Ordinal) => "ops-summaries",
                 var p when p.StartsWith("/operations/health", StringComparison.Ordinal) => "ops-health",

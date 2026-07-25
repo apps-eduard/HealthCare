@@ -137,6 +137,7 @@ Authoritative Doctor Web MVP scope: `Docs/mvp-doctor-scope.md` (**approved** 202
 - Medical notes with author + own-appointment ownership (DR-6 tightens today’s broader clinic Doctor read/amend).
 - Doctor dashboard / profile when those permissions ship (DR-1/DR-2).
 - **DR-1 delivered:** `doctor_dashboard.read` + `GET /api/v1/doctor/dashboard` + Doctor Dashboard UI; Doctor console nav hides Patients/Ops/Clinics/Doctors directory until later phases.
+- **DR-2 delivered:** `doctor_profile.read` / `doctor_profile.update` + `GET/PATCH /api/v1/doctor/profile` + `/doctor/profile` (My Profile); Specialty/email/role/clinic/active remain read-only; successful updates audit `doctor_profile_update` with safe changed-field names only.
 
 **Not allowed:**
 

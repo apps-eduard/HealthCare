@@ -709,6 +709,69 @@ internal sealed class ClinicDashHarness : IAsyncDisposable
         return BuildDoctorDashboardService(currentUser, currentStaff);
     }
 
+    public DoctorProfileService CreateDoctorProfileService(
+        (ApplicationUser User, Domain.Staff.StaffMember Staff) actor,
+        IAuthorizationAuditLogger? audit = null)
+    {
+        var currentUser = new FakeCurrentUser
+        {
+            IsAuthenticated = true,
+            UserId = actor.User.Id,
+            Email = actor.User.Email,
+            Roles = [actor.Staff.Role],
+            OrganizationId = actor.Staff.OrganizationId,
+            ClinicId = actor.Staff.ClinicId,
+            StaffMemberId = actor.Staff.Id,
+        };
+        var currentStaff = new FakeCurrentStaff
+        {
+            HasActiveMembership = actor.Staff.IsActive,
+            StaffMemberId = actor.Staff.Id,
+            OrganizationId = actor.Staff.OrganizationId,
+            ClinicId = actor.Staff.ClinicId,
+            Role = actor.Staff.Role,
+        };
+        return BuildDoctorProfileService(currentUser, currentStaff, audit);
+    }
+
+    public DoctorProfileService CreatePlatformDoctorProfileService(
+        ApplicationUser platformUser,
+        IAuthorizationAuditLogger? audit = null)
+    {
+        var currentUser = new FakeCurrentUser
+        {
+            IsAuthenticated = true,
+            UserId = platformUser.Id,
+            Email = platformUser.Email,
+            Roles = [AppRoles.PlatformAdmin],
+        };
+        var currentStaff = new FakeCurrentStaff { HasActiveMembership = false };
+        return BuildDoctorProfileService(currentUser, currentStaff, audit);
+    }
+
+    public DoctorProfileService BuildDoctorProfileService(
+        FakeCurrentUser currentUser,
+        FakeCurrentStaff currentStaff,
+        IAuthorizationAuditLogger? audit = null)
+    {
+        audit ??= new NoOpAuthorizationAuditLogger();
+        var permissions = new PermissionService(
+            currentUser,
+            currentStaff,
+            new FakeCurrentPatient(),
+            audit);
+
+        return new DoctorProfileService(
+            Db,
+            Users,
+            currentUser,
+            currentStaff,
+            permissions,
+            audit,
+            Clock,
+            NullLogger<DoctorProfileService>.Instance);
+    }
+
     public DoctorDashboardService CreatePlatformDoctorDashboardService(ApplicationUser platformUser)
     {
         var currentUser = new FakeCurrentUser

@@ -66,6 +66,8 @@ public static class Permissions
     public static class Doctors
     {
         public const string DashboardRead = "doctor_dashboard.read";
+        public const string ProfileRead = "doctor_profile.read";
+        public const string ProfileUpdate = "doctor_profile.update";
     }
 
     public static class Organizations
@@ -148,6 +150,8 @@ public static class Permissions
         Clinics.ReportsRead,
         Clinics.AuditLogsRead,
         Doctors.DashboardRead,
+        Doctors.ProfileRead,
+        Doctors.ProfileUpdate,
         Organizations.Read,
         Organizations.Select,
         Organizations.DashboardRead,

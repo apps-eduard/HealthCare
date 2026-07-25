@@ -1,0 +1,333 @@
+@page "/doctor/profile"
+@attribute [Authorize]
+@using HealthCare.Contracts.Doctors
+@using HealthCare.Web.DoctorProfile
+@implements IDisposable
+@inject IDoctorProfileApiClient ProfileApi
+@inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
+@inject IUserNotificationService Notify
+@inject NavigationManager Navigation
+
+<PageTitle>My Profile</PageTitle>
+
+@if (Permissions.IsPatientOnly)
+{
+    <Alert Type="@AlertType.Error" Message="Patient accounts cannot use doctor profile." ShowIcon="true" />
+}
+else if (!DoctorProfilePermissionRules.CanView(Permissions))
+{
+    <PermissionDeniedState Message="You do not have permission to view doctor profile." />
+}
+else
+{
+    <HcPageHeader Title="My Profile"
+                  Subtitle="@(_subtitle ?? "Your staff profile details")">
+        <Breadcrumb>
+            <Breadcrumb>
+                <BreadcrumbItem Href="/dashboard">Home</BreadcrumbItem>
+                <BreadcrumbItem>My Profile</BreadcrumbItem>
+            </Breadcrumb>
+        </Breadcrumb>
+        <ChildContent>
+            <Button OnClick="LoadAsync" Disabled="_loading || _saving" AriaLabel="Refresh doctor profile">
+                <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
+            </Button>
+        </ChildContent>
+    </HcPageHeader>
+
+    @if (Permissions.IsPlatformAdmin)
+    {
+        <Alert Type="@AlertType.Info"
+               Message="Platform Admin doctor-profile troubleshooting requires explicit clinic and doctor staff member context. The UI does not auto-select a doctor."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <ErrorState Message="@_error" />
+    }
+
+    @if (_loading && _profile is null)
+    {
+        <PageLoading />
+    }
+    else if (_profile is null)
+    {
+        <EmptyState Message="@(_emptyMessage ?? "Load doctor profile to view settings.")" />
+    }
+    else
+    {
+        <div class="hc-card" style="margin-bottom:1rem;" data-testid="doctor-profile-summary">
+            <AntDesign.Row Gutter="(16, 16)" Align="RowAlign.Middle">
+                <AntDesign.Col Xs="24" Md="14">
+                    <div class="hc-caption" style="margin-bottom:4px;text-transform:uppercase;letter-spacing:0.04em;">Doctor identity</div>
+                    <h2 style="margin:0 0 0.5rem;font-size:1.25rem;">@DoctorProfilePresentation.ResolveDisplayName(_profile)</h2>
+                    <div class="hc-caption">Staff member ID: @_profile.StaffMemberId</div>
+                    <div class="hc-caption" style="margin-top:0.35rem;" data-testid="doctor-profile-clinic">
+                        Clinic: @_profile.ClinicName (read-only)
+                    </div>
+                    <div class="hc-caption" style="margin-top:0.35rem;" data-testid="doctor-profile-organization">
+                        Organization: @_profile.OrganizationName (read-only)
+                    </div>
+                    <div class="hc-caption" style="margin-top:0.35rem;" data-testid="doctor-profile-email">
+                        Email: @_profile.Email (read-only)
+                    </div>
+                    <div class="hc-caption" style="margin-top:0.35rem;" data-testid="doctor-profile-role">
+                        Role: @_profile.Role (read-only)
+                    </div>
+                    <div class="hc-caption" style="margin-top:0.35rem;" data-testid="doctor-profile-specialty">
+                        Specialty: @DoctorProfilePresentation.DisplayOrDash(_profile.Specialty) (read-only)
+                    </div>
+                    <div class="hc-caption" style="margin-top:0.35rem;">
+                        Created @_profile.CreatedAtUtc.UtcDateTime:u · Updated @_profile.UpdatedAtUtc.UtcDateTime:u (UTC)
+                    </div>
+                </AntDesign.Col>
+                <AntDesign.Col Xs="24" Md="10" Style="text-align:right;">
+                    <StatusBadge Text="@DoctorProfilePresentation.StatusText(_profile.IsActive)"
+                                 Tone="@DoctorProfilePresentation.StatusTone(_profile.IsActive)" />
+                    <div class="hc-caption" style="margin-top:0.5rem;">Status is read-only</div>
+                </AntDesign.Col>
+            </AntDesign.Row>
+        </div>
+
+        <div class="hc-card" style="margin-bottom:1rem;">
+            <h3 style="margin:0 0 0.75rem;font-size:1rem;">Editable profile</h3>
+            @if (_concurrencyConflict)
+            {
+                <Alert Type="@AlertType.Error"
+                       Message="Another change was saved first. Reload the latest profile and try again."
+                       ShowIcon="true"
+                       Style="margin-bottom:0.75rem;" />
+                <Button OnClick="LoadAsync"
+                        Disabled="_loading || _saving"
+                        Style="margin-bottom:0.75rem;"
+                        AriaLabel="Reload latest doctor profile">
+                    Reload latest
+                </Button>
+            }
+            @if (!CanEdit)
+            {
+                <Alert Type="@AlertType.Info"
+                       Message="You can view this profile. Updating requires doctor_profile.update."
+                       ShowIcon="true"
+                       Style="margin-bottom:0.75rem;" />
+            }
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                <div>
+                    <label for="doctor-profile-display-name">Display name</label>
+                    <Input Id="doctor-profile-display-name"
+                           @bind-Value="_form.DisplayName"
+                           Disabled="@(!CanEdit || _saving || _concurrencyConflict)"
+                           Style="width:100%;"
+                           AriaLabel="Display name" />
+                </div>
+                <div>
+                    <label for="doctor-profile-first-name">@FieldLabel.Mark("First name")</label>
+                    <Input Id="doctor-profile-first-name"
+                           @bind-Value="_form.FirstName"
+                           Disabled="@(!CanEdit || _saving || _concurrencyConflict)"
+                           Style="width:100%;"
+                           AriaLabel="First name" />
+                </div>
+                <div>
+                    <label for="doctor-profile-last-name">@FieldLabel.Mark("Last name")</label>
+                    <Input Id="doctor-profile-last-name"
+                           @bind-Value="_form.LastName"
+                           Disabled="@(!CanEdit || _saving || _concurrencyConflict)"
+                           Style="width:100%;"
+                           AriaLabel="Last name" />
+                </div>
+                <div>
+                    <label for="doctor-profile-job-title">Job title</label>
+                    <Input Id="doctor-profile-job-title"
+                           @bind-Value="_form.JobTitle"
+                           Disabled="@(!CanEdit || _saving || _concurrencyConflict)"
+                           Style="width:100%;"
+                           AriaLabel="Job title" />
+                </div>
+                <div>
+                    <label for="doctor-profile-phone">Contact phone</label>
+                    <Input Id="doctor-profile-phone"
+                           @bind-Value="_form.ContactPhone"
+                           Disabled="@(!CanEdit || _saving || _concurrencyConflict)"
+                           Style="width:100%;"
+                           AriaLabel="Contact phone" />
+                </div>
+                @if (!string.IsNullOrWhiteSpace(_validationError))
+                {
+                    <Alert Type="@AlertType.Error" Message="@_validationError" ShowIcon="true" role="alert" />
+                }
+                @if (CanEdit)
+                {
+                    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+                        <Button OnClick="ResetFormFromLoaded" Disabled="_saving || _loading" AriaLabel="Reset doctor profile form">
+                            Reset
+                        </Button>
+                        <Button Type="@ButtonType.Primary"
+                                OnClick="SaveAsync"
+                                Loading="_saving"
+                                Disabled="@(_saving || _loading || _concurrencyConflict)"
+                                AriaLabel="Save doctor profile">
+                            Save
+                        </Button>
+                    </div>
+                }
+            </div>
+            <div class="hc-caption" style="margin-top:0.75rem;">
+                Permission: @WebPermissions.DoctorProfileRead
+                @if (CanEdit)
+                {
+                    <span> · @WebPermissions.DoctorProfileUpdate</span>
+                }
+                · Version @_form.ExpectedVersion
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private bool _loading;
+    private bool _saving;
+    private bool _concurrencyConflict;
+    private string? _error;
+    private string? _validationError;
+    private string? _subtitle;
+    private string? _emptyMessage;
+    private CancellationTokenSource? _cts;
+    private DoctorProfileResponse? _profile;
+    private DoctorProfileFormState _form = new();
+
+    private bool CanEdit => DoctorProfilePermissionRules.CanUpdate(Permissions);
+
+    private bool CanLoad =>
+        DoctorProfilePermissionRules.CanView(Permissions)
+        && !Permissions.IsPlatformAdmin;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Permissions.IsPatientOnly || !DoctorProfilePermissionRules.CanView(Permissions))
+        {
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (!DoctorProfilePermissionRules.CanView(Permissions))
+        {
+            return;
+        }
+
+        if (!CanLoad)
+        {
+            _profile = null;
+            _error = null;
+            _validationError = null;
+            _concurrencyConflict = false;
+            _subtitle = "Explicit doctor context required";
+            _emptyMessage = "Select an explicit clinic and doctor staff member before loading doctor profile.";
+            return;
+        }
+
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        _loading = true;
+        _error = null;
+        _validationError = null;
+        _concurrencyConflict = false;
+        _emptyMessage = null;
+
+        try
+        {
+            _profile = await ProfileApi.GetAsync(new DoctorProfileQuery(), platformAdminBypass: false, _cts.Token);
+            _form = DoctorProfileFormState.FromResponse(_profile);
+            _subtitle = DoctorProfilePresentation.ResolveDisplayName(_profile);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ApiProblemException ex)
+        {
+            _profile = null;
+            _error = DoctorProfileProblemMessages.ToUserMessage(ex);
+        }
+        catch (Exception)
+        {
+            _profile = null;
+            _error = "Unable to load doctor profile.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ResetFormFromLoaded()
+    {
+        if (_profile is null)
+        {
+            return;
+        }
+
+        _form = DoctorProfileFormState.FromResponse(_profile);
+        _validationError = null;
+        _concurrencyConflict = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!CanEdit || _profile is null || _concurrencyConflict)
+        {
+            return;
+        }
+
+        var request = _form.TryBuildUpdateRequest(out var validationError);
+        if (request is null)
+        {
+            _validationError = validationError;
+            return;
+        }
+
+        _validationError = null;
+        _saving = true;
+        _error = null;
+
+        try
+        {
+            _profile = await ProfileApi.UpdateAsync(request, new DoctorProfileQuery(), platformAdminBypass: false);
+            _form = DoctorProfileFormState.FromResponse(_profile);
+            _subtitle = DoctorProfilePresentation.ResolveDisplayName(_profile);
+            _concurrencyConflict = false;
+            Notify.Success("Doctor profile saved.");
+        }
+        catch (ApiProblemException ex) when (ex.StatusCode == 409
+            || string.Equals(ex.ErrorCode, DoctorProfileErrorCodes.ConcurrencyConflict, StringComparison.Ordinal))
+        {
+            _concurrencyConflict = true;
+            _validationError = DoctorProfileProblemMessages.ToUserMessage(ex);
+        }
+        catch (ApiProblemException ex)
+        {
+            _validationError = DoctorProfileProblemMessages.ToUserMessage(ex);
+        }
+        catch (Exception)
+        {
+            _validationError = "Unable to save doctor profile.";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}
