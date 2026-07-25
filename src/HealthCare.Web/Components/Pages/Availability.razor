@@ -712,7 +712,12 @@ else
         try
         {
             var doctors = await AvailabilityApi.ListClinicDoctorsByIdAsync(clinicId, Permissions.IsPlatformAdmin);
-            _doctors.AddRange(doctors.Where(d => d.AcceptsBookings));
+            // Managers need every clinic doctor (including those without current bookable windows).
+            // Read-only viewers keep the booking-oriented AcceptsBookings filter.
+            var visible = _canManage
+                ? doctors
+                : doctors.Where(d => d.AcceptsBookings);
+            _doctors.AddRange(visible);
             PreferTimeZoneFromPayload();
             if (_selfOnly && _doctorId is Guid selfId)
             {

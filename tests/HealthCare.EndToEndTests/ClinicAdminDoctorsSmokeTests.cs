@@ -78,8 +78,10 @@ public sealed class ClinicAdminDoctorsSmokeTests : E2ePageTestBase
             return;
         }
 
-        await Expect(Page.GetByLabel("Select doctor")).ToBeEnabledAsync(new() { Timeout = 45_000 });
-        await Page.GetByLabel("Select doctor").ClickAsync();
+        // Ant Design Select may not expose AriaLabel as GetByLabel; use the page combobox.
+        var doctorCombo = Page.GetByRole(AriaRole.Combobox);
+        await Expect(doctorCombo).ToBeVisibleAsync(new() { Timeout = 45_000 });
+        await doctorCombo.ClickAsync();
         var option = Page.Locator(".ant-select-dropdown:visible .ant-select-item-option").First;
         await Expect(option).ToBeVisibleAsync(new() { Timeout = 30_000 });
         await option.ClickAsync();
