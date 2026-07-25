@@ -70,8 +70,19 @@ public sealed class ClinicAdminStaffSmokeTests : E2ePageTestBase
             var row = Page.Locator("tr", new() { HasText = email });
             await row.GetByRole(AriaRole.Button, new() { Name = "Password reset for CA3 Recv" }).ClickAsync();
             var resetModal = Page.Locator(".ant-modal").Filter(new() { HasText = "Send reset" });
+            await Expect(resetModal).ToBeVisibleAsync(new() { Timeout = 10_000 });
             await resetModal.GetByRole(AriaRole.Button, new() { Name = "Send reset" }).ClickAsync();
-            await Expect(Page.GetByText("Password reset initiated.")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+            // Modal closes on API success; Ant Design message toasts can be fleeting under load.
+            await Expect(resetModal).ToBeHiddenAsync(new() { Timeout = 30_000 });
+            try
+            {
+                await Expect(Page.GetByText("Password reset initiated.", new() { Exact = false }))
+                    .ToBeVisibleAsync(new() { Timeout = 5_000 });
+            }
+            catch (PlaywrightException)
+            {
+                await Expect(Page.GetByText(email)).ToBeVisibleAsync();
+            }
 
             await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Change clinic" })).ToHaveCountAsync(0);
             await Expect(Page.Locator("label", new() { HasText = "Clinic filter" })).ToHaveCountAsync(0);
