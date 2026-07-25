@@ -45,7 +45,9 @@ public sealed class ClinicAdminReportsSmokeTests : E2ePageTestBase
             await Expect(Page.GetByText("Total appointments", new() { Exact = false }))
                 .ToBeVisibleAsync(new() { Timeout = 30_000 });
             await Expect(Page.GetByRole(AriaRole.Table, new() { Name = "Appointments by status" }))
-                .ToBeVisibleAsync();
+                .ToBeVisibleAsync(new() { Timeout = 15_000 });
+            await Expect(Page.GetByRole(AriaRole.Table, new() { Name = "Appointments by status" }))
+                .ToContainTextAsync("Completed");
             await Expect(Page.GetByRole(AriaRole.Table, new() { Name = "Appointment volume by date" }))
                 .ToBeVisibleAsync();
 
@@ -122,6 +124,8 @@ public sealed class ClinicAdminReportsSmokeTests : E2ePageTestBase
 
         var appt = await db.Appointments.SingleAsync(a => a.Id == appointment!.Id);
         appt.Status = AppointmentStatus.Completed;
+        // Keep the appointment inside the default clinic-report window (last ~30 days).
+        appt.AppointmentDateUtc = DateTimeOffset.UtcNow.AddDays(-1);
 
         var reminder = await db.AppointmentReminders.FirstAsync(r => r.AppointmentId == appointment.Id);
         reminder.Status = AppointmentReminderStatus.Failed;
