@@ -362,7 +362,13 @@ else
             });
             Notify.Success("Draft note created.");
             _changed = true;
-            await SelectNoteAsync(created.Id);
+            _selectedNote = created;
+            _noteSubjective = created.Subjective;
+            _noteObjective = created.Objective;
+            _noteAssessment = created.Assessment;
+            _notePlan = created.Plan;
+            _amendReason = null;
+            _amendPlan = null;
             _busy = false;
             await InvokeAsync(StateHasChanged);
             await LoadNotesAsync();
@@ -524,6 +530,7 @@ else
             _amendReason = null;
             _amendPlan = null;
             _busy = false;
+            await InvokeAsync(StateHasChanged);
             await LoadNotesAsync();
         }
         catch (ApiProblemException ex) when (MedicalNoteProblemMessages.IsConcurrencyConflict(ex))

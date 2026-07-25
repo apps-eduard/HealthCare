@@ -80,7 +80,7 @@ public sealed class MedicalNotesUiTests
     {
         var detail = File.ReadAllText(Path.Combine(
             FindRepoRoot(), "src", "HealthCare.Web", "Components", "Appointments", "AppointmentDetailDialog.razor"));
-        detail.Should().Contain("SelectNoteAsync(created.Id)");
+        detail.Should().Contain("_selectedNote = created");
         detail.Should().Contain("private async Task SelectNoteAsync");
         detail.Should().Contain("medical-note-plan");
         detail.Should().Contain("for=\"medical-note-plan\"");

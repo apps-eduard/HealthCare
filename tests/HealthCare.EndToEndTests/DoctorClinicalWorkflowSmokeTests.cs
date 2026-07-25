@@ -42,8 +42,17 @@ public sealed class DoctorClinicalWorkflowSmokeTests : E2ePageTestBase
                 .ToBeVisibleAsync(new() { Timeout = 30_000 });
 
             dialog = DetailDialog(appointment.Id);
+            var planField = dialog.Locator("#medical-note-plan");
+            if (await planField.CountAsync() == 0)
+            {
+                await dialog.GetByRole(AriaRole.Button, new() { Name = "Open medical note" }).ClickAsync();
+            }
+
             await Expect(dialog.Locator("#medical-note-plan")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+            await dialog.Locator("#medical-note-plan").ClickAsync();
             await dialog.Locator("#medical-note-plan").FillAsync(originalPlan);
+            // Ensure Blazor bind picks up the value from Ant Design Input.
+            await dialog.Locator("#medical-note-plan").PressAsync("Tab");
             await dialog.GetByRole(AriaRole.Button, new() { Name = "Save medical note draft" })
                 .Or(dialog.GetByRole(AriaRole.Button, new() { Name = "Save draft" }))
                 .ClickAsync();
