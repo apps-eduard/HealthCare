@@ -74,7 +74,7 @@ public sealed class AppointmentFoundationTests
     {
         await using var h = await AppointmentHarness.CreateAsync();
         var data = await h.SeedAsync();
-        var sut = h.CreateStaffService(data.DoctorAUserId, data.Org1Id, data.ClinicAId, data.DoctorAStaffId, AppRoles.Doctor);
+        var sut = h.CreateStaffService(Guid.NewGuid(), data.Org1Id, data.ClinicAId, Guid.NewGuid(), AppRoles.ClinicAdmin);
 
         var created = await sut.CreateForStaffAsync(new CreateStaffAppointmentRequest
         {
@@ -93,7 +93,7 @@ public sealed class AppointmentFoundationTests
     {
         await using var h = await AppointmentHarness.CreateAsync();
         var data = await h.SeedAsync();
-        var sut = h.CreateStaffService(data.DoctorBUserId, data.Org1Id, data.ClinicBId, data.DoctorBStaffId, AppRoles.Doctor);
+        var sut = h.CreateStaffService(Guid.NewGuid(), data.Org1Id, data.ClinicBId, Guid.NewGuid(), AppRoles.ClinicAdmin);
 
         var act = () => sut.CreateForStaffAsync(new CreateStaffAppointmentRequest
         {
@@ -209,7 +209,7 @@ public sealed class AppointmentFoundationTests
         var data = await h.SeedAsync();
         var otherPatient = await h.SeedExtraPatientInClinicAAsync(data);
         var patientSut = h.CreatePatientService(data.PatientUserId, data.PatientId);
-        var staffSut = h.CreateStaffService(data.DoctorAUserId, data.Org1Id, data.ClinicAId, data.DoctorAStaffId, AppRoles.Doctor);
+        var staffSut = h.CreateStaffService(Guid.NewGuid(), data.Org1Id, data.ClinicAId, Guid.NewGuid(), AppRoles.ClinicAdmin);
 
         await patientSut.CreateForCurrentPatientAsync(new CreatePatientAppointmentRequest
         {
@@ -239,7 +239,7 @@ public sealed class AppointmentFoundationTests
         await h.EnrollPatientInClinicBAsync(data);
         var patientSut = h.CreatePatientService(data.PatientUserId, data.PatientId);
         var staffA = h.CreateStaffService(data.DoctorAUserId, data.Org1Id, data.ClinicAId, data.DoctorAStaffId, AppRoles.Doctor);
-        var staffB = h.CreateStaffService(data.DoctorBUserId, data.Org1Id, data.ClinicBId, data.DoctorBStaffId, AppRoles.Doctor);
+        var clinicBAdmin = h.CreateStaffService(Guid.NewGuid(), data.Org1Id, data.ClinicBId, Guid.NewGuid(), AppRoles.ClinicAdmin);
 
         await patientSut.CreateForCurrentPatientAsync(new CreatePatientAppointmentRequest
         {
@@ -249,7 +249,7 @@ public sealed class AppointmentFoundationTests
             DurationMinutes = 30,
         });
 
-        await staffB.CreateForStaffAsync(new CreateStaffAppointmentRequest
+        await clinicBAdmin.CreateForStaffAsync(new CreateStaffAppointmentRequest
         {
             PatientId = data.PatientId,
             DoctorStaffMemberId = data.DoctorBStaffId,
@@ -259,6 +259,7 @@ public sealed class AppointmentFoundationTests
 
         var listA = await staffA.ListForStaffAsync(new AppointmentListQuery());
         listA.Items.Should().OnlyContain(i => i.ClinicId == data.ClinicAId);
+        listA.Items.Should().OnlyContain(i => i.DoctorStaffMemberId == data.DoctorAStaffId);
     }
 
     [Fact]
@@ -268,7 +269,7 @@ public sealed class AppointmentFoundationTests
         var data = await h.SeedAsync();
         await h.EnrollPatientInClinicBAsync(data);
         var patientSut = h.CreatePatientService(data.PatientUserId, data.PatientId);
-        var staffB = h.CreateStaffService(data.DoctorBUserId, data.Org1Id, data.ClinicBId, data.DoctorBStaffId, AppRoles.Doctor);
+        var clinicBAdmin = h.CreateStaffService(Guid.NewGuid(), data.Org1Id, data.ClinicBId, Guid.NewGuid(), AppRoles.ClinicAdmin);
         var orgAdmin = h.CreateStaffService(Guid.NewGuid(), data.Org1Id, data.ClinicAId, Guid.NewGuid(), AppRoles.OrganizationAdmin);
 
         await patientSut.CreateForCurrentPatientAsync(new CreatePatientAppointmentRequest
@@ -278,7 +279,7 @@ public sealed class AppointmentFoundationTests
             AppointmentDateUtc = h.Now.AddDays(9),
             DurationMinutes = 30,
         });
-        await staffB.CreateForStaffAsync(new CreateStaffAppointmentRequest
+        await clinicBAdmin.CreateForStaffAsync(new CreateStaffAppointmentRequest
         {
             PatientId = data.PatientId,
             DoctorStaffMemberId = data.DoctorBStaffId,
@@ -297,10 +298,10 @@ public sealed class AppointmentFoundationTests
         await using var h = await AppointmentHarness.CreateAsync();
         var data = await h.SeedAsync();
         await h.EnrollPatientInClinicBAsync(data);
-        var staffB = h.CreateStaffService(data.DoctorBUserId, data.Org1Id, data.ClinicBId, data.DoctorBStaffId, AppRoles.Doctor);
+        var clinicBAdmin = h.CreateStaffService(Guid.NewGuid(), data.Org1Id, data.ClinicBId, Guid.NewGuid(), AppRoles.ClinicAdmin);
         var orgAdmin = h.CreateStaffService(Guid.NewGuid(), data.Org1Id, data.ClinicAId, Guid.NewGuid(), AppRoles.OrganizationAdmin);
 
-        await staffB.CreateForStaffAsync(new CreateStaffAppointmentRequest
+        await clinicBAdmin.CreateForStaffAsync(new CreateStaffAppointmentRequest
         {
             PatientId = data.PatientId,
             DoctorStaffMemberId = data.DoctorBStaffId,
@@ -320,10 +321,10 @@ public sealed class AppointmentFoundationTests
     {
         await using var h = await AppointmentHarness.CreateAsync();
         var data = await h.SeedAsync();
-        var staff = h.CreateStaffService(data.DoctorAUserId, data.Org1Id, data.ClinicAId, data.DoctorAStaffId, AppRoles.Doctor);
+        var clinicAdmin = h.CreateStaffService(Guid.NewGuid(), data.Org1Id, data.ClinicAId, Guid.NewGuid(), AppRoles.ClinicAdmin);
         var orgAdmin = h.CreateStaffService(Guid.NewGuid(), data.Org1Id, data.ClinicAId, Guid.NewGuid(), AppRoles.OrganizationAdmin);
 
-        var active = await staff.CreateForStaffAsync(new CreateStaffAppointmentRequest
+        var active = await clinicAdmin.CreateForStaffAsync(new CreateStaffAppointmentRequest
         {
             PatientId = data.PatientId,
             DoctorStaffMemberId = data.DoctorAStaffId,

@@ -124,6 +124,7 @@ public sealed class PermissionAuthorizationMatrixTests
         sut.HasPermission(Permissions.Availability.ManageSelf).Should().BeTrue();
         sut.HasPermission(Permissions.Availability.ManageClinic).Should().BeFalse();
         sut.HasPermission(Permissions.Appointments.Complete).Should().BeTrue();
+        sut.HasPermission(Permissions.Appointments.Create).Should().BeFalse();
     }
 
     [Fact]

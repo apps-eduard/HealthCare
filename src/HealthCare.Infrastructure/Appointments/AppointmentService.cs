@@ -137,6 +137,7 @@ public sealed class AppointmentService : IAppointmentService
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default)
     {
+        EnsureDoctorDoesNotCreateStaffAppointments();
         var scope = await ResolveStaffClinicScopeAsync(request.ClinicId, bypass, cancellationToken);
         EnsureFutureStart(request.AppointmentDateUtc);
 
@@ -212,7 +213,8 @@ public sealed class AppointmentService : IAppointmentService
     {
         var scope = await ResolveStaffListScopeAsync(query.ClinicId, bypass, cancellationToken);
         var appointments = ApplyStaffScope(_dbContext.Appointments.AsNoTracking(), scope);
-        appointments = ApplyListFilters(appointments, query);
+        appointments = ApplyDoctorOwnershipFilter(appointments);
+        appointments = ApplyListFilters(appointments, query, forceDoctorSelfFilter: IsDoctorActor());
         var page = await PageAsync(appointments, query, cancellationToken);
         _audit.AppointmentOperation(
             "staff_appointment_list",
@@ -245,7 +247,8 @@ public sealed class AppointmentService : IAppointmentService
 
         var scope = await ResolveStaffListScopeAsync(listQuery.ClinicId, bypass, cancellationToken);
         var appointments = ApplyStaffScope(_dbContext.Appointments.AsNoTracking(), scope);
-        appointments = ApplyListFilters(appointments, listQuery);
+        appointments = ApplyDoctorOwnershipFilter(appointments);
+        appointments = ApplyListFilters(appointments, listQuery, forceDoctorSelfFilter: IsDoctorActor());
 
         if (string.IsNullOrWhiteSpace(listQuery.Status))
         {
@@ -288,7 +291,8 @@ public sealed class AppointmentService : IAppointmentService
 
         var scope = await ResolveStaffListScopeAsync(listQuery.ClinicId, bypass, cancellationToken);
         var appointments = ApplyStaffScope(_dbContext.Appointments.AsNoTracking(), scope);
-        appointments = ApplyListFilters(appointments, listQuery);
+        appointments = ApplyDoctorOwnershipFilter(appointments);
+        appointments = ApplyListFilters(appointments, listQuery, forceDoctorSelfFilter: IsDoctorActor());
         var page = await PageAsync(appointments, listQuery, cancellationToken);
         _audit.AppointmentOperation(
             "staff_appointment_calendar",
@@ -834,6 +838,8 @@ public sealed class AppointmentService : IAppointmentService
             LogDenied("appointment_clinic_mutate_denied", appointment.Id);
             throw AppointmentException.NotFoundOrDenied();
         }
+
+        EnsureDoctorOwnsAppointment(appointment);
     }
 
     private async Task<Appointment> LoadAccessibleAsync(
@@ -885,6 +891,7 @@ public sealed class AppointmentService : IAppointmentService
 
             if (appointment.ClinicId == _currentStaff.ClinicId)
             {
+                EnsureDoctorOwnsAppointment(appointment);
                 return appointment;
             }
         }
@@ -1038,7 +1045,8 @@ public sealed class AppointmentService : IAppointmentService
 
     private static IQueryable<Appointment> ApplyListFilters(
         IQueryable<Appointment> query,
-        AppointmentListQuery listQuery)
+        AppointmentListQuery listQuery,
+        bool forceDoctorSelfFilter = false)
     {
         if (listQuery.FromUtc.HasValue)
         {
@@ -1056,12 +1064,54 @@ public sealed class AppointmentService : IAppointmentService
             query = query.Where(a => a.Status == status);
         }
 
-        if (listQuery.DoctorStaffMemberId.HasValue)
+        // Doctor self-scope is applied in ApplyDoctorOwnershipFilter; ignore client peer filters.
+        if (!forceDoctorSelfFilter && listQuery.DoctorStaffMemberId.HasValue)
         {
             query = query.Where(a => a.DoctorStaffMemberId == listQuery.DoctorStaffMemberId.Value);
         }
 
         return query;
+    }
+
+    private bool IsDoctorActor() =>
+        _currentStaff.HasActiveMembership
+        && string.Equals(_currentStaff.Role, AppRoles.Doctor, StringComparison.Ordinal);
+
+    private void EnsureDoctorDoesNotCreateStaffAppointments()
+    {
+        if (!IsDoctorActor())
+        {
+            return;
+        }
+
+        LogDenied("appointment_doctor_create_denied", Guid.Empty);
+        throw AuthorizationException.Forbidden();
+    }
+
+    private IQueryable<Appointment> ApplyDoctorOwnershipFilter(IQueryable<Appointment> appointments)
+    {
+        if (!IsDoctorActor())
+        {
+            return appointments;
+        }
+
+        return appointments.Where(a => a.DoctorStaffMemberId == _currentStaff.StaffMemberId);
+    }
+
+    private void EnsureDoctorOwnsAppointment(Appointment appointment)
+    {
+        if (!IsDoctorActor())
+        {
+            return;
+        }
+
+        if (appointment.DoctorStaffMemberId == _currentStaff.StaffMemberId)
+        {
+            return;
+        }
+
+        LogDenied("appointment_doctor_ownership_denied", appointment.Id);
+        throw AppointmentException.NotFoundOrDenied();
     }
 
     private async Task<PagedResponse<AppointmentResponse>> PageAsync(

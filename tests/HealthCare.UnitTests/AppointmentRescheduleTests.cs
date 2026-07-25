@@ -84,8 +84,9 @@ public sealed class AppointmentRescheduleTests
     {
         await using var h = await AppointmentHarness.CreateAsync();
         var data = await h.SeedAsync();
+        var clinicAdmin = h.CreateStaffService(Guid.NewGuid(), data.Org1Id, data.ClinicAId, Guid.NewGuid(), AppRoles.ClinicAdmin);
         var staff = h.CreateStaffService(data.DoctorAUserId, data.Org1Id, data.ClinicAId, data.DoctorAStaffId, AppRoles.Doctor);
-        var created = await staff.CreateForStaffAsync(new CreateStaffAppointmentRequest
+        var created = await clinicAdmin.CreateForStaffAsync(new CreateStaffAppointmentRequest
         {
             PatientId = data.PatientId,
             DoctorStaffMemberId = data.DoctorAStaffId,
@@ -108,8 +109,8 @@ public sealed class AppointmentRescheduleTests
     {
         await using var h = await AppointmentHarness.CreateAsync();
         var data = await h.SeedAsync();
-        var clinicAStaff = h.CreateStaffService(data.DoctorAUserId, data.Org1Id, data.ClinicAId, data.DoctorAStaffId, AppRoles.Doctor);
-        var created = await clinicAStaff.CreateForStaffAsync(new CreateStaffAppointmentRequest
+        var clinicAdmin = h.CreateStaffService(Guid.NewGuid(), data.Org1Id, data.ClinicAId, Guid.NewGuid(), AppRoles.ClinicAdmin);
+        var created = await clinicAdmin.CreateForStaffAsync(new CreateStaffAppointmentRequest
         {
             PatientId = data.PatientId,
             DoctorStaffMemberId = data.DoctorAStaffId,
@@ -134,8 +135,8 @@ public sealed class AppointmentRescheduleTests
     {
         await using var h = await AppointmentHarness.CreateAsync();
         var data = await h.SeedAsync();
-        var clinicAStaff = h.CreateStaffService(data.DoctorAUserId, data.Org1Id, data.ClinicAId, data.DoctorAStaffId, AppRoles.Doctor);
-        var created = await clinicAStaff.CreateForStaffAsync(new CreateStaffAppointmentRequest
+        var clinicAdmin = h.CreateStaffService(Guid.NewGuid(), data.Org1Id, data.ClinicAId, Guid.NewGuid(), AppRoles.ClinicAdmin);
+        var created = await clinicAdmin.CreateForStaffAsync(new CreateStaffAppointmentRequest
         {
             PatientId = data.PatientId,
             DoctorStaffMemberId = data.DoctorAStaffId,
@@ -211,8 +212,9 @@ public sealed class AppointmentRescheduleTests
     {
         await using var h = await AppointmentHarness.CreateAsync();
         var data = await h.SeedAsync();
+        var clinicAdmin = h.CreateStaffService(Guid.NewGuid(), data.Org1Id, data.ClinicAId, Guid.NewGuid(), AppRoles.ClinicAdmin);
         var staff = h.CreateStaffService(data.DoctorAUserId, data.Org1Id, data.ClinicAId, data.DoctorAStaffId, AppRoles.Doctor);
-        var created = await staff.CreateForStaffAsync(new CreateStaffAppointmentRequest
+        var created = await clinicAdmin.CreateForStaffAsync(new CreateStaffAppointmentRequest
         {
             PatientId = data.PatientId,
             DoctorStaffMemberId = data.DoctorAStaffId,

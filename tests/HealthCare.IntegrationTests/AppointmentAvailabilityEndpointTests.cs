@@ -627,7 +627,7 @@ public sealed class AppointmentAvailabilityEndpointTests : IAsyncLifetime
         });
         patientCreate.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        await AuthenticateAsync(StaffAEmail, StaffAPassword);
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
         var patientId = await GetSeedPatientIdAsync();
         var staffStart = AlignedFutureSlotUtc(14).AddMinutes(30);
         var staffCreate = await _client!.PostAsJsonAsync("/api/v1/staff/appointments", new

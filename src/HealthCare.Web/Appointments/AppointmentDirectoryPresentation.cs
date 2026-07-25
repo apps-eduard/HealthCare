@@ -22,7 +22,7 @@ public static class AppointmentDirectoryPermissionRules
 
     /// <summary>
     /// Doctor schedule UX locks the doctor filter to the authenticated membership.
-    /// Presentation only — appointment API ownership hardens in DR-4.
+    /// Backend enforces the same ownership for list/view/mutate (DR-4).
     /// </summary>
     public static bool LockDoctorFilterToSelf(IPermissionState permissions) =>
         permissions.IsDoctor && !permissions.IsPlatformAdmin;

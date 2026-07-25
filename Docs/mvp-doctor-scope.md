@@ -71,7 +71,7 @@ Clinical ownership key: StaffMemberId
 | Gap | Current behavior | Approved target | Phase |
 |-----|------------------|-----------------|-------|
 | Patient access | Clinic-wide enrollment (Model B) | Appointment-linked (Model A) | **DR-5** |
-| Appointment ownership | Any clinic staff with permission may act | Doctor list/view/mutate **own** only | **DR-4** |
+| Appointment ownership | Any clinic staff with permission may act | Doctor list/view/mutate **own** only | **DR-4 delivered** |
 | Medical-note read | Any clinic Doctor/Nurse with permission | Author + authorized own appointment only | **DR-6** |
 | Medical-note amend | Any clinic Doctor | Author-only append | **DR-6** |
 | Doctor dashboard | Missing | `GET /api/v1/doctor/dashboard` | **DR-1** |
@@ -87,9 +87,9 @@ Clinical ownership key: StaffMemberId
 | 2 | Doctor profile | Yes | Delivered | Delivered | DR-2 |
 | 3 | My clinic caption | Read-only | Partial | Partial | DR-1/DR-2 |
 | 4–5 | Own availability + exceptions | Yes | Self-enforced | `/availability` self-locked | DR-3 delivered |
-| 6–8 | Own schedule / list / detail | Yes | UI defaults to self; API still clinic-scoped | Shared pages (filter locked) | DR-3 UI / **DR-4 API** |
-| 9–14 | Confirm/check-in/complete/no-show/cancel/reschedule | Own only | Clinic-wide (**gap**) | Shared | DR-4/DR-7 |
-| — | Appointment **create** | **Not in Doctor Web MVP** | Permission still on DOCTOR | Must not expose UI | DR-4 review |
+| 6–8 | Own schedule / list / detail | Yes | Own only (API + UI) | Shared pages (filter locked) | **DR-4** |
+| 9–14 | Confirm/check-in/complete/no-show/cancel/reschedule | Own only | Own only | Shared | DR-4 / DR-7 |
+| — | Appointment **create** | **Not in Doctor Web MVP** | Removed from DOCTOR matrix | No UI | **DR-4** |
 | 15–18 | Patient summary/directory/history | Model A | Clinic-wide (**gap**) | Shared | **DR-5** |
 | 19–22 | Medical notes CRUD lifecycle | Tightened ownership | API broader than approved | Missing UI | **DR-6** |
 | 23–26 | Diagnosis/treatment/Rx/docs | SOAP fields only; no Rx module | Notes only | — | DR-6 / out of scope |
@@ -212,7 +212,7 @@ Cross-patient access → safe denied/not-found (no existence leak).
 
 ### `appointments.create` permission
 
-DOCTOR currently holds `appointments.create` in `RolePermissionMatrix`. Doctor Web MVP **must not** expose create UI. During DR-4, assess whether to **remove** `appointments.create` from DOCTOR or leave it unused by the Web client; prefer removal if no non-Web Doctor consumer requires it.
+DOCTOR **no longer** holds `appointments.create` in `RolePermissionMatrix` (removed in DR-4). Doctor Web MVP does not expose create UI; Clinic Admin / Organization Admin / Receptionist retain create.
 
 `ExpectedVersion` remains required for status mutations and reschedule.
 
@@ -418,10 +418,10 @@ medical_notes.read / create / update_draft / sign / amend
 
 | Item | Classification |
 |------|----------------|
-| Appointment ownership missing | **Security risk → DR-4** |
+| Appointment ownership missing | **Mitigated in DR-4** |
+| `appointments.create` on DOCTOR | **Removed in DR-4** |
 | Clinic-wide patient access | **Security risk → DR-5** |
 | Clinic-wide note read/amend | **Security risk → DR-6** |
-| `appointments.create` on DOCTOR | **Review in DR-4**; no Web surface |
 | reminders/summaries | Existing; **out of Doctor nav** |
 
 ---
@@ -485,7 +485,7 @@ Covering-doctor / care-team; InProgress API; note-before-complete policy; specia
 | DR-1 | Doctor dashboard + navigation foundation | Medium | **Delivered** (2026-07-25) |
 | DR-2 | Doctor profile | Small | **Delivered** (2026-07-25) |
 | DR-3 | My availability and schedule | Small | **Delivered** (2026-07-25) |
-| DR-4 | My appointment ownership and workflows | Medium | Not started |
+| DR-4 | My appointment ownership and workflows | Medium | **Delivered** (2026-07-25) |
 | DR-5 | Appointment-linked patient access | Large | Not started |
 | DR-6 | Medical notes ownership and lifecycle | Large | Not started |
 | DR-7 | Clinical workflow and completion hardening | Medium | Not started |
@@ -610,6 +610,7 @@ Covering-doctor / care-team; InProgress API; note-before-complete policy; specia
 |------|------|
 | 2026-07-25 | Initial draft from repository inspection |
 | 2026-07-25 | **Approved** by product owner: Model A patients; appointment ownership; medical-note tighten; profile/dashboard permissions; DR-8 skipped; no Doctor create UI |
-| 2026-07-25 | **DR-1 delivered:** `doctor_dashboard.read`, `GET /api/v1/doctor/dashboard`, Doctor Dashboard UI + Doctor console nav (Patients hidden until DR-5; appointment ownership remains DR-4) |
+| 2026-07-25 | **DR-1 delivered:** `doctor_dashboard.read`, `GET /api/v1/doctor/dashboard`, Doctor Dashboard UI + Doctor console nav (Patients hidden until DR-5) |
 | 2026-07-25 | **DR-2 delivered:** `doctor_profile.read` / `doctor_profile.update`, `GET/PATCH /api/v1/doctor/profile`, `/doctor/profile` My Profile UI; Specialty remains Clinic Admin–controlled |
-| 2026-07-25 | **DR-3 delivered:** confirm self-only `/availability`; lock queue/calendar doctor filter to self; peer availability edit denied; appointment API ownership remains DR-4 |
+| 2026-07-25 | **DR-3 delivered:** confirm self-only `/availability`; lock queue/calendar doctor filter to self; peer availability edit denied |
+| 2026-07-25 | **DR-4 delivered:** Doctor appointment ownership (list/view/mutate); removed `appointments.create` from DOCTOR; sibling peer denial; CA clinic-wide unchanged |

@@ -33,6 +33,7 @@ public sealed class DoctorAvailabilitySmokeTests : E2ePageTestBase
             await Expect(Page.Locator("[data-testid='appointments-doctor-self']")).ToBeVisibleAsync();
             await Expect(Page.Locator("#queue-doctor")).ToHaveCountAsync(0);
             await Expect(Page.GetByText("Your assigned appointments", new() { Exact = false })).ToBeVisibleAsync();
+            await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Create appointment" })).ToHaveCountAsync(0);
 
             await Page.GotoAsync("/appointments/calendar");
             await Expect(Page.Locator("[data-testid='calendar-doctor-self']")).ToBeVisibleAsync(new() { Timeout = 60_000 });

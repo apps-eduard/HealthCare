@@ -21,7 +21,6 @@ public sealed class DoctorScheduleUiTests
             Permissions =
             [
                 WebPermissions.AppointmentsRead,
-                WebPermissions.AppointmentsCreate,
                 WebPermissions.AvailabilityRead,
                 WebPermissions.AvailabilityManageSelf,
                 WebPermissions.DoctorDashboardRead,
@@ -33,6 +32,7 @@ public sealed class DoctorScheduleUiTests
         });
 
         AppointmentDirectoryPermissionRules.LockDoctorFilterToSelf(state).Should().BeTrue();
+        AppointmentDirectoryPermissionRules.CanCreate(state).Should().BeFalse();
         AvailabilityPermissionRules.IsSelfOnly(state).Should().BeTrue();
         AppointmentDirectoryPageCopy.QueueSubtitle(state, "Asia/Riyadh")
             .Should().Contain("Your assigned appointments");
@@ -96,11 +96,14 @@ public sealed class DoctorScheduleUiTests
         queue.Should().Contain("appointments-doctor-self");
         queue.Should().Contain("queue-doctor-self");
         queue.Should().Contain("ApplyDoctorSelfScope");
+        queue.Should().Contain("Showing only appointments assigned to you");
+        queue.Should().Contain("WebPermissions.AppointmentsCreate");
 
         var calendar = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "HealthCare.Web", "Components", "Pages", "AppointmentsCalendar.razor"));
         calendar.Should().Contain("LockDoctorFilterToSelf");
         calendar.Should().Contain("calendar-doctor-self");
         calendar.Should().Contain("ApplyDoctorSelfScope");
+        calendar.Should().Contain("Showing only appointments assigned to you");
 
         var availability = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "HealthCare.Web", "Components", "Pages", "Availability.razor"));
         availability.Should().Contain("My Availability");

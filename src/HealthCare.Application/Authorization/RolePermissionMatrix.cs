@@ -137,7 +137,6 @@ public static class RolePermissionMatrix
                 Permissions.Patients.Read,
                 Permissions.Patients.Search,
                 Permissions.Appointments.Read,
-                Permissions.Appointments.Create,
                 Permissions.Appointments.Confirm,
                 Permissions.Appointments.Cancel,
                 Permissions.Appointments.CheckIn,

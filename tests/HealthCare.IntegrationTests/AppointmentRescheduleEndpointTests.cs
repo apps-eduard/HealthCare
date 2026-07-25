@@ -26,6 +26,8 @@ public sealed class AppointmentRescheduleEndpointTests : IAsyncLifetime
     private const string StaffAPassword = "ChangeMe_DoctorA_1!";
     private const string StaffBEmail = "doctor.b@healthcare.local";
     private const string StaffBPassword = "ChangeMe_DoctorB_1!";
+    private const string ClinicAdminEmail = "clinicadmin@healthcare.local";
+    private const string ClinicAdminPassword = "ChangeMe_ClinicAdmin_1!";
 
     private PostgreSqlContainer? _postgres;
     private WebApplicationFactory<Program>? _factory;
@@ -66,6 +68,8 @@ public sealed class AppointmentRescheduleEndpointTests : IAsyncLifetime
                 builder.UseSetting("DevelopmentSeed:Patient:StaffPassword", StaffAPassword);
                 builder.UseSetting("DevelopmentSeed:Patient:OtherClinicStaffEmail", StaffBEmail);
                 builder.UseSetting("DevelopmentSeed:Patient:OtherClinicStaffPassword", StaffBPassword);
+                builder.UseSetting("DevelopmentSeed:Patient:ClinicAdminEmail", ClinicAdminEmail);
+                builder.UseSetting("DevelopmentSeed:Patient:ClinicAdminPassword", ClinicAdminPassword);
                 builder.UseSetting("DevelopmentSeed:Patient:ClinicSlug", "dev-clinic-a");
 
                 builder.ConfigureServices(services =>
@@ -129,7 +133,7 @@ public sealed class AppointmentRescheduleEndpointTests : IAsyncLifetime
     [Fact]
     public async Task Patient_Cannot_Reschedule_Another_Appointment()
     {
-        await AuthenticateAsync(StaffAEmail, StaffAPassword);
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
         var doctorId = await GetClinicADoctorStaffIdAsync();
         var patientId = await GetSeedPatientIdAsync();
         var create = await _client!.PostAsJsonAsync("/api/v1/staff/appointments", new
@@ -210,7 +214,7 @@ public sealed class AppointmentRescheduleEndpointTests : IAsyncLifetime
     [Fact]
     public async Task Staff_Reschedules_Within_Clinic()
     {
-        await AuthenticateAsync(StaffAEmail, StaffAPassword);
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
         var doctorId = await GetClinicADoctorStaffIdAsync();
         var patientId = await GetSeedPatientIdAsync();
         var create = await _client!.PostAsJsonAsync("/api/v1/staff/appointments", new
@@ -220,8 +224,10 @@ public sealed class AppointmentRescheduleEndpointTests : IAsyncLifetime
             appointmentDateUtc = AlignedFutureSlotUtc(40),
             durationMinutes = 30,
         });
+        create.StatusCode.Should().Be(HttpStatusCode.OK);
         var created = await create.Content.ReadFromJsonAsync<AppointmentResponse>();
 
+        await AuthenticateAsync(StaffAEmail, StaffAPassword);
         var reschedule = await _client!.PostAsJsonAsync($"/api/v1/appointments/{created!.Id}/reschedule", new
         {
             appointmentDateUtc = AlignedFutureSlotUtc(41),
@@ -234,7 +240,7 @@ public sealed class AppointmentRescheduleEndpointTests : IAsyncLifetime
     [Fact]
     public async Task Cross_Clinic_Reschedule_Denied()
     {
-        await AuthenticateAsync(StaffAEmail, StaffAPassword);
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
         var doctorId = await GetClinicADoctorStaffIdAsync();
         var patientId = await GetSeedPatientIdAsync();
         var create = await _client!.PostAsJsonAsync("/api/v1/staff/appointments", new
@@ -244,6 +250,7 @@ public sealed class AppointmentRescheduleEndpointTests : IAsyncLifetime
             appointmentDateUtc = AlignedFutureSlotUtc(42),
             durationMinutes = 30,
         });
+        create.StatusCode.Should().Be(HttpStatusCode.OK);
         var created = await create.Content.ReadFromJsonAsync<AppointmentResponse>();
 
         await AuthenticateAsync(StaffBEmail, StaffBPassword);

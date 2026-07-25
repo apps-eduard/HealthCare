@@ -6,6 +6,7 @@ using HealthCare.Contracts.Appointments;
 using HealthCare.Contracts.Common;
 using HealthCare.Contracts.Identity;
 using HealthCare.Domain.Identity;
+using HealthCare.Domain.Staff;
 using HealthCare.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -25,6 +26,8 @@ public sealed class AppointmentFoundationEndpointTests : IAsyncLifetime
     private const string StaffAPassword = "ChangeMe_DoctorA_1!";
     private const string StaffBEmail = "doctor.b@healthcare.local";
     private const string StaffBPassword = "ChangeMe_DoctorB_1!";
+    private const string ClinicAdminEmail = "clinicadmin@healthcare.local";
+    private const string ClinicAdminPassword = "ChangeMe_ClinicAdmin_1!";
 
     private PostgreSqlContainer? _postgres;
     private WebApplicationFactory<Program>? _factory;
@@ -65,6 +68,8 @@ public sealed class AppointmentFoundationEndpointTests : IAsyncLifetime
                 builder.UseSetting("DevelopmentSeed:Patient:StaffPassword", StaffAPassword);
                 builder.UseSetting("DevelopmentSeed:Patient:OtherClinicStaffEmail", StaffBEmail);
                 builder.UseSetting("DevelopmentSeed:Patient:OtherClinicStaffPassword", StaffBPassword);
+                builder.UseSetting("DevelopmentSeed:Patient:ClinicAdminEmail", ClinicAdminEmail);
+                builder.UseSetting("DevelopmentSeed:Patient:ClinicAdminPassword", ClinicAdminPassword);
                 builder.UseSetting("DevelopmentSeed:Patient:ClinicSlug", "dev-clinic-a");
 
                 builder.ConfigureServices(services =>
@@ -158,7 +163,7 @@ public sealed class AppointmentFoundationEndpointTests : IAsyncLifetime
     [Fact]
     public async Task Staff_Cannot_Assign_Clinic_B_Doctor_From_Clinic_A()
     {
-        await AuthenticateAsync(StaffAEmail, StaffAPassword);
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
         var patientId = await GetSeedPatientIdAsync();
         var doctorB = await GetClinicBDoctorStaffIdAsync();
         var response = await _client!.PostAsJsonAsync("/api/v1/staff/appointments", new
@@ -169,6 +174,126 @@ public sealed class AppointmentFoundationEndpointTests : IAsyncLifetime
             durationMinutes = 30,
         });
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Doctor_Cannot_Create_Staff_Appointments()
+    {
+        await AuthenticateAsync(StaffAEmail, StaffAPassword);
+        var patientId = await GetSeedPatientIdAsync();
+        var doctorId = await GetClinicADoctorStaffIdAsync();
+        var response = await _client!.PostAsJsonAsync("/api/v1/staff/appointments", new
+        {
+            patientId,
+            doctorStaffMemberId = doctorId,
+            appointmentDateUtc = AlignedFutureSlotUtc(daysAhead: 20),
+            durationMinutes = 30,
+        });
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Doctor_Cannot_Access_Same_Clinic_Peer_Appointment()
+    {
+        Guid peerStaffId;
+        using (var scope = _factory!.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+            var clinic = await db.Clinics.SingleAsync(c => c.Slug == "dev-clinic-a");
+            var peerUserId = Guid.NewGuid();
+            peerStaffId = Guid.NewGuid();
+            var now = DateTimeOffset.UtcNow;
+            db.Users.Add(new ApplicationUser
+            {
+                Id = peerUserId,
+                Email = $"peer.appt.{peerUserId:N}@healthcare.local",
+                NormalizedEmail = $"PEER.APPT.{peerUserId:N}@HEALTHCARE.LOCAL",
+                UserName = $"peer.appt.{peerUserId:N}@healthcare.local",
+                NormalizedUserName = $"PEER.APPT.{peerUserId:N}@HEALTHCARE.LOCAL",
+                EmailConfirmed = true,
+                IsActive = true,
+                SecurityStamp = Guid.NewGuid().ToString("N"),
+                ConcurrencyStamp = Guid.NewGuid().ToString("N"),
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+            });
+            db.StaffMembers.Add(new StaffMember
+            {
+                Id = peerStaffId,
+                UserId = peerUserId,
+                OrganizationId = clinic.OrganizationId,
+                ClinicId = clinic.Id,
+                Role = AppRoles.Doctor,
+                IsActive = true,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+            });
+            foreach (DayOfWeek day in Enum.GetValues<DayOfWeek>())
+            {
+                db.DoctorAvailabilities.Add(new Domain.Appointments.DoctorAvailability
+                {
+                    Id = Guid.NewGuid(),
+                    OrganizationId = clinic.OrganizationId,
+                    ClinicId = clinic.Id,
+                    DoctorStaffMemberId = peerStaffId,
+                    DayOfWeek = day,
+                    StartLocalTime = new TimeOnly(8, 0),
+                    EndLocalTime = new TimeOnly(20, 0),
+                    SlotDurationMinutes = 30,
+                    EffectiveFrom = new DateOnly(2020, 1, 1),
+                    IsActive = true,
+                });
+            }
+            await db.SaveChangesAsync();
+        }
+
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
+        var patientId = await GetSeedPatientIdAsync();
+        var create = await _client!.PostAsJsonAsync("/api/v1/staff/appointments", new
+        {
+            patientId,
+            doctorStaffMemberId = peerStaffId,
+            appointmentDateUtc = AlignedFutureSlotUtc(daysAhead: 21),
+            durationMinutes = 30,
+        });
+        create.StatusCode.Should().Be(HttpStatusCode.OK);
+        var created = await create.Content.ReadFromJsonAsync<AppointmentResponse>();
+
+        await AuthenticateAsync(StaffAEmail, StaffAPassword);
+        var get = await _client!.GetAsync($"/api/v1/appointments/{created!.Id}");
+        get.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        var list = await _client!.GetAsync("/api/v1/staff/appointments");
+        list.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await list.Content.ReadFromJsonAsync<PagedResponse<AppointmentResponse>>();
+        body!.Items.Should().NotContain(i => i.Id == created.Id);
+
+        var mutate = await _client!.PostAsJsonAsync(
+            $"/api/v1/staff/appointments/{created.Id}/confirm",
+            new AppointmentActionRequest { ExpectedVersion = created.Version });
+        mutate.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Clinic_Admin_Still_Lists_Clinic_Wide_Appointments()
+    {
+        await AuthenticateAsync(PatientEmail, PatientPassword);
+        var doctorId = await GetClinicADoctorStaffIdAsync();
+        var create = await _client!.PostAsJsonAsync("/api/v1/patients/me/appointments", new
+        {
+            clinicCode = "dev-clinic-a",
+            doctorStaffMemberId = doctorId,
+            appointmentDateUtc = AlignedFutureSlotUtc(daysAhead: 22),
+            durationMinutes = 30,
+        });
+        create.StatusCode.Should().Be(HttpStatusCode.OK);
+        var created = await create.Content.ReadFromJsonAsync<AppointmentResponse>();
+
+        await AuthenticateAsync(ClinicAdminEmail, ClinicAdminPassword);
+        var response = await _client!.GetAsync("/api/v1/staff/appointments");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<PagedResponse<AppointmentResponse>>();
+        body!.Items.Should().Contain(i => i.Id == created!.Id);
     }
 
     [Fact]

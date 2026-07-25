@@ -191,18 +191,24 @@ public sealed class MedicalNotesEndpointTests : IAsyncLifetime
 
     private async Task<AppointmentResponse> CreateEligibleAppointmentAsync()
     {
-        await AuthenticateAsync(DoctorAEmail, DoctorAPassword);
-        var patientId = await GetSeedPatientIdAsync();
+        await AuthenticateAsync(PatientEmail, PatientPassword);
         var doctorId = await GetDoctorIdAsync("dev-clinic-a");
-        var create = await _client!.PostAsJsonAsync("/api/v1/staff/appointments", new
+        var create = await _client!.PostAsJsonAsync("/api/v1/patients/me/appointments", new
         {
-            patientId,
+            clinicCode = "dev-clinic-a",
             doctorStaffMemberId = doctorId,
             appointmentDateUtc = AlignedFutureSlotUtc(30),
             durationMinutes = 30,
         });
         create.StatusCode.Should().Be(HttpStatusCode.OK);
         var appointment = (await create.Content.ReadFromJsonAsync<AppointmentResponse>())!;
+
+        await AuthenticateAsync(DoctorAEmail, DoctorAPassword);
+        var confirm = await _client!.PostAsJsonAsync($"/api/v1/staff/appointments/{appointment.Id}/confirm",
+            new AppointmentActionRequest { ExpectedVersion = appointment.Version });
+        confirm.StatusCode.Should().Be(HttpStatusCode.OK);
+        appointment = (await confirm.Content.ReadFromJsonAsync<AppointmentResponse>())!;
+
         var checkIn = await _client!.PostAsJsonAsync($"/api/v1/staff/appointments/{appointment.Id}/check-in",
             new AppointmentActionRequest { ExpectedVersion = appointment.Version });
         checkIn.StatusCode.Should().Be(HttpStatusCode.OK);
