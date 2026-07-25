@@ -75,6 +75,17 @@ public sealed class MedicalNotesUiTests
         program.Should().Contain("IMedicalNoteApiClient");
     }
 
+    [Fact]
+    public void Appointment_Detail_Selects_Draft_After_Create_Without_Busy_Gate()
+    {
+        var detail = File.ReadAllText(Path.Combine(
+            FindRepoRoot(), "src", "HealthCare.Web", "Components", "Appointments", "AppointmentDetailDialog.razor"));
+        detail.Should().Contain("SelectNoteAsync(created.Id)");
+        detail.Should().Contain("private async Task SelectNoteAsync");
+        detail.Should().Contain("medical-note-plan");
+        detail.Should().Contain("for=\"medical-note-plan\"");
+    }
+
     private static string FindRepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

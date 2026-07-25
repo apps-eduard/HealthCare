@@ -176,10 +176,14 @@ else
                              && MedicalNotePermissionRules.CanUpdateDraft(Permissions))
                         {
                             <div style="display:flex;flex-direction:column;gap:6px;margin-top:0.5rem;">
-                                <Input TextArea="@true" Rows="2" Placeholder="Subjective" @bind-Value="_noteSubjective" AriaLabel="Subjective" />
-                                <Input TextArea="@true" Rows="2" Placeholder="Objective" @bind-Value="_noteObjective" AriaLabel="Objective" />
-                                <Input TextArea="@true" Rows="2" Placeholder="Assessment" @bind-Value="_noteAssessment" AriaLabel="Assessment" />
-                                <Input TextArea="@true" Rows="2" Placeholder="Plan" @bind-Value="_notePlan" AriaLabel="Plan" />
+                                <label class="hc-caption" for="medical-note-subjective">Subjective</label>
+                                <Input Id="medical-note-subjective" TextArea="@true" Rows="2" Placeholder="Subjective" @bind-Value="_noteSubjective" AriaLabel="Subjective" />
+                                <label class="hc-caption" for="medical-note-objective">Objective</label>
+                                <Input Id="medical-note-objective" TextArea="@true" Rows="2" Placeholder="Objective" @bind-Value="_noteObjective" AriaLabel="Objective" />
+                                <label class="hc-caption" for="medical-note-assessment">Assessment</label>
+                                <Input Id="medical-note-assessment" TextArea="@true" Rows="2" Placeholder="Assessment" @bind-Value="_noteAssessment" AriaLabel="Assessment" />
+                                <label class="hc-caption" for="medical-note-plan">Plan</label>
+                                <Input Id="medical-note-plan" TextArea="@true" Rows="2" Placeholder="Plan" @bind-Value="_notePlan" AriaLabel="Plan" />
                             </div>
                             <Space Style="margin-top:0.5rem;">
                                 <Button Disabled="_busy" OnClick="SaveDraftNoteAsync" AriaLabel="Save medical note draft">Save draft</Button>
@@ -201,8 +205,10 @@ else
                                  && MedicalNotePermissionRules.CanAmend(Permissions))
                             {
                                 <div style="margin-top:0.5rem;display:flex;flex-direction:column;gap:6px;">
-                                    <Input Placeholder="Amendment reason" @bind-Value="_amendReason" AriaLabel="Amendment reason" />
-                                    <Input TextArea="@true" Rows="2" Placeholder="Updated plan (optional)" @bind-Value="_amendPlan" AriaLabel="Amendment plan" />
+                                    <label class="hc-caption" for="medical-note-amend-reason">Amendment reason</label>
+                                    <Input Id="medical-note-amend-reason" Placeholder="Amendment reason" @bind-Value="_amendReason" AriaLabel="Amendment reason" />
+                                    <label class="hc-caption" for="medical-note-amend-plan">Amendment plan</label>
+                                    <Input Id="medical-note-amend-plan" TextArea="@true" Rows="2" Placeholder="Updated plan (optional)" @bind-Value="_amendPlan" AriaLabel="Amendment plan" />
                                     <Button Disabled="_busy" OnClick="AmendNoteAsync" AriaLabel="Amend medical note">Amend</Button>
                                 </div>
                             }
@@ -357,7 +363,7 @@ else
             Notify.Success("Draft note created.");
             _changed = true;
             await LoadNotesAsync();
-            await OpenNoteAsync(created.Id);
+            await SelectNoteAsync(created.Id);
         }
         catch (ApiProblemException ex)
         {
@@ -379,6 +385,18 @@ else
         _busy = true;
         try
         {
+            await SelectNoteAsync(noteId);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SelectNoteAsync(Guid noteId)
+    {
+        try
+        {
             _selectedNote = await NotesApi.GetByIdAsync(noteId);
             _noteSubjective = _selectedNote.Subjective;
             _noteObjective = _selectedNote.Objective;
@@ -391,10 +409,6 @@ else
         {
             _selectedNote = null;
             Notify.Error(MedicalNoteProblemMessages.ToUserMessage(ex));
-        }
-        finally
-        {
-            _busy = false;
         }
     }
 
@@ -427,7 +441,7 @@ else
         catch (ApiProblemException ex) when (MedicalNoteProblemMessages.IsConcurrencyConflict(ex))
         {
             Notify.Warning(MedicalNoteProblemMessages.ToUserMessage(ex));
-            await OpenNoteAsync(_selectedNote.Id);
+            await SelectNoteAsync(_selectedNote.Id);
         }
         catch (ApiProblemException ex)
         {
@@ -465,7 +479,7 @@ else
         catch (ApiProblemException ex) when (MedicalNoteProblemMessages.IsConcurrencyConflict(ex))
         {
             Notify.Warning(MedicalNoteProblemMessages.ToUserMessage(ex));
-            await OpenNoteAsync(_selectedNote.Id);
+            await SelectNoteAsync(_selectedNote.Id);
         }
         catch (ApiProblemException ex)
         {
@@ -508,7 +522,7 @@ else
         catch (ApiProblemException ex) when (MedicalNoteProblemMessages.IsConcurrencyConflict(ex))
         {
             Notify.Warning(MedicalNoteProblemMessages.ToUserMessage(ex));
-            await OpenNoteAsync(_selectedNote.Id);
+            await SelectNoteAsync(_selectedNote.Id);
         }
         catch (ApiProblemException ex)
         {

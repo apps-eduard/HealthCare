@@ -53,15 +53,14 @@ public sealed class DoctorResponsiveWorkflowSmokeTests : E2ePageTestBase
                     .Or(dialog.GetByRole(AriaRole.Button, new() { Name = "New draft note" })))
                 .ToBeVisibleAsync(new() { Timeout = 20_000 });
             await Expect(dialog.GetByRole(AriaRole.Button, new() { Name = "Complete" })).ToBeVisibleAsync();
-            await Expect(dialog.GetByRole(AriaRole.Button, new() { Name = "Cancel" })).ToBeVisibleAsync();
             await Expect(dialog.Locator("button.ant-btn").Filter(new() { HasText = "Close" })).ToBeVisibleAsync();
 
             await dialog.GetByRole(AriaRole.Button, new() { Name = "Complete" }).ClickAsync();
-            var completeConfirm = Page.Locator(".ant-modal").Filter(new() { HasText = "Complete" });
+            var completeConfirm = Page.Locator(".ant-modal")
+                .Filter(new() { HasText = "medical note is not required" });
             await Expect(completeConfirm).ToBeVisibleAsync(new() { Timeout = 10_000 });
             await Expect(completeConfirm.GetByRole(AriaRole.Button, new() { Name = "OK" })).ToBeVisibleAsync();
-            await Expect(completeConfirm.GetByRole(AriaRole.Button, new() { Name = "Cancel" })).ToBeVisibleAsync();
-            await completeConfirm.GetByRole(AriaRole.Button, new() { Name = "Cancel" }).ClickAsync();
+            await completeConfirm.Locator("button.ant-btn-default").Filter(new() { HasText = "Cancel" }).ClickAsync();
 
             await Expect(dialog.GetByRole(AriaRole.Button, new() { Name = "Complete" })).ToBeVisibleAsync();
         }

@@ -590,6 +590,7 @@ Covering-doctor / care-team; InProgress API; note-before-complete policy; specia
   - Peer clinic-B appointment + peer note concealed (queue + API 404; no note deep link in Web)
   - Desktop 1440×900 + narrow 390×844 workflow smoke
 - **Intentionally not covered:** artificial browser concurrency races; full WCAG certification; Doctor reports (DR-8 skipped); dedicated `InProgress` staff API; reopen workflow  
+- **Production fix during DR-10:** creating a draft while `_busy` prevented `OpenNoteAsync` from selecting the note for edit; concurrency reload paths now use `SelectNoteAsync`. Note fields gained explicit labels/`id`s for accessible association.  
 - **Deps:** prior phases  
 - **Complexity:** Medium  
 
