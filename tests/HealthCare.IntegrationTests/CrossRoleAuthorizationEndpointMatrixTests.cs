@@ -189,7 +189,7 @@ public sealed class CrossRoleAuthorizationEndpointMatrixTests : IAsyncLifetime
             $"/api/v1/medical-notes/{_doctorANoteId}?platformAdminBypass=true", null, HttpStatusCode.Forbidden),
 
         new("clinic_admin_cross_clinic_appointment", ClinicAdminEmail, HttpMethod.Get, $"/api/v1/appointments/{_clinicBAppointmentId}", null,
-            HttpStatusCode.NotFound, allowForbidden: true),
+            HttpStatusCode.NotFound, AllowForbidden: true),
     ];
 
     private async Task ExecuteAsync(MatrixCase testCase)
