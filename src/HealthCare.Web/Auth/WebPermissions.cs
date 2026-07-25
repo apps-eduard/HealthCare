@@ -23,6 +23,7 @@ public static class WebPermissions
     public const string ClinicProfileUpdate = "clinic_profile.update";
     public const string ClinicReportsRead = "clinic_reports.read";
     public const string ClinicAuditLogsRead = "clinic_audit_logs.read";
+    public const string DoctorDashboardRead = "doctor_dashboard.read";
     public const string OrganizationsRead = "organizations.read";
     public const string OrganizationsSelect = "organizations.select";
     public const string OrganizationDashboardRead = "organization_dashboard.read";
@@ -61,4 +62,5 @@ public static class WebRoles
     public const string OrganizationAdmin = "ORGANIZATION_ADMIN";
     public const string PlatformAdmin = "PLATFORM_ADMIN";
     public const string ClinicAdmin = "CLINIC_ADMIN";
+    public const string Doctor = "DOCTOR";
 }

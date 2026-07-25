@@ -1,0 +1,241 @@
+@using HealthCare.Contracts.Doctors
+@using HealthCare.Web.Availability
+@using HealthCare.Web.DoctorDashboard
+@inject IDoctorDashboardApiClient DoctorDashboardApi
+@inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
+@inject IUserNotificationService Notify
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<HcPageHeader Title="Doctor Dashboard"
+              Subtitle="@_subtitle">
+    <Breadcrumb>
+        <Breadcrumb>
+            <BreadcrumbItem>Home</BreadcrumbItem>
+            <BreadcrumbItem>Dashboard</BreadcrumbItem>
+        </Breadcrumb>
+    </Breadcrumb>
+    <ChildContent>
+        <Space>
+            @if (_lastRefreshedUtc is DateTimeOffset refreshed)
+            {
+                <span class="hc-caption">Last refreshed @refreshed.ToString("u")</span>
+            }
+            <Button Type="@ButtonType.Default"
+                    OnClick="RefreshAsync"
+                    Loading="_loading"
+                    Disabled="@(!CanLoad)"
+                    AriaLabel="Refresh doctor dashboard">
+                <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
+            </Button>
+        </Space>
+    </ChildContent>
+</HcPageHeader>
+
+@if (Permissions.IsPlatformAdmin)
+{
+    <Alert Type="@AlertType.Info"
+           Message="Platform Admin doctor-dashboard troubleshooting requires explicit clinic and doctor staff member context. The UI does not auto-select a doctor."
+           ShowIcon="true"
+           Style="margin-bottom:16px;" />
+}
+else if (_loading && _dashboard is null)
+{
+    <Skeleton Active="true" />
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <ErrorState Message="@_error" />
+}
+else if (_dashboard is null)
+{
+    <Empty Description="@("No doctor dashboard data")" />
+}
+else
+{
+    <div class="hc-caption" style="margin-bottom:12px;" data-testid="doctor-dashboard-caption">
+        @_dashboard.DoctorDisplayName
+        · @_dashboard.ClinicName
+        · @_dashboard.OrganizationName (read-only)
+        · Timezone @_dashboard.DefaultTimeZoneId
+        · Date @_dashboard.LocalDashboardDate
+    </div>
+
+    <AntDesign.Row Gutter="(16,16)" Style="margin-bottom:16px;">
+        <AntDesign.Col Xs="12" Sm="8" Md="6">
+            <Card Size="CardSize.Small">
+                <Statistic Title="Today’s appointments" Value="@_dashboard.TodayAppointmentCount" />
+            </Card>
+        </AntDesign.Col>
+        <AntDesign.Col Xs="12" Sm="8" Md="6">
+            <Card Size="CardSize.Small">
+                <Statistic Title="Upcoming appointments" Value="@_dashboard.UpcomingAppointmentCount" />
+            </Card>
+        </AntDesign.Col>
+        <AntDesign.Col Xs="12" Sm="8" Md="6">
+            <Card Size="CardSize.Small">
+                <Statistic Title="Checked in" Value="@_dashboard.CheckedInAppointmentCount" />
+            </Card>
+        </AntDesign.Col>
+        <AntDesign.Col Xs="12" Sm="8" Md="6">
+            <Card Size="CardSize.Small">
+                <Statistic Title="Awaiting completion" Value="@_dashboard.AwaitingCompletionCount" />
+            </Card>
+        </AntDesign.Col>
+        <AntDesign.Col Xs="12" Sm="8" Md="6">
+            <Card Size="CardSize.Small">
+                <Statistic Title="Recent no-shows" Value="@_dashboard.RecentNoShowCount" />
+            </Card>
+        </AntDesign.Col>
+        <AntDesign.Col Xs="12" Sm="8" Md="6">
+            <Card Size="CardSize.Small">
+                <Statistic Title="Availability warnings" Value="@_dashboard.AvailabilityWarningCount" />
+            </Card>
+        </AntDesign.Col>
+    </AntDesign.Row>
+
+    <Card Title="Next appointment" Size="CardSize.Small" Style="margin-bottom:16px;">
+        @if (_dashboard.NextAppointment is null)
+        {
+            <Empty Description="@("No upcoming assigned appointment")" />
+        }
+        else
+        {
+            <p>
+                @_dashboard.NextAppointment.PatientDisplayName
+                · @_dashboard.NextAppointment.Status
+                · @_dashboard.NextAppointment.AppointmentDateUtc.ToString("u")
+            </p>
+        }
+    </Card>
+
+    <Card Title="Availability warnings" Size="CardSize.Small" Style="margin-bottom:16px;">
+        @if (_dashboard.AvailabilityWarnings.Count == 0)
+        {
+            <span class="hc-caption">No availability warnings.</span>
+        }
+        else
+        {
+            <ul>
+                @foreach (var warning in _dashboard.AvailabilityWarnings)
+                {
+                    <li>@warning</li>
+                }
+            </ul>
+        }
+    </Card>
+
+    <Card Title="Quick links" Size="CardSize.Small">
+        <Space Wrap>
+            @if (Permissions.Has(WebPermissions.AppointmentsRead))
+            {
+                <Button Type="@ButtonType.Primary"
+                        OnClick='() => Navigation.NavigateTo("/appointments")'
+                        AriaLabel="Open appointments">
+                    <Icon Type="unordered-list" Theme="IconThemeType.Outline" /> Appointments
+                </Button>
+                <Button Type="@ButtonType.Default"
+                        OnClick='() => Navigation.NavigateTo("/appointments/calendar")'
+                        AriaLabel="Open appointment calendar">
+                    <Icon Type="calendar" Theme="IconThemeType.Outline" /> Calendar
+                </Button>
+            }
+            @if (AvailabilityPermissionRules.CanView(Permissions))
+            {
+                <Button Type="@ButtonType.Default"
+                        OnClick='() => Navigation.NavigateTo("/availability")'
+                        AriaLabel="Open availability">
+                    <Icon Type="clock-circle" Theme="IconThemeType.Outline" /> Availability
+                </Button>
+            }
+        </Space>
+        <div class="hc-caption" style="margin-top:12px;">
+            Appointment list ownership is hardened in DR-4. Patient directory access is hardened in DR-5.
+        </div>
+    </Card>
+}
+
+@code {
+    private DoctorDashboardResponse? _dashboard;
+    private bool _loading;
+    private string? _error;
+    private string _subtitle = "Your assigned appointments";
+    private DateTimeOffset? _lastRefreshedUtc;
+    private CancellationTokenSource? _cts;
+
+    private bool CanLoad =>
+        Permissions.Has(WebPermissions.DoctorDashboardRead)
+        && !Permissions.IsPlatformAdmin;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+    }
+
+    private async Task RefreshAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (!Permissions.Has(WebPermissions.DoctorDashboardRead))
+        {
+            return;
+        }
+
+        if (!CanLoad)
+        {
+            _dashboard = null;
+            _error = null;
+            _subtitle = "Explicit doctor context required";
+            return;
+        }
+
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        var token = _cts.Token;
+
+        _loading = true;
+        _error = null;
+        try
+        {
+            _dashboard = await DoctorDashboardApi.GetAsync(
+                new DoctorDashboardQuery(),
+                platformAdminBypass: false,
+                cancellationToken: token);
+
+            if (token.IsCancellationRequested)
+            {
+                return;
+            }
+
+            _subtitle = $"{_dashboard.DoctorDisplayName} · {_dashboard.ClinicName}";
+            _lastRefreshedUtc = DateTimeOffset.UtcNow;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ApiProblemException ex)
+        {
+            _dashboard = null;
+            _error = DoctorDashboardProblemMessages.ToUserMessage(ex);
+            Notify.Error(_error);
+        }
+        catch (Exception)
+        {
+            _dashboard = null;
+            _error = "Unable to load doctor dashboard.";
+            Notify.Error(_error);
+        }
+        finally
+        {
+            if (!token.IsCancellationRequested)
+            {
+                _loading = false;
+            }
+        }
+    }
+}

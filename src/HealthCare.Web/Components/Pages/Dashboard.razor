@@ -322,6 +322,10 @@ else if (Permissions.Has(WebPermissions.ClinicDashboardRead))
 {
     <ClinicDashboardView />
 }
+else if (Permissions.Has(WebPermissions.DoctorDashboardRead))
+{
+    <DoctorDashboardView />
+}
 else
 {
     <HcPageHeader Title="Dashboard"

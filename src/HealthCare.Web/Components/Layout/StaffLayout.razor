@@ -2,6 +2,7 @@
 @implements IDisposable
 @using HealthCare.Web.ClinicReports
 @using HealthCare.Web.ClinicSettings
+@using HealthCare.Web.DoctorDashboard
 @inject IPermissionState Permissions
 @inject NavigationManager Navigation
 @inject IJSRuntime Js
@@ -44,14 +45,15 @@
                     <span>Appointment Calendar</span>
                 </MenuItem>
             }
-            @if (Permissions.Has(WebPermissions.PatientsSearch))
+            @if (DoctorConsoleNavigation.ShowPatientsLink(Permissions))
             {
                 <MenuItem Key="patients" RouterLink="/patients" RouterMatch="NavLinkMatch.Prefix">
                     <Icon Type="team" Theme="IconThemeType.Outline" />
                     <span>Patients</span>
                 </MenuItem>
             }
-            @if (DoctorDirectoryPermissionRules.CanView(Permissions))
+            @if (DoctorConsoleNavigation.ShowDoctorsDirectory(Permissions)
+                 && DoctorDirectoryPermissionRules.CanView(Permissions))
             {
                 <MenuItem Key="doctors" RouterLink="/doctors" RouterMatch="NavLinkMatch.Prefix">
                     <Icon Type="idcard" Theme="IconThemeType.Outline" />
@@ -62,10 +64,11 @@
             {
                 <MenuItem Key="availability" RouterLink="/availability" RouterMatch="NavLinkMatch.Prefix">
                     <Icon Type="clock-circle" Theme="IconThemeType.Outline" />
-                    <span>Doctor Availability</span>
+                    <span>@(DoctorConsoleNavigation.IsDoctorConsoleActor(Permissions) ? "Availability" : "Doctor Availability")</span>
                 </MenuItem>
             }
-            @if (OperationsPermissionRules.CanViewAnyOperations(Permissions))
+            @if (DoctorConsoleNavigation.ShowOperations(Permissions)
+                 && OperationsPermissionRules.CanViewAnyOperations(Permissions))
             {
                 <SubMenu Key="operations">
                     <TitleTemplate>
@@ -176,7 +179,7 @@
                     </ChildContent>
                 </SubMenu>
             }
-            @if (Permissions.Has(WebPermissions.ClinicsRead))
+            @if (DoctorConsoleNavigation.ShowClinicsDirectory(Permissions))
             {
                 <MenuItem Key="clinics" RouterLink="/clinics" RouterMatch="NavLinkMatch.Prefix">
                     <Icon Type="bank" Theme="IconThemeType.Outline" />

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using HealthCare.Application.Appointments;
 using HealthCare.Application.Authorization;
 using HealthCare.Application.Clinics;
+using HealthCare.Application.Doctors;
 using HealthCare.Application.Identity;
 using HealthCare.Application.MedicalNotes;
 using HealthCare.Application.Organizations;
@@ -187,6 +188,18 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
                 clinicDashboardException.ErrorCode,
                 correlationId,
                 "Clinic dashboard denied",
+                cancellationToken);
+        }
+
+        if (exception is DoctorDashboardException doctorDashboardException)
+        {
+            return await WriteAuthProblemAsync(
+                httpContext,
+                doctorDashboardException.StatusCode,
+                doctorDashboardException.Title,
+                doctorDashboardException.ErrorCode,
+                correlationId,
+                "Doctor dashboard denied",
                 cancellationToken);
         }
 

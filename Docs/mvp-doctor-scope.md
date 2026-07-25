@@ -1,7 +1,7 @@
 # MVP Doctor Scope
 
 **Status:** **Approved** by product owner (2026-07-25). Authoritative for the `DOCTOR` Web MVP.  
-**Implementation:** Application code for Doctor Web MVP is **not** started. Permissions/routes listed as approved are **not in the code matrix until their phase ships**.  
+**Implementation:** Doctor Web MVP **DR-1 delivered** (2026-07-25). Later DR phases not started. Permissions ship with their phase.  
 **Authority:** This document overrides informal notes in `Docs/security.md` §4.4 where they conflict; keep matrix and security cross-links in sync when coding.  
 **Related:** `Docs/mvp-clinic-admin-scope.md`, `Docs/mvp-organization-admin-scope.md`, `Docs/authorization-matrix.md`, `Docs/security.md` §4.4 / medical-notes.  
 **Do not** copy Clinic Admin or Organization Admin capabilities into Doctor without validating ownership and clinical least-privilege.  
@@ -482,7 +482,7 @@ Covering-doctor / care-team; InProgress API; note-before-complete policy; specia
 
 | Phase | Theme | Complexity | Status |
 |-------|--------|------------|--------|
-| DR-1 | Doctor dashboard + navigation foundation | Medium | Not started |
+| DR-1 | Doctor dashboard + navigation foundation | Medium | **Delivered** (2026-07-25) |
 | DR-2 | Doctor profile | Small | Not started |
 | DR-3 | My availability and schedule | Small | Not started |
 | DR-4 | My appointment ownership and workflows | Medium | Not started |
@@ -610,3 +610,4 @@ Covering-doctor / care-team; InProgress API; note-before-complete policy; specia
 |------|------|
 | 2026-07-25 | Initial draft from repository inspection |
 | 2026-07-25 | **Approved** by product owner: Model A patients; appointment ownership; medical-note tighten; profile/dashboard permissions; DR-8 skipped; no Doctor create UI |
+| 2026-07-25 | **DR-1 delivered:** `doctor_dashboard.read`, `GET /api/v1/doctor/dashboard`, Doctor Dashboard UI + Doctor console nav (Patients hidden until DR-5; appointment ownership remains DR-4) |

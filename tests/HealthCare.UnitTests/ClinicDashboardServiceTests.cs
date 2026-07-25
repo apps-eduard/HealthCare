@@ -9,6 +9,7 @@ using HealthCare.Domain.Patients;
 using HealthCare.Infrastructure.Appointments;
 using HealthCare.Infrastructure.Authorization;
 using HealthCare.Infrastructure.Clinics;
+using HealthCare.Infrastructure.Doctors;
 using HealthCare.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -682,6 +683,65 @@ internal sealed class ClinicDashHarness : IAsyncDisposable
             UpdatedAtUtc = DateTimeOffset.UtcNow,
         });
         await Db.SaveChangesAsync();
+    }
+
+    public DoctorDashboardService CreateDoctorDashboardService(
+        (ApplicationUser User, Domain.Staff.StaffMember Staff) actor)
+    {
+        var currentUser = new FakeCurrentUser
+        {
+            IsAuthenticated = true,
+            UserId = actor.User.Id,
+            Email = actor.User.Email,
+            Roles = [actor.Staff.Role],
+            OrganizationId = actor.Staff.OrganizationId,
+            ClinicId = actor.Staff.ClinicId,
+            StaffMemberId = actor.Staff.Id,
+        };
+        var currentStaff = new FakeCurrentStaff
+        {
+            HasActiveMembership = true,
+            StaffMemberId = actor.Staff.Id,
+            OrganizationId = actor.Staff.OrganizationId,
+            ClinicId = actor.Staff.ClinicId,
+            Role = actor.Staff.Role,
+        };
+        return BuildDoctorDashboardService(currentUser, currentStaff);
+    }
+
+    public DoctorDashboardService CreatePlatformDoctorDashboardService(ApplicationUser platformUser)
+    {
+        var currentUser = new FakeCurrentUser
+        {
+            IsAuthenticated = true,
+            UserId = platformUser.Id,
+            Email = platformUser.Email,
+            Roles = [AppRoles.PlatformAdmin],
+        };
+        var currentStaff = new FakeCurrentStaff { HasActiveMembership = false };
+        return BuildDoctorDashboardService(currentUser, currentStaff);
+    }
+
+    public DoctorDashboardService BuildDoctorDashboardService(
+        FakeCurrentUser currentUser,
+        FakeCurrentStaff currentStaff)
+    {
+        var audit = new NoOpAuthorizationAuditLogger();
+        var permissions = new PermissionService(
+            currentUser,
+            currentStaff,
+            new FakeCurrentPatient(),
+            audit);
+
+        return new DoctorDashboardService(
+            Db,
+            currentUser,
+            currentStaff,
+            permissions,
+            audit,
+            new ClinicTimeZoneConverter(NullLogger<ClinicTimeZoneConverter>.Instance),
+            Clock,
+            NullLogger<DoctorDashboardService>.Instance);
     }
 
     public async ValueTask DisposeAsync()

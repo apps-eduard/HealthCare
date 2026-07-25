@@ -101,7 +101,7 @@ public sealed class ClinicAdminPatientsUiTests
         drawer.Should().NotContain("MedicalNote");
 
         layout.Should().Contain("RouterLink=\"/patients\"");
-        layout.Should().Contain("WebPermissions.PatientsSearch");
+        layout.Should().Contain("DoctorConsoleNavigation.ShowPatientsLink");
     }
 
     [Fact]

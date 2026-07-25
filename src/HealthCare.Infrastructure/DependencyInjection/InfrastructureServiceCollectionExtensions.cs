@@ -1,6 +1,7 @@
 using HealthCare.Application.Appointments;
 using HealthCare.Application.Authorization;
 using HealthCare.Application.Clinics;
+using HealthCare.Application.Doctors;
 using HealthCare.Application.Identity;
 using HealthCare.Application.MedicalNotes;
 using HealthCare.Application.Organizations;
@@ -11,6 +12,7 @@ using HealthCare.Domain.Identity;
 using HealthCare.Infrastructure.Appointments;
 using HealthCare.Infrastructure.Authorization;
 using HealthCare.Infrastructure.Clinics;
+using HealthCare.Infrastructure.Doctors;
 using HealthCare.Infrastructure.Identity;
 using HealthCare.Infrastructure.MedicalNotes;
 using HealthCare.Infrastructure.Organizations;
@@ -167,6 +169,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IClinicDirectoryService, ClinicDirectoryService>();
         services.AddScoped<IClinicManagementService, ClinicManagementService>();
         services.AddScoped<IClinicDashboardService, ClinicDashboardService>();
+        services.AddScoped<IDoctorDashboardService, DoctorDashboardService>();
         services.AddScoped<IClinicSettingsService, ClinicSettingsService>();
         services.AddScoped<IClinicReportsService, ClinicReportsService>();
         services.AddScoped<IClinicAuditLogService, ClinicAuditLogService>();
