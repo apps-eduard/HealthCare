@@ -162,7 +162,7 @@ public sealed class PatientContractHardeningEndpointTests : IAsyncLifetime
         var moved = await ok.Content.ReadFromJsonAsync<AppointmentResponse>();
 
         await SetAppointmentStartAsync(moved!.Id, _clock.GetUtcNow().AddMinutes(45));
-        var denied = await _client.PostAsJsonAsync($"/api/v1/appointments/{moved.Id}/reschedule", new
+        var denied = await _client!.PostAsJsonAsync($"/api/v1/appointments/{moved.Id}/reschedule", new
         {
             appointmentDateUtc = AlignedSlotDaysAhead(7),
             durationMinutes = 30,
