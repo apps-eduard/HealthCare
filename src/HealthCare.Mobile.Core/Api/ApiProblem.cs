@@ -1,5 +1,7 @@
 using System.Net;
 using System.Text.Json;
+using HealthCare.Contracts.Identity;
+using HealthCare.Contracts.Patients;
 
 namespace HealthCare.Mobile.Core.Api;
 
@@ -31,18 +33,50 @@ public sealed class ApiProblem
 
     public IReadOnlyDictionary<string, string[]>? ValidationErrors { get; init; }
 
-    public string UserMessage => Kind switch
+    public string UserMessage
     {
-        ApiErrorKind.Unauthorized => "Your session has expired. Please sign in again.",
-        ApiErrorKind.Forbidden => "You do not have permission to perform this action.",
-        ApiErrorKind.NotFound => "The requested item is not available.",
-        ApiErrorKind.Conflict => Detail ?? "This action conflicts with the current state. Refresh and try again.",
-        ApiErrorKind.Validation => Detail ?? "Please correct the highlighted fields.",
-        ApiErrorKind.Network => "Unable to reach the server. Check your connection and try again.",
-        ApiErrorKind.Timeout => "The server took too long to respond. Please try again.",
-        ApiErrorKind.Server => "Something went wrong on the server. Please try again later.",
-        _ => "Something went wrong. Please try again.",
-    };
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(ErrorCode))
+            {
+                var byCode = ErrorCode switch
+                {
+                    AuthErrorCodes.InvalidCredentials => "Invalid email or password.",
+                    AuthErrorCodes.EmailNotConfirmed =>
+                        "Confirm your email before signing in. Check your inbox for the confirmation link.",
+                    AuthErrorCodes.AccountDisabled => "This account is disabled.",
+                    AuthErrorCodes.AccountLocked => "This account is temporarily locked.",
+                    AuthErrorCodes.InvalidConfirmationToken =>
+                        "The confirmation link is invalid or has expired.",
+                    AuthErrorCodes.RegistrationFailed => "Registration could not be completed. Please try again.",
+                    PatientErrorCodes.ConcurrencyConflict =>
+                        "Your profile was updated elsewhere. Reload the latest profile before saving again.",
+                    "patient.linkage_required" =>
+                        Detail ?? "This account is not linked to a Patient profile and cannot use the Patient app.",
+                    _ => null,
+                };
+
+                if (byCode is not null)
+                {
+                    return byCode;
+                }
+            }
+
+            return Kind switch
+            {
+                ApiErrorKind.Unauthorized => "Your session has expired. Please sign in again.",
+                ApiErrorKind.Forbidden => "You do not have permission to perform this action.",
+                ApiErrorKind.NotFound => "The requested item is not available.",
+                ApiErrorKind.Conflict => Detail
+                    ?? "This action conflicts with the current state. Refresh and try again.",
+                ApiErrorKind.Validation => Detail ?? "Please correct the highlighted fields.",
+                ApiErrorKind.Network => "Unable to reach the server. Check your connection and try again.",
+                ApiErrorKind.Timeout => "The server took too long to respond. Please try again.",
+                ApiErrorKind.Server => "Something went wrong on the server. Please try again later.",
+                _ => "Something went wrong. Please try again.",
+            };
+        }
+    }
 }
 
 public sealed class ApiResult<T>

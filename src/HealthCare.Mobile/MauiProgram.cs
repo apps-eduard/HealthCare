@@ -1,6 +1,5 @@
 ﻿using System.Reflection;
 using HealthCare.Mobile.Core;
-using HealthCare.Mobile.Core.Authentication;
 using HealthCare.Mobile.Core.Configuration;
 using HealthCare.Mobile.Storage;
 using Microsoft.Extensions.Configuration;
@@ -45,24 +44,7 @@ public static class MauiProgram
         builder.Logging.AddDebug();
 #endif
 
-        var app = builder.Build();
-
-        // Restore session before first render (best-effort).
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                var session = app.Services.GetRequiredService<IAuthSessionService>();
-                await session.InitializeAsync();
-            }
-            catch (Exception ex)
-            {
-                var logger = app.Services.GetService<ILoggerFactory>()?.CreateLogger("MauiProgram");
-                logger?.LogWarning(ex, "Session restore failed during startup.");
-            }
-        });
-
-        return app;
+        return builder.Build();
     }
 
     private static IConfiguration BuildConfiguration()

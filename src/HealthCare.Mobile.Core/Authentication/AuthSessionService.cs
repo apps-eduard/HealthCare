@@ -32,6 +32,8 @@ public sealed class AuthSessionService : IAuthSessionService
 
     public bool IsAuthenticated => Current.IsAuthenticated;
 
+    public bool IsPatientReady => Current.IsPatientReady;
+
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         try

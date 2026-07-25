@@ -123,10 +123,67 @@ html, body {
     border: 1px solid #99f6e4;
 }
 
-.hint {
-    margin-top: 1rem;
+.password-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.password-row .btn-inline {
+    flex-shrink: 0;
+}
+
+.field-hint {
+    color: #64748b;
+    font-size: 0.85rem;
+}
+
+.section-title {
+    font-size: 1.1rem;
+    margin-top: 1.5rem;
+}
+
+.home-cards {
+    display: grid;
+    gap: 0.75rem;
+    margin: 1.25rem 0;
+}
+
+.placeholder-card {
+    border: 1px dashed #cbd5e1;
+    border-radius: 0.75rem;
+    padding: 0.9rem 1rem;
+    background: rgba(255, 255, 255, 0.7);
+}
+
+.placeholder-card h2 {
+    margin: 0 0 0.35rem;
+    font-size: 1rem;
+}
+
+.placeholder-card p {
+    margin: 0;
     color: #64748b;
     font-size: 0.9rem;
+}
+
+.profile-meta {
+    margin-bottom: 1.25rem;
+}
+
+.resend-form {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+textarea {
+    min-height: 5rem;
+    padding: 0.55rem 0.65rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.5rem;
+    font-size: 1rem;
+    font-family: inherit;
 }
 
 .validation-message, .validation-errors {

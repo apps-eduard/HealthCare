@@ -559,16 +559,16 @@ Authoritative product contract: **`Docs/mvp-patient-scope.md`** (PM-0 approved 2
 
 Deliver Patient Mobile via milestones **PM-1…PM-8** (do not treat Phase 11 as a single unstructured drop).
 
-**Progress:** PM-1 (backend hardening) and **PM-2 (MAUI foundation)** delivered. PM-3…PM-8 not started.
+**Progress:** PM-1 (backend hardening), **PM-2 (MAUI foundation)**, and **PM-3 (auth + profile)** delivered. PM-4…PM-8 not started.
 
 ### Objectives
 
-Build the Android-first patient experience on existing Patient APIs; close approved backend gaps first (PM-1), then ship the mobile foundation (PM-2) before product journeys.
+Build the Android-first patient experience on existing Patient APIs; close approved backend gaps first (PM-1), ship the mobile foundation (PM-2), then authentication and profile (PM-3).
 
 ### Screens (by milestone)
 
 - PM-2: shell, secure tokens, typed client (**delivered**)
-- PM-3: register / confirm-email / login / logout / profile
+- PM-3: register / confirm-email / login / logout / profile (**delivered**)
 - PM-4: clinic browse + code enroll / doctors / slots
 - PM-5: book appointment (`Requested`)
 - PM-6: my appointments / cancel / reschedule (2-hour cutoff)

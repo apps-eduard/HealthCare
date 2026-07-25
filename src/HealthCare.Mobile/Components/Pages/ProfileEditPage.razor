@@ -1,0 +1,231 @@
+@page "/profile/edit"
+@inject IPatientProfileService Profiles
+@inject NavigationManager Nav
+@inject ILogger<ProfileEditPage> Logger
+
+<h1>Edit profile</h1>
+<p class="lede">Update your demographic and contact details. Changes use optimistic concurrency.</p>
+
+@if (_loading)
+{
+    <LoadingState Message="Loading profile…" />
+}
+else if (_loadProblem is not null && _model is null)
+{
+    @if (_loadProblem.Kind is ApiErrorKind.Network or ApiErrorKind.Timeout)
+    {
+        <OfflineState Message="@_loadProblem.UserMessage" OnRetry="LoadAsync" />
+    }
+    else if (_loadProblem.Kind == ApiErrorKind.Unauthorized)
+    {
+        <SessionExpiredState SignInHref="@PatientRoutes.SignIn" />
+    }
+    else
+    {
+        <ErrorState Problem="@_loadProblem" OnRetry="LoadAsync" />
+    }
+}
+else if (_model is not null)
+{
+    @if (_saved)
+    {
+        <div class="state-panel state-ok" role="status">
+            <h2>Profile updated</h2>
+            <p>Your changes were saved.</p>
+        </div>
+    }
+
+    @if (_conflict)
+    {
+        <div class="state-panel state-error" role="alert">
+            <h2>Profile changed</h2>
+            <p>Your profile was updated elsewhere. Reload the latest values, then review your edits before saving again.</p>
+            <button type="button" class="btn" disabled="@_busy" @onclick="ReloadKeepingEditsAsync">Reload latest profile</button>
+        </div>
+    }
+
+    @if (_fieldErrors.Count > 0)
+    {
+        <FormValidationSummary Errors="_fieldErrors.SelectMany(kv => kv.Value).ToList()" />
+    }
+
+    @if (_saveProblem is not null && !_conflict)
+    {
+        @if (_saveProblem.Kind is ApiErrorKind.Network or ApiErrorKind.Timeout)
+        {
+            <OfflineState Message="@_saveProblem.UserMessage" />
+        }
+        else if (_saveProblem.ValidationErrors is { Count: > 0 } validation)
+        {
+            <FormValidationSummary Errors="validation.SelectMany(kv => kv.Value).ToList()" />
+        }
+        else
+        {
+            <ErrorState Problem="@_saveProblem" />
+        }
+    }
+
+    <form @onsubmit="SaveAsync" @onsubmit:preventDefault>
+        <div class="field">
+            <label for="firstName">First name</label>
+            <InputText id="firstName" @bind-Value="_model.FirstName" autocomplete="given-name" />
+        </div>
+        <div class="field">
+            <label for="middleName">Middle name</label>
+            <InputText id="middleName" @bind-Value="_model.MiddleName" autocomplete="additional-name" />
+        </div>
+        <div class="field">
+            <label for="lastName">Last name</label>
+            <InputText id="lastName" @bind-Value="_model.LastName" autocomplete="family-name" />
+        </div>
+        <div class="field">
+            <label for="dateOfBirth">Date of birth</label>
+            <InputDate id="dateOfBirth" @bind-Value="_dateOfBirth" />
+        </div>
+        <div class="field">
+            <label for="gender">Gender</label>
+            <InputText id="gender" @bind-Value="_model.Gender" />
+        </div>
+        <div class="field">
+            <label for="mobileNumber">Mobile number</label>
+            <InputText id="mobileNumber" @bind-Value="_model.MobileNumber" autocomplete="tel" inputmode="tel" />
+        </div>
+        <div class="field">
+            <label for="preferredLanguage">Preferred language</label>
+            <InputText id="preferredLanguage" @bind-Value="_model.PreferredLanguage" />
+        </div>
+        <div class="field">
+            <label for="address">Address</label>
+            <InputTextArea id="address" @bind-Value="_model.Address" />
+        </div>
+        <div class="field">
+            <label for="emergencyContact">Emergency contact</label>
+            <InputText id="emergencyContact" @bind-Value="_model.EmergencyContact" />
+        </div>
+        <div class="actions">
+            <button class="btn" type="submit" disabled="@_busy">@(_busy ? "Saving…" : "Save changes")</button>
+            <a class="btn btn-secondary" href="@PatientRoutes.Profile">Cancel</a>
+        </div>
+    </form>
+}
+
+@code {
+    private PatientProfileEditModel? _model;
+    private PatientProfileEditModel? _pendingEdits;
+    private DateTime? _dateOfBirth;
+    private int _expectedVersion;
+    private bool _loading = true;
+    private bool _busy;
+    private bool _saved;
+    private bool _conflict;
+    private ApiProblem? _loadProblem;
+    private ApiProblem? _saveProblem;
+    private IReadOnlyDictionary<string, string[]> _fieldErrors = new Dictionary<string, string[]>();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _loadProblem = null;
+        _saved = false;
+        _conflict = false;
+        StateHasChanged();
+
+        var result = await Profiles.GetAsync();
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _loadProblem = result.Error;
+            _model = null;
+            _loading = false;
+            return;
+        }
+
+        ApplyProfile(result.Value, preserveEdits: false);
+        _loading = false;
+    }
+
+    private async Task ReloadKeepingEditsAsync()
+    {
+        _busy = true;
+        _pendingEdits = _model is null
+            ? null
+            : new PatientProfileEditModel
+            {
+                FirstName = _model.FirstName,
+                MiddleName = _model.MiddleName,
+                LastName = _model.LastName,
+                DateOfBirth = _model.DateOfBirth,
+                Gender = _model.Gender,
+                MobileNumber = _model.MobileNumber,
+                PreferredLanguage = _model.PreferredLanguage,
+                Address = _model.Address,
+                EmergencyContact = _model.EmergencyContact,
+            };
+
+        var result = await Profiles.GetAsync();
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _saveProblem = result.Error;
+            _busy = false;
+            return;
+        }
+
+        ApplyProfile(result.Value, preserveEdits: true);
+        _conflict = false;
+        _saveProblem = null;
+        _busy = false;
+    }
+
+    private void ApplyProfile(PatientProfileResponse profile, bool preserveEdits)
+    {
+        _expectedVersion = profile.Version;
+        if (preserveEdits && _pendingEdits is not null)
+        {
+            _model = _pendingEdits;
+            _dateOfBirth = _pendingEdits.DateOfBirth?.ToDateTime(TimeOnly.MinValue);
+        }
+        else
+        {
+            _model = PatientProfileEditModel.FromResponse(profile);
+            _dateOfBirth = profile.DateOfBirth?.ToDateTime(TimeOnly.MinValue);
+        }
+
+        _pendingEdits = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_busy || _model is null)
+        {
+            return;
+        }
+
+        _saved = false;
+        _conflict = false;
+        _saveProblem = null;
+        _model.DateOfBirth = _dateOfBirth is null ? null : DateOnly.FromDateTime(_dateOfBirth.Value);
+        _fieldErrors = PatientFormValidators.ValidateProfileEdit(_model);
+        if (_fieldErrors.Count > 0)
+        {
+            return;
+        }
+
+        _busy = true;
+        Logger.LogInformation("Patient profile update submitted.");
+
+        var request = PatientFormValidators.ToUpdateRequest(_model, _expectedVersion);
+        var result = await Profiles.UpdateAsync(request);
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _saveProblem = result.Error;
+            _conflict = ProfileConcurrencyUx.IsConcurrencyConflict(result.Error);
+            _busy = false;
+            return;
+        }
+
+        ApplyProfile(result.Value, preserveEdits: false);
+        _saved = true;
+        _busy = false;
+    }
+}

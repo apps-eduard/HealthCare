@@ -11,7 +11,7 @@ Authoritative design documents:
 - [Organization Admin MVP scope](Docs/mvp-organization-admin-scope.md)
 - [Clinic Admin MVP scope](Docs/mvp-clinic-admin-scope.md) *(approved — **CA-1–CA-10 complete**)*
 - [Doctor MVP scope](Docs/mvp-doctor-scope.md) *(approved — **complete**; DR-8 skipped)*
-- [Patient MVP scope](Docs/mvp-patient-scope.md) *(approved — **PM-0 + PM-1 + PM-2**; PM-3…PM-8 not started)*
+- [Patient MVP scope](Docs/mvp-patient-scope.md) *(approved — **PM-0…PM-3**; PM-4…PM-8 not started)*
 
 ## Prerequisites
 
@@ -133,7 +133,7 @@ HealthCare/
 ├── src/
 │   ├── HealthCare.Api/              # ASP.NET Core Web API host
 │   ├── HealthCare.Web/              # Staff Blazor + Ant Design web app
-│   ├── HealthCare.Mobile/           # Patient MAUI Blazor Hybrid (PM-2 foundation)
+│   ├── HealthCare.Mobile/           # Patient MAUI Blazor Hybrid (PM-2/PM-3: foundation + auth/profile)
 │   ├── HealthCare.Mobile.Core/      # Mobile foundation services (testable)
 │   ├── HealthCare.Domain/           # Domain entities by module
 │   ├── HealthCare.Application/      # Use cases, validators, DI

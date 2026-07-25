@@ -29,6 +29,12 @@ public sealed class AuthSession
 
     public bool HasLinkedPatient => CurrentUser?.HasLinkedPatient == true && CurrentUser.PatientId is not null;
 
+    /// <summary>
+    /// Tokens present and <c>/auth/me</c> confirmed an eligible Patient account.
+    /// </summary>
+    public bool IsPatientReady => IsAuthenticated && CurrentUser is { } user
+        && PatientIdentityRules.IsEligiblePatientAccount(user);
+
     public static AuthSession Anonymous { get; } = new();
 
     public static AuthSession FromTokens(AuthTokenResponse tokens, CurrentUserResponse? user = null) =>
@@ -49,6 +55,8 @@ public interface IAuthSessionService
     AuthSession Current { get; }
 
     bool IsAuthenticated { get; }
+
+    bool IsPatientReady { get; }
 
     Task InitializeAsync(CancellationToken cancellationToken = default);
 

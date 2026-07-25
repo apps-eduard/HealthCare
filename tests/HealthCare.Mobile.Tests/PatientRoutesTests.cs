@@ -8,10 +8,12 @@ public sealed class PatientRoutesTests
     [Theory]
     [InlineData("/home", true)]
     [InlineData("/profile", true)]
+    [InlineData("/profile/edit", true)]
     [InlineData("/clinics", true)]
     [InlineData("/appointments", true)]
     [InlineData("/sign-in", false)]
     [InlineData("/register", false)]
+    [InlineData("/confirm-email", false)]
     [InlineData("/connectivity", false)]
     [InlineData("/", false)]
     public void RequiresAuthentication_Matches_Foundation_Routes(string path, bool required)

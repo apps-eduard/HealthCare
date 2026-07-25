@@ -558,7 +558,7 @@ When added, require:
 
 ## 11. Mobile application security
 
-- Use platform secure storage for tokens (`HealthCare.Mobile` / PM-2).
+- Use platform secure storage for tokens (`HealthCare.Mobile` / PM-2+).
 - Do not hardcode API secrets or production base URLs with credentials.
 - Do not include privileged service credentials in the app.
 - Validate TLS certificates normally.
@@ -567,6 +567,7 @@ When added, require:
 - Avoid screenshots containing sensitive data where platform controls are practical.
 - Clear sensitive local state on logout.
 - Do not trust JWT claims alone for Patient identity — call the API (`/auth/me`, patient endpoints).
+- PM-3: never log passwords, tokens, registration bodies, or full profile payloads; map auth error codes to safe UI messages.
 
 ---
 

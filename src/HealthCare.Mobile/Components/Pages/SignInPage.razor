@@ -1,76 +1,107 @@
 @page "/sign-in"
-@inject IHealthCareApiClient Api
-@inject IAuthSessionService Auth
+@inject IPatientAuthenticationService AuthService
 @inject NavigationManager Nav
 @inject ILogger<SignInPage> Logger
 
 <h1>Sign in</h1>
-<p class="lede">
-    Development-only connectivity for the PM-2 foundation. Full registration and email-confirmation UX ships in PM-3.
-</p>
+<p class="lede">Sign in with your Patient account email and password.</p>
+
+@if (_fieldErrors.Count > 0)
+{
+    <FormValidationSummary Errors="_fieldErrors.SelectMany(kv => kv.Value).ToList()" />
+}
 
 @if (_problem is not null)
 {
-    <ErrorState Problem="@_problem" />
+    @if (_problem.Kind is ApiErrorKind.Network or ApiErrorKind.Timeout)
+    {
+        <OfflineState Message="@_problem.UserMessage" />
+    }
+    else if (string.Equals(_problem.ErrorCode, AuthErrorCodes.EmailNotConfirmed, StringComparison.Ordinal))
+    {
+        <ErrorState Title="Email not confirmed" Message="@_problem.UserMessage" />
+        <p class="hint">
+            <a href="@($"{PatientRoutes.ConfirmEmail}?email={Uri.EscapeDataString(_email)}")">Confirm email</a>
+            or
+            <a href="@PatientRoutes.Register">create an account</a>
+        </p>
+    }
+    else
+    {
+        <ErrorState Problem="@_problem" />
+    }
 }
 
-<EditForm Model="_model" OnValidSubmit="SubmitAsync">
-    <DataAnnotationsValidator />
-    <ValidationSummary />
+<form @onsubmit="SubmitAsync" @onsubmit:preventDefault>
     <div class="field">
         <label for="email">Email</label>
-        <InputText id="email" @bind-Value="_model.Email" autocomplete="username" />
+        <InputText id="email" @bind-Value="_email" autocomplete="username" inputmode="email" />
     </div>
     <div class="field">
         <label for="password">Password</label>
-        <InputText id="password" @bind-Value="_model.Password" type="password" autocomplete="current-password" />
+        <div class="password-row">
+            <InputText id="password" @bind-Value="_password" type="@(_showPassword ? "text" : "password")" autocomplete="current-password" />
+            <button type="button" class="btn btn-secondary btn-inline" @onclick="() => _showPassword = !_showPassword">
+                @(_showPassword ? "Hide" : "Show")
+            </button>
+        </div>
     </div>
     <button class="btn" type="submit" disabled="@_busy">@(_busy ? "Signing in…" : "Sign in")</button>
-</EditForm>
+</form>
 
-<p class="hint"><a href="@PatientRoutes.Connectivity">Back to connectivity</a></p>
+<p class="hint">
+    <a href="@PatientRoutes.Register">Create a Patient account</a>
+    ·
+    <a href="@PatientRoutes.Connectivity">Connection status</a>
+</p>
 
 @code {
-    private readonly SignInModel _model = new();
+    private string _email = string.Empty;
+    private string _password = string.Empty;
+    private bool _showPassword;
     private bool _busy;
     private ApiProblem? _problem;
+    private IReadOnlyDictionary<string, string[]> _fieldErrors = new Dictionary<string, string[]>();
 
     private async Task SubmitAsync()
     {
-        _busy = true;
-        _problem = null;
-        Logger.LogInformation("Dev sign-in attempted.");
-
-        var result = await Api.LoginAsync(new LoginRequest
+        if (_busy)
         {
-            Email = _model.Email.Trim(),
-            Password = _model.Password,
-        });
-
-        if (!result.IsSuccess || result.Value is null)
-        {
-            _problem = result.Error ?? new ApiProblem { Kind = ApiErrorKind.Unknown, Title = "Sign-in failed" };
-            _busy = false;
             return;
         }
 
-        var me = await Api.GetMeAsync();
-        if (me.IsSuccess && me.Value is not null)
+        _problem = null;
+        _fieldErrors = PatientFormValidators.ValidateSignIn(_email, _password);
+        if (_fieldErrors.Count > 0)
         {
-            await Auth.UpdateCurrentUserAsync(me.Value);
+            return;
+        }
+
+        _busy = true;
+        Logger.LogInformation("Patient sign-in submitted.");
+
+        var result = await AuthService.SignInAsync(new LoginRequest
+        {
+            Email = _email.Trim(),
+            Password = _password,
+        });
+
+        _password = string.Empty;
+
+        switch (result.Status)
+        {
+            case SignInStatus.Success:
+                Nav.NavigateTo(PatientRoutes.Home);
+                break;
+            case SignInStatus.OfflineAfterLogin:
+                _problem = result.Problem;
+                break;
+            case SignInStatus.LinkageRejected:
+            case SignInStatus.Failed:
+                _problem = result.Problem;
+                break;
         }
 
         _busy = false;
-        Nav.NavigateTo(PatientRoutes.Home);
-    }
-
-    private sealed class SignInModel
-    {
-        [System.ComponentModel.DataAnnotations.Required]
-        [System.ComponentModel.DataAnnotations.EmailAddress]
-        public string Email { get; set; } = string.Empty;
-
-        [System.ComponentModel.DataAnnotations.Required]
-        public string Password { get; set; } = string.Empty;
     }
 }

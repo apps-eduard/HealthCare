@@ -20,9 +20,17 @@
     protected override void OnParametersSet()
     {
         var path = PatientRoutes.Normalize(Nav.ToBaseRelativePath(Nav.Uri));
-        if (PatientRoutes.RequiresAuthentication(path) && !Auth.IsAuthenticated)
+
+        if (PatientRoutes.RequiresAuthentication(path) && !Auth.IsPatientReady)
         {
             Nav.NavigateTo(PatientRoutes.SignIn);
+            _ready = false;
+            return;
+        }
+
+        if (PatientRoutes.IsGuestOnly(path) && Auth.IsPatientReady)
+        {
+            Nav.NavigateTo(PatientRoutes.Home);
             _ready = false;
             return;
         }

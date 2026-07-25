@@ -1,12 +1,12 @@
 # MVP Patient Scope
 
 **Status:** **Approved** by product owner (2026-07-25). Authoritative for the **Patient Mobile MVP**.  
-**Implementation:** **PM-0 + PM-1 + PM-2 delivered** (2026-07-25). PM-3…PM-8 not started.  
+**Implementation:** **PM-0 + PM-1 + PM-2 + PM-3 delivered** (2026-07-25). PM-4…PM-8 not started.  
 **Authority:** This document overrides informal Patient notes in `Docs/security.md` §4.7 / §5.1, `Docs/architecture.md` §10.1 / §12.2, and `Docs/development-plan.md` Phase 11 where they conflict. Keep matrix and security cross-links in sync when coding.  
 **Related:** `Docs/mvp-organization-admin-scope.md`, `Docs/mvp-clinic-admin-scope.md`, `Docs/mvp-doctor-scope.md`, `Docs/authorization-matrix.md`, `Docs/security.md` §4.7 / patient self-scope.  
 **Do not** copy staff Web capabilities into the Patient app.  
 **Do not** rebuild existing Patient APIs that already match this contract.  
-**Do not** begin PM-3 (full auth/profile UX) until scheduled.
+**Do not** begin PM-4 (clinic/Doctor discovery) until scheduled.
 
 Verified baseline when approved (2026-07-25):
 
@@ -444,7 +444,7 @@ Do not treat permission-catalog-only tests as sufficient for Patient product DoD
 | **PM-0** | Patient MVP scope and contract | Docs | **Delivered** (2026-07-25) |
 | **PM-1** | Patient contract and backend gap hardening | Medium | **Delivered** (2026-07-25) |
 | **PM-2** | Patient mobile foundation (MAUI) | Medium | **Delivered** (2026-07-25) |
-| **PM-3** | Mobile authentication and profile | Medium | Not started |
+| **PM-3** | Mobile authentication and profile | Medium | **Delivered** (2026-07-25) |
 | **PM-4** | Clinic and Doctor discovery | Medium | Not started |
 | **PM-5** | Appointment booking (mobile) | Medium | Not started |
 | **PM-6** | My Appointments, cancel, reschedule | Medium | Not started |
@@ -472,9 +472,14 @@ Do not treat permission-catalog-only tests as sufficient for Patient product DoD
 
 ### PM-3 — Mobile authentication and profile
 
-- Register, confirm-email handling, login, refresh, logout  
-- Current-user resolution  
-- View/update Patient profile  
+**Delivered (2026-07-25).** See `src/HealthCare.Mobile/README.md`.
+
+- Register, confirm-email handling (incl. resend), login, refresh, logout  
+- Startup session restore with offline vs invalid-session distinction  
+- `/auth/me` Patient linkage validation before home access  
+- View/update Patient profile with `ExpectedVersion` concurrency UX  
+- Dev-only PM-2 sign-in removed  
+- **Known limitation:** OS App Links for confirmation emails not registered; browser/manual confirm supported  
 
 ### PM-4 — Clinic and Doctor discovery
 
@@ -517,7 +522,8 @@ Do not treat permission-catalog-only tests as sufficient for Patient product DoD
 - [x] Scope approved by product owner (PM-0, 2026-07-25)  
 - [x] PM-1 backend gap hardening complete  
 - [x] PM-2 mobile foundation complete  
-- [ ] PM-3 … PM-8 complete  
+- [x] PM-3 authentication and profile complete  
+- [ ] PM-4 … PM-8 complete  
 - [x] Backend gaps closed for PM-1 (404 concealment, 2-hour cutoff, DTO review)  
 - [ ] Android MAUI app supports full Patient MVP flow  
 - [ ] Patient security matrix green  
@@ -572,10 +578,10 @@ PM-0 alone does **not** complete the Patient MVP. PM-1 does **not** complete mob
 
 | Capability | Existing implementation | Approved Patient MVP target | Gap | Planned milestone |
 |------------|-------------------------|-----------------------------|-----|-------------------|
-| Registration | `POST /auth/register/patient` + confirm | Keep | None | — (mobile UX PM-3) |
-| Login | Shared `POST /auth/login` | Email/password MVP | Google/OTP deferred | PM-3 mobile |
-| Account linkage | Unique UserId; linker; strip unlinked | Keep | None material | Verified PM-1 |
-| Profile | `GET/PATCH /patients/me` | Keep fields + concurrency | None | PM-3 mobile |
+| Registration | `POST /auth/register/patient` + confirm | Keep | Mobile UX | **PM-3 delivered** |
+| Login | Shared `POST /auth/login` | Email/password MVP | Google/OTP deferred | **PM-3 delivered** |
+| Account linkage | Unique UserId; linker; strip unlinked | Keep | None material | Verified PM-1 / enforced mobile PM-3 |
+| Profile | `GET/PATCH /patients/me` | Keep fields + concurrency | None | **PM-3 delivered** |
 | Clinic-code enrollment | `POST /patients/me/clinics/register` | Keep alternate path | None | PM-4 mobile |
 | Clinic browse | Missing (staff directory denies Patient) | Authenticated browse/search | **API missing** | PM-4 |
 | Doctor discovery | Doctors by clinic code | Keep patient-safe list | None material | PM-4 |
@@ -587,7 +593,7 @@ PM-0 alone does **not** complete the Patient MVP. PM-1 does **not** complete mob
 | Clinical visibility | Notes staff-only | Remain denied | None (intentional) | — |
 | Notifications | Hangfire infra / NoOp prod | API refresh only | Not a Patient feature yet | Deferred |
 | Cross-patient profile | **404** | **404** | Closed PM-1 | — |
-| Mobile application | MAUI Blazor Hybrid Android foundation (`HealthCare.Mobile` + `.Core`) | Full Patient journeys | Auth/profile/discovery/booking UX | PM-3…PM-6 |
+| Mobile application | Auth + profile on MAUI Android (`HealthCare.Mobile`) | Discovery/booking UX | Clinics/appointments | PM-4…PM-6 |
 | Patient E2E | Denial/seed only | Full Patient pack | **Missing** | PM-8 |
 
 ---
@@ -599,3 +605,4 @@ PM-0 alone does **not** complete the Patient MVP. PM-1 does **not** complete mob
 | 2026-07-25 | **PM-0:** Initial authoritative Patient Mobile MVP scope from API audit + product-owner decisions |
 | 2026-07-25 | **PM-1 delivered:** foreign patient profile `404`; 2-hour cancel/reschedule cutoff; AppointmentResponse retained with patient display scrub; authz-before-conflict tests |
 | 2026-07-25 | **PM-2 delivered:** MAUI Blazor Hybrid Android-first foundation; typed API client; secure storage; auth-state; navigation shell; connectivity smoke; foundation unit tests |
+| 2026-07-25 | **PM-3 delivered:** Patient registration, email confirmation UX, login + `/auth/me` linkage, session restore, logout, profile view/edit + concurrency UX |

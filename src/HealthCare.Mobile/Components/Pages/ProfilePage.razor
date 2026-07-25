@@ -1,2 +1,111 @@
 @page "/profile"
-<PlaceholderState Title="Profile" Message="Patient profile view/update is planned for PM-3." />
+@inject IPatientProfileService Profiles
+@inject IAuthSessionService Auth
+@inject IPatientAuthenticationService AuthService
+@inject NavigationManager Nav
+@inject ILogger<ProfilePage> Logger
+
+<h1>Profile</h1>
+
+@if (_loading)
+{
+    <LoadingState Message="Loading profile…" />
+}
+else if (_problem is not null)
+{
+    @if (_problem.Kind is ApiErrorKind.Network or ApiErrorKind.Timeout)
+    {
+        <OfflineState Message="@_problem.UserMessage" OnRetry="LoadAsync" />
+    }
+    else if (_problem.Kind == ApiErrorKind.Unauthorized)
+    {
+        <SessionExpiredState SignInHref="@PatientRoutes.SignIn" />
+    }
+    else
+    {
+        <ErrorState Problem="@_problem" OnRetry="LoadAsync" />
+    }
+}
+else if (_profile is not null)
+{
+    <dl class="meta profile-meta">
+        <dt>Email</dt>
+        <dd>@(Auth.Current.CurrentUser?.Email ?? "—")</dd>
+        <dt>First name</dt>
+        <dd>@_profile.FirstName</dd>
+        <dt>Middle name</dt>
+        <dd>@(string.IsNullOrWhiteSpace(_profile.MiddleName) ? "—" : _profile.MiddleName)</dd>
+        <dt>Last name</dt>
+        <dd>@_profile.LastName</dd>
+        <dt>Date of birth</dt>
+        <dd>@(_profile.DateOfBirth?.ToString("yyyy-MM-dd") ?? "—")</dd>
+        <dt>Gender</dt>
+        <dd>@(string.IsNullOrWhiteSpace(_profile.Gender) ? "—" : _profile.Gender)</dd>
+        <dt>Mobile</dt>
+        <dd>@(string.IsNullOrWhiteSpace(_profile.MobileNumber) ? "—" : _profile.MobileNumber)</dd>
+        <dt>Preferred language</dt>
+        <dd>@(string.IsNullOrWhiteSpace(_profile.PreferredLanguage) ? "—" : _profile.PreferredLanguage)</dd>
+        <dt>Address</dt>
+        <dd>@(string.IsNullOrWhiteSpace(_profile.Address) ? "—" : _profile.Address)</dd>
+        <dt>Emergency contact</dt>
+        <dd>@(string.IsNullOrWhiteSpace(_profile.EmergencyContact) ? "—" : _profile.EmergencyContact)</dd>
+        <dt>Account status</dt>
+        <dd>@(_profile.IsActive ? "Active" : "Inactive")</dd>
+    </dl>
+
+    <div class="actions">
+        <a class="btn" href="@PatientRoutes.ProfileEdit">Edit profile</a>
+        <a class="btn btn-secondary" href="@PatientRoutes.Home">Home</a>
+        @if (!_confirmLogout)
+        {
+            <button type="button" class="btn btn-secondary" @onclick="() => _confirmLogout = true">Sign out</button>
+        }
+        else
+        {
+            <button type="button" class="btn" disabled="@_busy" @onclick="SignOutAsync">Confirm sign out</button>
+            <button type="button" class="btn btn-secondary" @onclick="() => _confirmLogout = false">Cancel</button>
+        }
+    </div>
+}
+
+@code {
+    private PatientProfileResponse? _profile;
+    private ApiProblem? _problem;
+    private bool _loading = true;
+    private bool _confirmLogout;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _problem = null;
+        StateHasChanged();
+
+        var result = await Profiles.GetAsync();
+        if (result.IsSuccess)
+        {
+            _profile = result.Value;
+        }
+        else
+        {
+            _problem = result.Error;
+        }
+
+        _loading = false;
+    }
+
+    private async Task SignOutAsync()
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        Logger.LogInformation("Patient sign-out confirmed from profile.");
+        await AuthService.SignOutAsync();
+        Nav.NavigateTo(PatientRoutes.SignIn, forceLoad: true);
+    }
+}

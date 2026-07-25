@@ -1,2 +1,119 @@
 @page "/register"
-<PlaceholderState Title="Register" Message="Patient registration UI is planned for PM-3." />
+@inject IPatientAuthenticationService AuthService
+@inject NavigationManager Nav
+@inject ILogger<RegisterPage> Logger
+
+<h1>Create account</h1>
+<p class="lede">Register a Patient account. Email confirmation is required before you can sign in.</p>
+
+@if (_fieldErrors.Count > 0)
+{
+    <FormValidationSummary Errors="_fieldErrors.SelectMany(kv => kv.Value).ToList()" />
+}
+
+@if (_problem is not null)
+{
+    @if (_problem.Kind is ApiErrorKind.Network or ApiErrorKind.Timeout)
+    {
+        <OfflineState Message="@_problem.UserMessage" />
+    }
+    else if (_problem.ValidationErrors is { Count: > 0 } validation)
+    {
+        <FormValidationSummary Errors="validation.SelectMany(kv => kv.Value).ToList()" />
+    }
+    else
+    {
+        <ErrorState Problem="@_problem" />
+    }
+}
+
+<form @onsubmit="SubmitAsync" @onsubmit:preventDefault>
+    <div class="field">
+        <label for="email">Email</label>
+        <InputText id="email" @bind-Value="_email" autocomplete="username" inputmode="email" />
+    </div>
+    <div class="field">
+        <label for="password">Password</label>
+        <InputText id="password" @bind-Value="_password" type="password" autocomplete="new-password" />
+        <span class="field-hint">At least 8 characters, with upper, lower, digit, and symbol.</span>
+    </div>
+    <div class="field">
+        <label for="confirmPassword">Confirm password</label>
+        <InputText id="confirmPassword" @bind-Value="_confirmPassword" type="password" autocomplete="new-password" />
+    </div>
+    <div class="field">
+        <label for="firstName">First name</label>
+        <InputText id="firstName" @bind-Value="_firstName" autocomplete="given-name" />
+    </div>
+    <div class="field">
+        <label for="lastName">Last name</label>
+        <InputText id="lastName" @bind-Value="_lastName" autocomplete="family-name" />
+    </div>
+    <div class="field">
+        <label for="dateOfBirth">Date of birth (optional)</label>
+        <InputDate id="dateOfBirth" @bind-Value="_dateOfBirth" />
+    </div>
+    <div class="field">
+        <label for="phoneNumber">Mobile number (optional)</label>
+        <InputText id="phoneNumber" @bind-Value="_phoneNumber" autocomplete="tel" inputmode="tel" />
+    </div>
+    <button class="btn" type="submit" disabled="@_busy">@(_busy ? "Creating account…" : "Create account")</button>
+</form>
+
+<p class="hint"><a href="@PatientRoutes.SignIn">Already have an account? Sign in</a></p>
+
+@code {
+    private string _email = string.Empty;
+    private string _password = string.Empty;
+    private string _confirmPassword = string.Empty;
+    private string _firstName = string.Empty;
+    private string _lastName = string.Empty;
+    private DateTime? _dateOfBirth;
+    private string? _phoneNumber;
+    private bool _busy;
+    private ApiProblem? _problem;
+    private IReadOnlyDictionary<string, string[]> _fieldErrors = new Dictionary<string, string[]>();
+
+    private async Task SubmitAsync()
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _problem = null;
+        var request = new PatientRegisterRequest
+        {
+            Email = _email.Trim(),
+            Password = _password,
+            ConfirmPassword = _confirmPassword,
+            FirstName = _firstName.Trim(),
+            LastName = _lastName.Trim(),
+            DateOfBirth = _dateOfBirth is null ? null : DateOnly.FromDateTime(_dateOfBirth.Value),
+            PhoneNumber = string.IsNullOrWhiteSpace(_phoneNumber) ? null : _phoneNumber.Trim(),
+        };
+
+        _fieldErrors = PatientFormValidators.ValidateRegistration(request);
+        if (_fieldErrors.Count > 0)
+        {
+            return;
+        }
+
+        _busy = true;
+        Logger.LogInformation("Patient registration submitted.");
+
+        var result = await AuthService.RegisterAsync(request);
+        _password = string.Empty;
+        _confirmPassword = string.Empty;
+
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _problem = result.Error ?? new ApiProblem { Kind = ApiErrorKind.Unknown, Title = "Registration failed" };
+            _busy = false;
+            return;
+        }
+
+        var email = Uri.EscapeDataString(_email.Trim());
+        Nav.NavigateTo($"{PatientRoutes.RegistrationComplete}?email={email}");
+    }
+}

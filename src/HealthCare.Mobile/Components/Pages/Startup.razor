@@ -1,19 +1,44 @@
 @page "/"
+@inject IPatientAuthenticationService AuthService
 @inject NavigationManager Nav
-@inject IAuthSessionService Auth
+@inject ILogger<Startup> Logger
 
 <LoadingState Message="Starting…" />
 
+@if (_offline)
+{
+    <OfflineState Message="@_offlineMessage" OnRetry="RunAsync" />
+    <p class="hint"><a href="@PatientRoutes.SignIn">Continue to sign in</a></p>
+}
+
 @code {
-    protected override void OnInitialized()
+    private bool _offline;
+    private string? _offlineMessage;
+
+    protected override async Task OnInitializedAsync() => await RunAsync();
+
+    private async Task RunAsync()
     {
-        if (Auth.IsAuthenticated)
+        _offline = false;
+        _offlineMessage = null;
+        StateHasChanged();
+
+        Logger.LogInformation("Startup session restore began.");
+        var result = await AuthService.RestoreSessionAsync();
+
+        switch (result.Status)
         {
-            Nav.NavigateTo(PatientRoutes.Home);
-        }
-        else
-        {
-            Nav.NavigateTo(PatientRoutes.Connectivity);
+            case SessionRestoreStatus.AuthenticatedPatient:
+                Nav.NavigateTo(PatientRoutes.Home);
+                break;
+            case SessionRestoreStatus.OfflineWithTokens:
+                _offline = true;
+                _offlineMessage = result.Problem?.UserMessage
+                    ?? "Unable to reach the server to verify your session.";
+                break;
+            default:
+                Nav.NavigateTo(PatientRoutes.SignIn);
+                break;
         }
     }
 }

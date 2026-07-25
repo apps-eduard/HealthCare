@@ -40,8 +40,8 @@ else if (_health is not null)
 
 <div class="actions">
     <button type="button" class="btn" disabled="@_busy" @onclick="RunCheckAsync">Check again</button>
-    <a class="btn btn-secondary" href="@PatientRoutes.SignIn">Dev sign-in</a>
-    @if (Auth.IsAuthenticated)
+    <a class="btn btn-secondary" href="@PatientRoutes.SignIn">Sign in</a>
+    @if (Auth.IsPatientReady)
     {
         <a class="btn btn-secondary" href="@PatientRoutes.Home">Home</a>
     }

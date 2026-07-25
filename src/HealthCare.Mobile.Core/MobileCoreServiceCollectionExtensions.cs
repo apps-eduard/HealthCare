@@ -1,6 +1,7 @@
 using HealthCare.Mobile.Core.Api;
 using HealthCare.Mobile.Core.Authentication;
 using HealthCare.Mobile.Core.Configuration;
+using HealthCare.Mobile.Core.Patients;
 using HealthCare.Mobile.Core.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -27,6 +28,8 @@ public static class MobileCoreServiceCollectionExtensions
         services.TryAddSingleton<ITokenRefresher, TokenRefresher>();
         services.TryAddTransient<AuthenticatingHttpMessageHandler>();
         services.TryAddSingleton<IHealthCareApiClient, HealthCareApiClient>();
+        services.TryAddSingleton<IPatientAuthenticationService, PatientAuthenticationService>();
+        services.TryAddSingleton<IPatientProfileService, PatientProfileService>();
 
         services.AddHttpClient(MobileHttpClientNames.Anonymous, (sp, client) =>
         {
@@ -46,9 +49,6 @@ public static class MobileCoreServiceCollectionExtensions
         return services;
     }
 
-    /// <summary>
-    /// Registers a secure token store implementation (MAUI SecureStorage or test double).
-    /// </summary>
     public static IServiceCollection AddSecureTokenStore<TStore>(this IServiceCollection services)
         where TStore : class, ISecureTokenStore
     {

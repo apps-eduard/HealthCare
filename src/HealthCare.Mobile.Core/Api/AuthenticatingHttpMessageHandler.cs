@@ -107,7 +107,10 @@ public sealed class AuthenticatingHttpMessageHandler : DelegatingHandler
         var path = uri.AbsolutePath;
         return path.Contains("/api/v1/auth/login", StringComparison.OrdinalIgnoreCase)
                || path.Contains("/api/v1/auth/refresh", StringComparison.OrdinalIgnoreCase)
-               || path.Contains("/api/v1/auth/register", StringComparison.OrdinalIgnoreCase);
+               || path.Contains("/api/v1/auth/register", StringComparison.OrdinalIgnoreCase)
+               || path.Contains("/api/v1/auth/confirm-email", StringComparison.OrdinalIgnoreCase)
+               || path.Contains("/api/v1/auth/resend-confirmation", StringComparison.OrdinalIgnoreCase)
+               || path.Contains("/api/v1/auth/logout", StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task<HttpRequestMessage> CloneAsync(HttpRequestMessage request, CancellationToken cancellationToken)

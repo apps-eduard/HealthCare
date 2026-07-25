@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace HealthCare.Contracts.Patients;
 
 /// <summary>
@@ -37,6 +39,7 @@ public sealed class UpdatePatientProfileRequest
         }
     }
 
+    [JsonIgnore]
     public bool FirstNameSpecified => _firstNameSpecified;
 
     public string? MiddleName
@@ -49,6 +52,7 @@ public sealed class UpdatePatientProfileRequest
         }
     }
 
+    [JsonIgnore]
     public bool MiddleNameSpecified => _middleNameSpecified;
 
     public string? LastName
@@ -61,6 +65,7 @@ public sealed class UpdatePatientProfileRequest
         }
     }
 
+    [JsonIgnore]
     public bool LastNameSpecified => _lastNameSpecified;
 
     public DateOnly? DateOfBirth
@@ -73,6 +78,7 @@ public sealed class UpdatePatientProfileRequest
         }
     }
 
+    [JsonIgnore]
     public bool DateOfBirthSpecified => _dateOfBirthSpecified;
 
     public string? Gender
@@ -85,6 +91,7 @@ public sealed class UpdatePatientProfileRequest
         }
     }
 
+    [JsonIgnore]
     public bool GenderSpecified => _genderSpecified;
 
     public string? MobileNumber
@@ -97,6 +104,7 @@ public sealed class UpdatePatientProfileRequest
         }
     }
 
+    [JsonIgnore]
     public bool MobileNumberSpecified => _mobileNumberSpecified;
 
     public string? PreferredLanguage
@@ -109,6 +117,7 @@ public sealed class UpdatePatientProfileRequest
         }
     }
 
+    [JsonIgnore]
     public bool PreferredLanguageSpecified => _preferredLanguageSpecified;
 
     public string? Address
@@ -121,6 +130,7 @@ public sealed class UpdatePatientProfileRequest
         }
     }
 
+    [JsonIgnore]
     public bool AddressSpecified => _addressSpecified;
 
     public string? EmergencyContact
@@ -133,8 +143,10 @@ public sealed class UpdatePatientProfileRequest
         }
     }
 
+    [JsonIgnore]
     public bool EmergencyContactSpecified => _emergencyContactSpecified;
 
+    [JsonIgnore]
     public bool HasAnyEditableField =>
         FirstNameSpecified
         || MiddleNameSpecified

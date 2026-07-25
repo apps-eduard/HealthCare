@@ -1,33 +1,125 @@
 ﻿@page "/home"
 @inject IAuthSessionService Auth
-@inject IHealthCareApiClient Api
+@inject IPatientAuthenticationService AuthService
+@inject IPatientProfileService Profiles
 @inject NavigationManager Nav
+@inject ILogger<Home> Logger
 
 <h1>Home</h1>
-<p class="lede">Authenticated foundation shell. Patient journeys arrive in later milestones.</p>
 
-@if (Auth.Current.CurrentUser is { } user)
+@if (_loadingProfile)
 {
+    <LoadingState Message="Loading your profile…" />
+}
+else if (_profile is not null)
+{
+    <p class="lede">Welcome, <strong>@_displayName</strong>.</p>
     <dl class="meta">
         <dt>Email</dt>
-        <dd>@(user.Email ?? "—")</dd>
-        <dt>Linked patient</dt>
-        <dd>@(user.HasLinkedPatient ? "Yes" : "No")</dd>
+        <dd>@(Auth.Current.CurrentUser?.Email ?? "—")</dd>
+        <dt>Account</dt>
+        <dd>Patient</dd>
     </dl>
+
+    @if (_needsProfileCompletion)
+    {
+        <div class="state-panel" role="status">
+            <h2>Complete your profile</h2>
+            <p>Add contact details so clinics can reach you when needed.</p>
+            <a class="btn" href="@PatientRoutes.ProfileEdit">Update profile</a>
+        </div>
+    }
 }
-else
+else if (_problem is not null)
 {
-    <EmptyState Message="Session restored without /auth/me details yet." />
+    @if (_problem.Kind is ApiErrorKind.Network or ApiErrorKind.Timeout)
+    {
+        <OfflineState Message="@_problem.UserMessage" OnRetry="LoadAsync" />
+    }
+    else if (_problem.Kind == ApiErrorKind.Unauthorized)
+    {
+        <SessionExpiredState SignInHref="@PatientRoutes.SignIn" />
+    }
+    else
+    {
+        <ErrorState Problem="@_problem" OnRetry="LoadAsync" />
+    }
 }
 
+<section class="home-cards" aria-label="Coming soon">
+    <div class="placeholder-card">
+        <h2>Clinics</h2>
+        <p>Clinic browse and enrollment arrive in a later milestone.</p>
+    </div>
+    <div class="placeholder-card">
+        <h2>My Appointments</h2>
+        <p>Booking and appointment management arrive in a later milestone.</p>
+    </div>
+</section>
+
 <div class="actions">
-    <button type="button" class="btn btn-secondary" @onclick="SignOutAsync">Sign out</button>
+    <a class="btn" href="@PatientRoutes.Profile">Profile</a>
+    @if (!_confirmLogout)
+    {
+        <button type="button" class="btn btn-secondary" @onclick="() => _confirmLogout = true">Sign out</button>
+    }
+    else
+    {
+        <span class="hint">Sign out on this device?</span>
+        <button type="button" class="btn" disabled="@_busy" @onclick="SignOutAsync">Confirm sign out</button>
+        <button type="button" class="btn btn-secondary" @onclick="() => _confirmLogout = false">Cancel</button>
+    }
 </div>
 
 @code {
+    private PatientProfileResponse? _profile;
+    private ApiProblem? _problem;
+    private bool _loadingProfile = true;
+    private bool _confirmLogout;
+    private bool _busy;
+
+    private string _displayName =>
+        _profile is null
+            ? (Auth.Current.CurrentUser?.Email ?? "Patient")
+            : $"{_profile.FirstName} {_profile.LastName}".Trim();
+
+    private bool _needsProfileCompletion =>
+        _profile is not null
+        && (string.IsNullOrWhiteSpace(_profile.MobileNumber)
+            || string.IsNullOrWhiteSpace(_profile.PreferredLanguage)
+            || _profile.DateOfBirth is null);
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loadingProfile = true;
+        _problem = null;
+        StateHasChanged();
+
+        var result = await Profiles.GetAsync();
+        if (result.IsSuccess)
+        {
+            _profile = result.Value;
+        }
+        else
+        {
+            _problem = result.Error;
+        }
+
+        _loadingProfile = false;
+    }
+
     private async Task SignOutAsync()
     {
-        await Api.LogoutAsync();
-        Nav.NavigateTo(PatientRoutes.SignIn);
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        Logger.LogInformation("Patient sign-out confirmed.");
+        await AuthService.SignOutAsync();
+        Nav.NavigateTo(PatientRoutes.SignIn, forceLoad: true);
     }
 }

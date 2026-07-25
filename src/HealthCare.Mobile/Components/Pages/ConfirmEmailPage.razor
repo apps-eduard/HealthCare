@@ -1,0 +1,180 @@
+@page "/confirm-email"
+@inject IPatientAuthenticationService AuthService
+@inject NavigationManager Nav
+@inject ILogger<ConfirmEmailPage> Logger
+
+<h1>Confirm email</h1>
+<p class="lede">
+    Paste the confirmation token from your email, or open a confirmation link that includes email and token query parameters.
+</p>
+
+@if (_success)
+{
+    <div class="state-panel state-ok" role="status">
+        <h2>Email confirmed</h2>
+        <p>@_successMessage</p>
+    </div>
+    <div class="actions">
+        <a class="btn" href="@PatientRoutes.SignIn">Sign in</a>
+    </div>
+}
+else
+{
+    @if (_problem is not null)
+    {
+        <ErrorState Problem="@_problem" />
+    }
+
+    @if (_fieldErrors.Count > 0)
+    {
+        <FormValidationSummary Errors="_fieldErrors" />
+    }
+
+    <form @onsubmit="ConfirmAsync" @onsubmit:preventDefault>
+        <div class="field">
+            <label for="email">Email</label>
+            <InputText id="email" @bind-Value="_email" autocomplete="username" inputmode="email" />
+        </div>
+        <div class="field">
+            <label for="token">Confirmation token</label>
+            <InputText id="token" @bind-Value="_token" autocomplete="one-time-code" />
+        </div>
+        <button class="btn" type="submit" disabled="@_busy">@(_busy ? "Confirming…" : "Confirm email")</button>
+    </form>
+
+    <form class="resend-form" @onsubmit="ResendAsync" @onsubmit:preventDefault>
+        <h2 class="section-title">Resend confirmation</h2>
+        <p class="field-hint">Uses the email above. The API always returns a generic success message.</p>
+        <button class="btn btn-secondary" type="submit" disabled="@_busy">@(_busy ? "Sending…" : "Resend email")</button>
+        @if (!string.IsNullOrWhiteSpace(_resendMessage))
+        {
+            <p class="hint" role="status">@_resendMessage</p>
+        }
+    </form>
+
+    <p class="hint"><a href="@PatientRoutes.SignIn">Back to sign in</a></p>
+}
+
+@code {
+    private string _email = string.Empty;
+    private string _token = string.Empty;
+    private bool _busy;
+    private bool _success;
+    private string? _successMessage;
+    private string? _resendMessage;
+    private ApiProblem? _problem;
+    private List<string> _fieldErrors = [];
+
+    protected override void OnInitialized()
+    {
+        _email = TryGetQuery("email") ?? string.Empty;
+        _token = TryGetQuery("token") ?? string.Empty;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(_email) && !string.IsNullOrWhiteSpace(_token))
+        {
+            await ConfirmAsync();
+        }
+    }
+
+    private static string? TryGetQueryFrom(string uriString, string key)
+    {
+        if (!Uri.TryCreate(uriString, UriKind.Absolute, out var uri))
+        {
+            return null;
+        }
+
+        var query = uri.Query.TrimStart('?');
+        if (string.IsNullOrEmpty(query))
+        {
+            return null;
+        }
+
+        foreach (var part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var pair = part.Split('=', 2);
+            if (pair.Length == 2
+                && string.Equals(Uri.UnescapeDataString(pair[0]), key, StringComparison.OrdinalIgnoreCase))
+            {
+                return Uri.UnescapeDataString(pair[1].Replace('+', ' '));
+            }
+        }
+
+        return null;
+    }
+
+    private string? TryGetQuery(string key) => TryGetQueryFrom(Nav.Uri, key);
+
+    private async Task ConfirmAsync()
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _problem = null;
+        _fieldErrors = [];
+        if (string.IsNullOrWhiteSpace(_email) || string.IsNullOrWhiteSpace(_token))
+        {
+            _fieldErrors.Add("Email and confirmation token are required.");
+            return;
+        }
+
+        _busy = true;
+        Logger.LogInformation("Email confirmation submitted.");
+
+        var result = await AuthService.ConfirmEmailAsync(new ConfirmEmailRequest
+        {
+            Email = _email.Trim(),
+            Token = _token.Trim(),
+        });
+
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _problem = result.Error ?? new ApiProblem
+            {
+                Kind = ApiErrorKind.Unauthorized,
+                Title = "Confirmation failed",
+                ErrorCode = AuthErrorCodes.InvalidConfirmationToken,
+            };
+            _busy = false;
+            return;
+        }
+
+        _success = true;
+        _successMessage = string.IsNullOrWhiteSpace(result.Value.Message)
+            ? "Your email is confirmed. You can sign in."
+            : result.Value.Message;
+        _token = string.Empty;
+        _busy = false;
+    }
+
+    private async Task ResendAsync()
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _resendMessage = null;
+        _problem = null;
+        if (string.IsNullOrWhiteSpace(_email))
+        {
+            _fieldErrors = ["Email is required to resend confirmation."];
+            return;
+        }
+
+        _busy = true;
+        var result = await AuthService.ResendConfirmationAsync(new ResendConfirmationRequest
+        {
+            Email = _email.Trim(),
+        });
+
+        _resendMessage = result.IsSuccess && result.Value is not null
+            ? result.Value.Message
+            : "If an account exists for that email, a confirmation message can be sent.";
+        _busy = false;
+    }
+}

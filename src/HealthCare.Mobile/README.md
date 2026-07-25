@@ -1,8 +1,8 @@
-# HealthCare.Mobile — Patient MAUI foundation (PM-2)
+# HealthCare.Mobile — Patient MAUI app
 
 Android-first **.NET MAUI Blazor Hybrid** app for the Patient Mobile MVP.
 
-**Status:** PM-2 foundation only. PM-3 (full auth/profile UX) through PM-8 are **not** started.
+**Status:** **PM-2 + PM-3 delivered.** PM-4 (clinic/Doctor discovery) through PM-8 are **not** started.
 
 Authoritative product scope: [`Docs/mvp-patient-scope.md`](../../Docs/mvp-patient-scope.md).
 
@@ -11,24 +11,70 @@ Authoritative product scope: [`Docs/mvp-patient-scope.md`](../../Docs/mvp-patien
 | Project | Role |
 |---------|------|
 | `HealthCare.Mobile` | MAUI Blazor Hybrid Android app (`net10.0-android`) |
-| `HealthCare.Mobile.Core` | Testable DI/config/API/auth/storage abstractions (`net10.0`) |
-| `HealthCare.Mobile.Tests` | Foundation unit tests |
+| `HealthCare.Mobile.Core` | Testable DI/config/API/auth/profile services (`net10.0`) |
+| `HealthCare.Mobile.Tests` | Foundation + PM-3 unit tests |
 
 Shared contracts only: `HealthCare.Contracts`. The mobile app does **not** reference Web, Application, or Infrastructure.
 
 ## Supported targets
 
 - **Primary:** Android (`net10.0-android`, min API 24)
-- **Not a PM-2 release requirement:** iOS / Mac Catalyst / Windows (template platform folders may exist; TFM is Android-only)
+- **Not a release requirement yet:** iOS / Mac Catalyst / Windows (template folders may exist; TFM is Android-only)
 
-## Structure (app)
+## PM-3 authentication and profile
 
-- `MauiProgram.cs` — DI, configuration, BlazorWebView
-- `Components/` — Blazor pages, layout, shared UI states, route guard
-- `Storage/MauiSecureTokenStore.cs` — MAUI `SecureStorage` (no plaintext fallback)
-- `Platforms/Android/` — manifest + `network_security_config.xml`
-- `appsettings*.json` — embedded environment config
-- `wwwroot/` — static assets
+### Registration
+
+- Screen: `/register` → `POST /api/v1/auth/register/patient`
+- Fields: email, password, confirm password, first/last name, optional DOB and phone
+- Client validation mirrors Application FluentValidation (password policy: 8+, upper/lower/digit/symbol)
+- Success navigates to `/registration-complete` (confirmation required; no auto-login)
+- Passwords are never logged
+
+### Email confirmation
+
+- Screen: `/confirm-email` → `POST /api/v1/auth/confirm-email` (+ resend via `POST /api/v1/auth/resend-confirmation`)
+- Supports `?email=` / `?token=` query parameters when a link opens the app route
+- **Known limitation:** OS-level deep-link / App Link registration is **not** configured in PM-3. Confirmation may complete in an external browser; the user then returns to the app and signs in. Manual token entry is supported.
+
+### Login and Patient linkage
+
+- Screen: `/sign-in` → `POST /api/v1/auth/login` then `GET /api/v1/auth/me`
+- Tokens stored via `ISecureTokenStore`
+- Requires PATIENT role, `HasLinkedPatient`, non-empty `PatientId`, and no active staff membership
+- Unconfirmed email (`auth.email_not_confirmed`) and invalid credentials mapped to safe messages
+- Linkage failure clears the session and blocks authenticated routes
+- Does **not** trust JWT claims alone
+
+### Session restoration
+
+- Startup (`/`) runs `IPatientAuthenticationService.RestoreSessionAsync`
+- Restores tokens, refreshes when access is expiring, resolves `/auth/me`, validates linkage
+- Offline / network failure keeps tokens and shows offline UX (does not wipe a potentially valid session)
+- Auth rejection clears the session
+
+### Refresh and logout
+
+- One refresh+retry on `401` (PM-2 handler); refresh endpoints are not intercepted recursively
+- Logout: `POST /api/v1/auth/logout` with refresh token when possible, **always** clears local tokens, `forceLoad` navigate to sign-in
+
+### Profile
+
+- View: `/profile` → `GET /api/v1/patients/me`
+- Edit: `/profile/edit` → `PATCH /api/v1/patients/me` with `ExpectedVersion`
+- Editable: name fields, DOB, gender, mobile, preferred language, address, emergency contact
+- Not shown: internal Patient ID, `LinkedUserId`, staff-only data
+- `409` / `patient.concurrency_conflict`: conflict UX with reload-latest while preserving unsaved edits (no silent overwrite / auto-resubmit)
+
+### Home
+
+- Minimal Patient home with display name, profile prompt, and **coming soon** placeholders for Clinics / My Appointments (PM-4+)
+
+### Navigation guards
+
+- Authenticated: `/home`, `/profile`, `/profile/edit`, placeholder clinics/appointments
+- Guest-only: sign-in, register, registration-complete, confirm-email (redirect to home when Patient-ready)
+- `/connectivity` remains a diagnostic page
 
 ## Configuration
 
@@ -37,7 +83,7 @@ Section: `Mobile` (`MobileAppOptions`).
 | Setting | Purpose |
 |---------|---------|
 | `EnvironmentName` | Development / Emulator / Device / Staging / Production |
-| `ApiBaseUrl` | Absolute API base (no trailing slash required) |
+| `ApiBaseUrl` | Absolute API base |
 | `HttpTimeoutSeconds` | 5–120 |
 | `AllowCleartextHttp` | Dev/emulator HTTP only; **must be false in Production** |
 
@@ -50,51 +96,9 @@ Section: `Mobile` (`MobileAppOptions`).
 | Shared / docsvr | HTTPS base URL for that environment |
 | Production | HTTPS only; cleartext forbidden |
 
-Notes:
-
-- Emulator `10.0.2.2` is the host loopback alias.
-- Dev HTTPS with the ASP.NET dev certificate often fails on Android unless the cert is trusted on the device/emulator — prefer documented Dev HTTP to the emulator alias, or a proper trusted cert.
-- Cleartext is restricted in `network_security_config.xml` to `10.0.2.2` / localhost / `127.0.0.1`.
-- Override at runtime: set env `HEALTHCARE_API_BASE_URL` (host builds) or `HEALTHCARE_MOBILE_ENV=Emulator`.
-- **Do not** disable TLS validation globally. **Do not** commit secrets, tokens, or private machine credentials.
-
-## Secure storage
-
-- Refresh + access tokens and expiry timestamps via `ISecureTokenStore` → MAUI `SecureStorage`
-- Cleared on logout and failed refresh
-- Never logged or shown in UI
-- No email/password persistence
-- No silent Preferences fallback for tokens
-
-## Authentication-state foundation
-
-`IAuthSessionService` / `AuthSession`:
-
-- Anonymous vs authenticated (token pair present)
-- Access/refresh + expiry awareness
-- Current-user + patient-linkage hooks (from `/auth/me`, not JWT claims alone)
-- Startup restore from secure storage
-- Clear session on logout / refresh failure
-- Route guard: authenticated destinations redirect to `/sign-in` when anonymous
-
-Backend remains authoritative for Patient identity and authorization.
-
-## Typed API client
-
-- Named `HttpClient`s: anonymous + authenticated
-- Bearer injection + **one** refresh retry on `401` (no infinite loop)
-- Problem mapping: `401` / `403` / `404` / `409` / validation / network / timeout / server
-- User-facing messages never include stack traces, SQL, or raw protected payloads
-
-## Navigation (placeholders)
-
-| Route | Milestone |
-|-------|-----------|
-| `/` startup, `/connectivity` smoke | PM-2 |
-| `/sign-in`, `/register` | PM-3 (sign-in page is **dev smoke only** in PM-2) |
-| `/home`, `/profile` | PM-3+ |
-| `/clinics` | PM-4 |
-| `/appointments` | PM-6 |
+- Cleartext allowlist: `10.0.2.2` / localhost / `127.0.0.1` only
+- Overrides: `HEALTHCARE_API_BASE_URL`, `HEALTHCARE_MOBILE_ENV=Emulator`
+- Do not disable TLS validation globally
 
 ## Restore / build / run
 
@@ -105,16 +109,11 @@ dotnet build src/HealthCare.Mobile/HealthCare.Mobile.csproj -f net10.0-android
 dotnet test tests/HealthCare.Mobile.Tests/HealthCare.Mobile.Tests.csproj
 ```
 
-Run on an emulator/device from Visual Studio / `dotnet build -t:Run -f net10.0-android` with a selected Android target. Start the API so the smoke page can reach `/health`.
+Start the API, then deploy/run on an emulator or device. Seeded Patient accounts may be used for smoke sign-in.
 
-## Connectivity smoke
+## Known limitations
 
-`/connectivity` calls `GET /health` using the configured base URL. Dev sign-in on `/sign-in` exists only to prove token storage + authenticated client wiring — **not** completed PM-3 UX.
-
-## Known limitations (PM-2)
-
-- No full registration, email confirmation, profile, discovery, booking, or appointments UX
-- No Google / OTP
-- No Patient E2E pack
-- Android emulator launch may be unavailable in CI/agent environments; Android **build** is still required
-- iOS not a release target in this milestone
+- Deep-link App Links for confirmation emails are not registered (manual token / browser confirm + return to app)
+- Emulator runtime smoke may be unavailable in CI; Android **build** is required
+- Clinics, booking, appointments, Google/OTP, notifications: PM-4…PM-8
+- No Blazor bUnit package in-repo; PM-3 UI logic is covered via Core services + form validators

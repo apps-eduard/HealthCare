@@ -1,7 +1,10 @@
-using System.Net.Http.Json;
 using HealthCare.Contracts.Identity;
+using HealthCare.Contracts.Patients;
 using HealthCare.Mobile.Core.Authentication;
 using Microsoft.Extensions.Logging;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace HealthCare.Mobile.Core.Api;
 
@@ -9,11 +12,29 @@ public interface IHealthCareApiClient
 {
     Task<ApiResult<HealthStatusDto>> GetHealthAsync(CancellationToken cancellationToken = default);
 
+    Task<ApiResult<PatientRegisterResponse>> RegisterPatientAsync(
+        PatientRegisterRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResult<ConfirmEmailResponse>> ConfirmEmailAsync(
+        ConfirmEmailRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<ApiResult<ResendConfirmationResponse>> ResendConfirmationAsync(
+        ResendConfirmationRequest request,
+        CancellationToken cancellationToken = default);
+
     Task<ApiResult<AuthTokenResponse>> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default);
 
     Task<ApiResult<CurrentUserResponse>> GetMeAsync(CancellationToken cancellationToken = default);
 
     Task<ApiResult<bool>> LogoutAsync(CancellationToken cancellationToken = default);
+
+    Task<ApiResult<PatientProfileResponse>> GetPatientProfileAsync(CancellationToken cancellationToken = default);
+
+    Task<ApiResult<PatientProfileResponse>> UpdatePatientProfileAsync(
+        UpdatePatientProfileRequest request,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class HealthStatusDto
@@ -23,6 +44,12 @@ public sealed class HealthStatusDto
 
 public sealed class HealthCareApiClient : IHealthCareApiClient
 {
+    private static readonly JsonSerializerOptions PatchJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IAuthSessionService _session;
     private readonly ILogger<HealthCareApiClient> _logger;
@@ -39,7 +66,6 @@ public sealed class HealthCareApiClient : IHealthCareApiClient
 
     public async Task<ApiResult<HealthStatusDto>> GetHealthAsync(CancellationToken cancellationToken = default)
     {
-        // ASP.NET MapHealthChecks defaults to text/plain ("Healthy"), not JSON.
         try
         {
             var client = _httpClientFactory.CreateClient(MobileHttpClientNames.Anonymous);
@@ -47,9 +73,7 @@ public sealed class HealthCareApiClient : IHealthCareApiClient
             if (!response.IsSuccessStatusCode)
             {
                 var raw = await response.Content.ReadAsStringAsync(cancellationToken);
-                _logger.LogInformation(
-                    "Health check failed. Status={StatusCode}",
-                    (int)response.StatusCode);
+                _logger.LogInformation("Health check failed. Status={StatusCode}", (int)response.StatusCode);
                 return ApiResult<HealthStatusDto>.Failure(ApiProblemMapper.FromStatusCode(response.StatusCode, raw));
             }
 
@@ -72,6 +96,33 @@ public sealed class HealthCareApiClient : IHealthCareApiClient
             return ApiResult<HealthStatusDto>.Failure(ApiProblemMapper.FromException(ex));
         }
     }
+
+    public Task<ApiResult<PatientRegisterResponse>> RegisterPatientAsync(
+        PatientRegisterRequest request,
+        CancellationToken cancellationToken = default) =>
+        SendAnonymousAsync<PatientRegisterResponse>(
+            HttpMethod.Post,
+            "api/v1/auth/register/patient",
+            request,
+            cancellationToken);
+
+    public Task<ApiResult<ConfirmEmailResponse>> ConfirmEmailAsync(
+        ConfirmEmailRequest request,
+        CancellationToken cancellationToken = default) =>
+        SendAnonymousAsync<ConfirmEmailResponse>(
+            HttpMethod.Post,
+            "api/v1/auth/confirm-email",
+            request,
+            cancellationToken);
+
+    public Task<ApiResult<ResendConfirmationResponse>> ResendConfirmationAsync(
+        ResendConfirmationRequest request,
+        CancellationToken cancellationToken = default) =>
+        SendAnonymousAsync<ResendConfirmationResponse>(
+            HttpMethod.Post,
+            "api/v1/auth/resend-confirmation",
+            request,
+            cancellationToken);
 
     public async Task<ApiResult<AuthTokenResponse>> LoginAsync(
         LoginRequest request,
@@ -104,7 +155,7 @@ public sealed class HealthCareApiClient : IHealthCareApiClient
                 var client = _httpClientFactory.CreateClient(MobileHttpClientNames.Anonymous);
                 using var response = await client.PostAsJsonAsync(
                     "api/v1/auth/logout",
-                    new RefreshTokenRequest { RefreshToken = refresh },
+                    new LogoutRequest { RefreshToken = refresh },
                     cancellationToken);
                 _logger.LogInformation("Logout API completed with status {StatusCode}.", (int)response.StatusCode);
             }
@@ -116,6 +167,53 @@ public sealed class HealthCareApiClient : IHealthCareApiClient
 
         await _session.ClearSessionAsync(cancellationToken);
         return ApiResult<bool>.Success(true);
+    }
+
+    public Task<ApiResult<PatientProfileResponse>> GetPatientProfileAsync(
+        CancellationToken cancellationToken = default) =>
+        SendAuthenticatedAsync<PatientProfileResponse>(HttpMethod.Get, "api/v1/patients/me", null, cancellationToken);
+
+    public async Task<ApiResult<PatientProfileResponse>> UpdatePatientProfileAsync(
+        UpdatePatientProfileRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var client = _httpClientFactory.CreateClient(MobileHttpClientNames.Authenticated);
+            using var httpRequest = new HttpRequestMessage(HttpMethod.Patch, "api/v1/patients/me")
+            {
+                Content = JsonContent.Create(request, options: PatchJsonOptions),
+            };
+
+            using var response = await client.SendAsync(httpRequest, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var value = await response.Content.ReadFromJsonAsync<PatientProfileResponse>(cancellationToken: cancellationToken);
+                if (value is null)
+                {
+                    return ApiResult<PatientProfileResponse>.Failure(new ApiProblem
+                    {
+                        Kind = ApiErrorKind.Unknown,
+                        Title = "Empty response",
+                        StatusCode = (int)response.StatusCode,
+                    });
+                }
+
+                return ApiResult<PatientProfileResponse>.Success(value);
+            }
+
+            var raw = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogInformation(
+                "Profile update failed. Status={StatusCode} ErrorCodePresent={HasBody}",
+                (int)response.StatusCode,
+                !string.IsNullOrWhiteSpace(raw));
+            return ApiResult<PatientProfileResponse>.Failure(ApiProblemMapper.FromStatusCode(response.StatusCode, raw));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogInformation(ex, "Profile update exception.");
+            return ApiResult<PatientProfileResponse>.Failure(ApiProblemMapper.FromException(ex));
+        }
     }
 
     private Task<ApiResult<T>> SendAnonymousAsync<T>(
@@ -154,6 +252,12 @@ public sealed class HealthCareApiClient : IHealthCareApiClient
                 if (typeof(T) == typeof(bool))
                 {
                     return ApiResult<T>.Success((T)(object)true);
+                }
+
+                // 204 No Content
+                if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
+                {
+                    return ApiResult<T>.Success(default!);
                 }
 
                 var value = await response.Content.ReadFromJsonAsync<T>(cancellationToken: cancellationToken);

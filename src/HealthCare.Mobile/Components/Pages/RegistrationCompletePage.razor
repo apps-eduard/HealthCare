@@ -1,0 +1,62 @@
+@page "/registration-complete"
+@inject NavigationManager Nav
+
+<h1>Check your email</h1>
+
+@if (!string.IsNullOrWhiteSpace(_email))
+{
+    <p class="lede">
+        If an account can be created for <strong>@_email</strong>, a confirmation message will be sent.
+        Confirm your email before signing in.
+    </p>
+}
+else
+{
+    <p class="lede">
+        If an account can be created for the email you entered, a confirmation message will be sent.
+        Confirm your email before signing in.
+    </p>
+}
+
+<p class="hint">
+    Confirmation may complete in your email client or browser. After confirming, return here to sign in.
+    Deep-link activation into the app is not required for PM-3.
+</p>
+
+<div class="actions">
+    <a class="btn" href="@PatientRoutes.SignIn">Sign in</a>
+    <a class="btn btn-secondary" href="@($"{PatientRoutes.ConfirmEmail}?email={Uri.EscapeDataString(_email ?? string.Empty)}")">
+        Enter confirmation code
+    </a>
+</div>
+
+@code {
+    private string? _email;
+
+    protected override void OnInitialized()
+    {
+        _email = TryGetQuery("email");
+    }
+
+    private string? TryGetQuery(string key)
+    {
+        var uri = new Uri(Nav.Uri);
+        var query = uri.Query.TrimStart('?');
+        if (string.IsNullOrEmpty(query))
+        {
+            return null;
+        }
+
+        foreach (var part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var pair = part.Split('=', 2);
+            if (pair.Length == 2
+                && string.Equals(Uri.UnescapeDataString(pair[0]), key, StringComparison.OrdinalIgnoreCase))
+            {
+                return Uri.UnescapeDataString(pair[1]);
+            }
+        }
+
+        return null;
+    }
+}

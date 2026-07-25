@@ -640,9 +640,11 @@ Authoritative scope: **`Docs/mvp-patient-scope.md`**.
 
 **PM-2 (delivered):** MAUI Blazor Hybrid Android-first foundation — DI, config, secure tokens, typed API client, navigation shell, shared error/loading states, `/connectivity` health smoke. See `src/HealthCare.Mobile/README.md`.
 
-The full patient app (PM-3…PM-6) should provide:
+**PM-3 (delivered):** Registration, email-confirmation UX (manual/browser; App Links deferred), login with `/auth/me` Patient-linkage validation, session restore, logout, profile view/edit with concurrency UX.
 
-- Email/password registration and login (Google deferred)
+The remaining patient app (PM-4…PM-6) should provide:
+
+- Email/password registration and login (**PM-3 delivered**; Google deferred)
 - Authenticated clinic discovery (name / city / optional specialty string)
 - Clinic-code enrollment (alternate)
 - Clinic details (patient-safe)
@@ -650,7 +652,7 @@ The full patient app (PM-3…PM-6) should provide:
 - Appointment booking (`Requested`)
 - My appointments (upcoming + past)
 - Appointment cancellation and rescheduling (2-hour cutoff)
-- Profile management
+- Profile management (**PM-3 delivered**)
 - Status via refreshed API data (no notification inbox in first release)
 
 Patient-visible clinical records grouped by clinic are **deferred**. Medical-note bodies remain staff-only.

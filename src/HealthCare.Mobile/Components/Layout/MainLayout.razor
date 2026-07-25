@@ -12,8 +12,6 @@
     {
         <nav class="app-nav" aria-label="Primary">
             <NavLink href="@PatientRoutes.Home" Match="NavLinkMatch.All">Home</NavLink>
-            <NavLink href="@PatientRoutes.Clinics">Clinics</NavLink>
-            <NavLink href="@PatientRoutes.Appointments">Appointments</NavLink>
             <NavLink href="@PatientRoutes.Profile">Profile</NavLink>
             <NavLink href="@PatientRoutes.Connectivity">Status</NavLink>
         </nav>
@@ -25,8 +23,17 @@
 </div>
 
 @code {
-    private bool ShowNav =>
-        Auth.IsAuthenticated
-        && !PatientRoutes.Normalize(Nav.ToBaseRelativePath(Nav.Uri))
-            .Equals(PatientRoutes.SignIn, StringComparison.OrdinalIgnoreCase);
+    private bool ShowNav
+    {
+        get
+        {
+            if (!Auth.IsPatientReady)
+            {
+                return false;
+            }
+
+            var path = PatientRoutes.Normalize(Nav.ToBaseRelativePath(Nav.Uri));
+            return path is not (PatientRoutes.SignIn or PatientRoutes.Register);
+        }
+    }
 }
