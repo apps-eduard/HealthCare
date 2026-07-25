@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace HealthCare.Api.Controllers;
 
-[Authorize(Policy = AuthorizationPolicies.StaffUser)]
+[Authorize(Policy = AuthorizationPolicies.Authenticated)]
 [Route("api/v1/staff")]
 public sealed class AppointmentRemindersController : ControllerBase
 {

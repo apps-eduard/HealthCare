@@ -5,6 +5,7 @@ using HealthCare.Contracts.Appointments;
 using HealthCare.Domain.Appointments;
 using HealthCare.Domain.Identity;
 using HealthCare.Domain.Organizations;
+using HealthCare.Domain.Staff;
 using HealthCare.Infrastructure.Appointments;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -413,11 +414,126 @@ public sealed class ClinicAppointmentSummaryTests
         result.SummarySenderMode.Should().Be("Development");
         result.HangfireWorkersEnabled.Should().BeTrue();
         result.HangfireQueues.Should().Contain(["default", "reminders", "summaries"]);
+        result.ClinicId.Should().BeNull();
+        result.FailedReminderCount.Should().BeNull();
+
+        var scoped = await health.GetHealthAsync(data.ClinicAId);
+        scoped.ClinicId.Should().Be(data.ClinicAId);
+        scoped.FailedReminderCount.Should().NotBeNull();
 
         var patient = h.CreateOperationsHealth(
             data.PatientUserId, data.Org1Id, data.ClinicAId, Guid.Empty, AppRoles.Patient, isPatient: true);
         var deny = () => patient.GetHealthAsync();
         await deny.Should().ThrowAsync<AuthorizationException>();
+    }
+
+    [Fact]
+    public async Task Clinic_Admin_Lists_Only_Own_Clinic_Summaries_And_Cannot_Retry_Sibling()
+    {
+        await using var h = await SummaryHarness.CreateAsync();
+        var data = await h.SeedAsync();
+
+        h.Db.ClinicAppointmentSummaryRuns.AddRange(
+            new ClinicAppointmentSummaryRun
+            {
+                Id = Guid.NewGuid(),
+                ClinicId = data.ClinicAId,
+                OrganizationId = data.Org1Id,
+                SummaryDate = data.SummaryDate,
+                ScheduledAtUtc = h.Time.GetUtcNow().AddHours(-2),
+                Status = ClinicAppointmentSummaryRunStatus.Failed,
+                AttemptCount = 1,
+                LastError = "simulated",
+                LastErrorCode = AppointmentSummaryErrorCodes.SummaryDeliveryFailed,
+                IdempotencyKey = ClinicAppointmentSummaryRun.BuildIdempotencyKey(data.ClinicAId, data.SummaryDate),
+            },
+            new ClinicAppointmentSummaryRun
+            {
+                Id = Guid.NewGuid(),
+                ClinicId = data.ClinicBId,
+                OrganizationId = data.Org1Id,
+                SummaryDate = data.SummaryDate,
+                ScheduledAtUtc = h.Time.GetUtcNow().AddHours(-1),
+                Status = ClinicAppointmentSummaryRunStatus.Failed,
+                AttemptCount = 1,
+                LastError = "simulated",
+                LastErrorCode = AppointmentSummaryErrorCodes.SummaryDeliveryFailed,
+                IdempotencyKey = ClinicAppointmentSummaryRun.BuildIdempotencyKey(data.ClinicBId, data.SummaryDate),
+            });
+        await h.Db.SaveChangesAsync();
+
+        var adminUser = Guid.NewGuid();
+        var adminStaff = Guid.NewGuid();
+        h.Db.StaffMembers.Add(new StaffMember
+        {
+            Id = adminStaff,
+            UserId = adminUser,
+            OrganizationId = data.Org1Id,
+            ClinicId = data.ClinicAId,
+            Role = AppRoles.ClinicAdmin,
+            IsActive = true,
+        });
+        await h.Db.SaveChangesAsync();
+
+        var sut = h.CreateStaffService(adminUser, data.Org1Id, data.ClinicAId, adminStaff, AppRoles.ClinicAdmin);
+        var runs = await sut.ListRunsForStaffAsync(new ClinicAppointmentSummaryRunQuery { ClinicId = data.ClinicBId });
+        runs.Items.Should().NotBeEmpty();
+        runs.Items.Should().OnlyContain(r => r.ClinicId == data.ClinicAId);
+
+        var retried = await sut.RetryAsync(data.ClinicAId, data.SummaryDate);
+        retried.Status.Should().Be(nameof(ClinicAppointmentSummaryRunStatus.Pending));
+        retried.ClinicId.Should().Be(data.ClinicAId);
+
+        // Client clinicId is ignored for clinic-scoped staff; sibling run remains Failed.
+        var siblingAttempt = () => sut.RetryAsync(data.ClinicBId, data.SummaryDate.AddDays(1));
+        await siblingAttempt.Should().ThrowAsync<AppointmentSummaryException>();
+
+        var sibling = await h.Db.ClinicAppointmentSummaryRuns.AsNoTracking()
+            .SingleAsync(r => r.ClinicId == data.ClinicBId);
+        sibling.Status.Should().Be(ClinicAppointmentSummaryRunStatus.Failed);
+    }
+
+    [Fact]
+    public async Task Clinic_Admin_Operations_Health_Is_Clinic_Scoped()
+    {
+        await using var h = await SummaryHarness.CreateAsync();
+        var data = await h.SeedAsync();
+
+        h.Db.ClinicAppointmentSummaryRuns.Add(new ClinicAppointmentSummaryRun
+        {
+            Id = Guid.NewGuid(),
+            ClinicId = data.ClinicBId,
+            OrganizationId = data.Org1Id,
+            SummaryDate = data.SummaryDate,
+            ScheduledAtUtc = h.Time.GetUtcNow(),
+            Status = ClinicAppointmentSummaryRunStatus.Failed,
+            AttemptCount = 1,
+            IdempotencyKey = ClinicAppointmentSummaryRun.BuildIdempotencyKey(data.ClinicBId, data.SummaryDate),
+        });
+        await h.Db.SaveChangesAsync();
+
+        var adminUser = Guid.NewGuid();
+        var adminStaff = Guid.NewGuid();
+        h.Db.StaffMembers.Add(new StaffMember
+        {
+            Id = adminStaff,
+            UserId = adminUser,
+            OrganizationId = data.Org1Id,
+            ClinicId = data.ClinicAId,
+            Role = AppRoles.ClinicAdmin,
+            IsActive = true,
+        });
+        await h.Db.SaveChangesAsync();
+
+        var health = h.CreateOperationsHealth(
+            adminUser, data.Org1Id, data.ClinicAId, adminStaff, AppRoles.ClinicAdmin);
+        var result = await health.GetHealthAsync(data.ClinicBId);
+
+        result.ClinicId.Should().Be(data.ClinicAId);
+        result.FailedSummaryRunCount.Should().Be(0);
+        result.ReminderSenderMode.Should().NotBeNullOrWhiteSpace();
+        typeof(StaffOperationsHealthResponse).GetProperty("ConnectionString").Should().BeNull();
+        typeof(StaffOperationsHealthResponse).GetProperty("ApiKey").Should().BeNull();
     }
 
     [Fact]
@@ -772,6 +888,7 @@ internal sealed class SummaryHarness : IAsyncDisposable
             };
 
         return new StaffOperationsHealthService(
+            Db,
             user,
             staff,
             new DevelopmentAppointmentReminderSender(NullLogger<DevelopmentAppointmentReminderSender>.Instance),
@@ -784,7 +901,8 @@ internal sealed class SummaryHarness : IAsyncDisposable
                 Dashboard = new Infrastructure.Configuration.HangfireDashboardOptions { Enabled = false },
             }),
             new TestHostEnvironment(),
-            new NoOpAuthorizationAuditLogger());
+            new NoOpAuthorizationAuditLogger(),
+            Time);
     }
 
     public ValueTask DisposeAsync()

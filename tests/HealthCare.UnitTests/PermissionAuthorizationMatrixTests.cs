@@ -135,8 +135,16 @@ public sealed class PermissionAuthorizationMatrixTests
         sut.HasPermission(Permissions.Appointments.Complete).Should().BeTrue();
         sut.HasPermission(Permissions.Appointments.NoShow).Should().BeTrue();
         sut.HasPermission(Permissions.Roles.Assign).Should().BeTrue();
+        sut.HasPermission(Permissions.Reminders.Read).Should().BeTrue();
+        sut.HasPermission(Permissions.Reminders.Retry).Should().BeTrue();
+        sut.HasPermission(Permissions.Summaries.Read).Should().BeTrue();
+        sut.HasPermission(Permissions.Summaries.Retry).Should().BeTrue();
         sut.HasPermission(Permissions.Hangfire.Dashboard).Should().BeFalse();
         sut.HasPermission(Permissions.MedicalNotes.Read).Should().BeFalse();
+        sut.HasPermission(Permissions.Organizations.ReportsRead).Should().BeFalse();
+        sut.HasPermission(Permissions.Organizations.AuditLogsRead).Should().BeFalse();
+        sut.HasPermission("clinic_reports.read").Should().BeFalse();
+        sut.HasPermission("clinic_audit_logs.read").Should().BeFalse();
     }
 
     [Fact]

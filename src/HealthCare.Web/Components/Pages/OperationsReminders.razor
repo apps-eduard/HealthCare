@@ -8,6 +8,8 @@
 @inject IPermissionState Permissions
 @inject IPlatformTenantContext PlatformTenant
 @inject IClinicWorkingContext ClinicContext
+@inject IClinicDirectoryCache ClinicCache
+@inject IClinicDirectoryApiClient ClinicsApi
 @inject IUiModalService Modals
 @inject IUserNotificationService Notify
 @inject NavigationManager Navigation
@@ -25,7 +27,7 @@ else if (!OperationsPermissionRules.CanViewReminders(Permissions))
 else
 {
     <HcPageHeader Title="Reminders"
-                  Subtitle="Organization reminder delivery status (safe operational fields only)">
+                  Subtitle="@OperationsPageCopy.RemindersSubtitle(Permissions)">
         <Breadcrumb>
             <Breadcrumb>
                 <BreadcrumbItem Href="/dashboard">Home</BreadcrumbItem>
@@ -47,7 +49,7 @@ else
                         Health
                     </Button>
                 }
-                <Button OnClick="RefreshAsync" Disabled="_loading" AriaLabel="Refresh reminders">
+                <Button OnClick="RefreshAsync" Disabled="@(_loading || _retryBusy)" AriaLabel="Refresh reminders">
                     <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
                 </Button>
             </Space>
@@ -84,7 +86,7 @@ else
                 <label class="hc-filter-label" for="reminder-to">To (UTC date)</label>
                 <DatePicker Id="reminder-to" TValue="DateTime?" @bind-Value="_toDate" Style="width:100%;" AriaLabel="Reminders to date" />
             </div>
-            @if (Permissions.CanFilterByClinic)
+            @if (OperationsPermissionRules.ShowClinicPicker(Permissions))
             {
                 <ClinicPicker Value="_clinicId" ValueChanged="OnClinicFilterChanged" Label="Clinic filter"
                               HelperText="@(Permissions.IsPlatformAdmin ? "Optional within selected organization" : "Leave empty for all clinics")"
@@ -93,13 +95,22 @@ else
                               PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
                               Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)" />
             }
+            else if (_clinicId is not null || !string.IsNullOrWhiteSpace(_clinicCaptionName))
+            {
+                <div>
+                    <div class="hc-filter-label">Clinic</div>
+                    <div class="hc-caption" data-testid="operations-reminders-clinic-caption">
+                        @OperationsPageCopy.ClinicCaption(Permissions, _clinicCaptionName)
+                    </div>
+                </div>
+            }
             <div style="display:flex;gap:8px;align-items:flex-end;">
                 <Button Type="@ButtonType.Primary" OnClick="ApplyFiltersAsync"
                         Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)"
                         AriaLabel="Search reminders">
                     Search
                 </Button>
-                <Button OnClick="ResetFiltersAsync" Disabled="_loading" AriaLabel="Reset filters">Reset</Button>
+                <Button OnClick="ResetFiltersAsync" Disabled="@(_loading || _retryBusy)" AriaLabel="Reset filters">Reset</Button>
             </div>
         </div>
     </div>
@@ -143,7 +154,10 @@ else
                                 @if (OperationsPermissionRules.CanRetryReminders(Permissions)
                                      && ReminderStatusPresentation.AppearsRetryable(row.Status))
                                 {
-                                    <Button Type="@ButtonType.Link" OnClick="@(() => RetryAsync(row))" AriaLabel="Retry reminder">
+                                    <Button Type="@ButtonType.Link"
+                                            OnClick="@(() => RetryAsync(row))"
+                                            Disabled="_retryBusy"
+                                            AriaLabel="Retry reminder">
                                         Retry
                                     </Button>
                                 }
@@ -168,11 +182,13 @@ else
 @code {
     private readonly List<AppointmentReminderResponse> _items = [];
     private bool _loading;
+    private bool _retryBusy;
     private string? _error;
     private string? _status = "Failed";
     private DateTime? _fromDate = DateTime.UtcNow.Date.AddDays(-7);
     private DateTime? _toDate = DateTime.UtcNow.Date.AddDays(1);
     private Guid? _clinicId;
+    private string? _clinicCaptionName;
     private int _page = 1;
     private int _pageSize = 50;
     private int _totalCount;
@@ -203,9 +219,11 @@ else
                 _clinicId = ClinicContext.SelectedClinicId;
             }
         }
-        else if (!Permissions.CanFilterByClinic && Permissions.CurrentUser?.ClinicId is Guid clinicId)
+        else if (!OperationsPermissionRules.ShowClinicPicker(Permissions)
+                 && Permissions.CurrentUser?.ClinicId is Guid clinicId)
         {
             _clinicId = clinicId;
+            await ResolveClinicCaptionAsync(clinicId);
         }
 
         await LoadAsync();
@@ -319,7 +337,7 @@ else
             ClinicContext.ClearClinic();
             return;
         }
-        else if (Permissions.CanFilterByClinic)
+        else if (OperationsPermissionRules.ShowClinicPicker(Permissions))
         {
             _clinicId = null;
         }
@@ -333,6 +351,26 @@ else
     {
         _page = page;
         await LoadAsync();
+    }
+
+    private async Task ResolveClinicCaptionAsync(Guid clinicId)
+    {
+        try
+        {
+            if (ClinicCache.TryGet(clinicId, out var cached) && cached is not null)
+            {
+                _clinicCaptionName = cached.Name;
+                return;
+            }
+
+            var detail = await ClinicsApi.GetByIdAsync(clinicId, Permissions.IsPlatformAdmin);
+            ClinicCache.Set(detail);
+            _clinicCaptionName = detail.Name;
+        }
+        catch (ApiProblemException)
+        {
+            _clinicCaptionName = null;
+        }
     }
 
     private async Task LoadAsync()
@@ -399,18 +437,19 @@ else
 
     private async Task RetryAsync(AppointmentReminderResponse row)
     {
-        if (!OperationsPermissionRules.CanRetryReminders(Permissions))
+        if (!OperationsPermissionRules.CanRetryReminders(Permissions) || _retryBusy)
         {
             return;
         }
 
         if (!await Modals.ConfirmAsync(
                 "Retry reminder",
-                $"Retry {ReminderStatusPresentation.TypeLabel(row.ReminderType)} reminder?"))
+                $"Retry {ReminderStatusPresentation.TypeLabel(row.ReminderType)} reminder? Delivery is queued — this does not confirm the message was sent."))
         {
             return;
         }
 
+        _retryBusy = true;
         try
         {
             await OperationsApi.RetryReminderAsync(row.AppointmentId, row.Id, Permissions.IsPlatformAdmin);
@@ -425,6 +464,10 @@ else
         catch (ApiProblemException ex)
         {
             Notify.Error(ReminderProblemMessages.ToUserMessage(ex));
+        }
+        finally
+        {
+            _retryBusy = false;
         }
     }
 }

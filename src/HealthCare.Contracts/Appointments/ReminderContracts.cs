@@ -62,6 +62,7 @@ public sealed class RetryAppointmentReminderRequest
 
 /// <summary>
 /// Safe operational health for reminder/summary delivery. No secrets or connection strings.
+/// Clinic-scoped counts are populated when a trusted clinic context is available.
 /// </summary>
 public sealed class StaffOperationsHealthResponse
 {
@@ -76,4 +77,19 @@ public sealed class StaffOperationsHealthResponse
     public bool HangfireDashboardEnabled { get; init; }
 
     public IReadOnlyList<string> HangfireQueues { get; init; } = [];
+
+    /// <summary>Clinic used for scoped counts when resolved; null when only infrastructure flags are returned.</summary>
+    public Guid? ClinicId { get; init; }
+
+    public string? ClinicName { get; init; }
+
+    public int? FailedReminderCount { get; init; }
+
+    public int? PendingReminderCount { get; init; }
+
+    public int? FailedSummaryRunCount { get; init; }
+
+    public bool? MissingActiveDoctorAvailability { get; init; }
+
+    public DateTimeOffset GeneratedAtUtc { get; init; }
 }

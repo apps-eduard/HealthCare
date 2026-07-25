@@ -412,7 +412,11 @@ Queue/calendar + confirm/check-in/cancel/reschedule/complete/no-show. Backend + 
 
 ## 15. Reminders and operational summaries
 
-Reminders, summary runs/retry, operations health — clinic scoped. Backend + Web **implemented** (CA-7 verify).
+Reminders, summary runs/retry, operations health — clinic scoped.
+
+### Status
+
+**CA-7 delivered:** Clinic Admin uses fixed clinic caption (no clinic picker); list/retry scoped to membership clinic; operations health shows clinic-scoped failure/pending counts and hides Hangfire infrastructure cards; controllers use `Authenticated` (Platform Admin explicit bypass + clinicId); no rebuild API (Completed summaries cannot be rebuilt); no Hangfire dashboard / clinic reports / clinic audit navigation.
 
 ---
 
@@ -574,7 +578,7 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 | CA-4 | Doctor directory + availability verify | Small | **Delivered** (2026-07-25) |
 | CA-5 | Patients verify | Small | **Delivered** (2026-07-25) |
 | CA-6 | Appointments verify (Complete for CA) | Small | **Delivered** (2026-07-25) |
-| CA-7 | Operations verify | Small | After CA-1 |
+| CA-7 | Operations verify | Small | **Delivered** |
 | CA-8 | Clinic reports (JSON) | Large | Approved |
 | CA-9 | Clinic-filtered audit | Medium | Approved |
 | CA-10 | Hardening + Playwright E2E | Medium | After prior phases |
@@ -600,7 +604,7 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 | Doctors / availability | Matrix | availability.* + staff.read | Done | **Done** (`/doctors` + `/availability`) | — | CA-4 |
 | Patients | Matrix | patients.* | Done | **Done** (CA-5 actor-aware) | — | CA-5 |
 | Appointments | Matrix | appointments.* | Done | **Done** (CA-6 actor-aware + Complete) | — | CA-6 |
-| Ops | Matrix | reminders/summaries | Done | Done | Verify | CA-7 |
+| Ops | Matrix | reminders/summaries | Done | Done | **Delivered** | CA-7 |
 | Clinic reports | Approved | `clinic_reports.read` | Missing | Missing | New | CA-8 |
 | Clinic audit | Approved | `clinic_audit_logs.read` | Missing | Missing | New | CA-9 |
 | Org limits /usage | Denied | — | CA denied | Gated | Intentional | — |

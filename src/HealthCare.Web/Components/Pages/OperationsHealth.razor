@@ -6,6 +6,7 @@
 @inject IStaffOperationsApiClient OperationsApi
 @inject IPermissionState Permissions
 @inject IPlatformTenantContext PlatformTenant
+@inject IClinicWorkingContext ClinicContext
 @inject NavigationManager Navigation
 
 <PageTitle>Operations Health</PageTitle>
@@ -21,7 +22,7 @@ else if (!OperationsPermissionRules.CanViewOperationsHealth(Permissions))
 else
 {
     <HcPageHeader Title="Operations Health"
-                  Subtitle="Safe sender and Hangfire worker flags — no secrets or job payloads">
+                  Subtitle="@OperationsPageCopy.HealthSubtitle(Permissions)">
         <Breadcrumb>
             <Breadcrumb>
                 <BreadcrumbItem Href="/dashboard">Home</BreadcrumbItem>
@@ -58,11 +59,81 @@ else
                Style="margin-bottom:1rem;" />
     }
 
+    @if (OperationsPermissionRules.ShowClinicPicker(Permissions))
+    {
+        <div class="hc-card" style="margin-bottom:1rem;">
+            <div class="hc-filter-grid">
+                <ClinicPicker Value="_clinicId" ValueChanged="OnClinicFilterChanged" Label="Clinic filter"
+                              HelperText="@(Permissions.IsPlatformAdmin ? "Required for clinic-scoped counts" : "Optional — leave empty for infrastructure flags only")"
+                              AllowClear="true" Required="false" ActiveOnly="null"
+                              PlatformAdminBypass="@(Permissions.IsPlatformAdmin)"
+                              PlatformOrganizationId="@(Permissions.IsPlatformAdmin ? PlatformTenant.SelectedOrganizationId : null)"
+                              Disabled="@(Permissions.IsPlatformAdmin && !PlatformTenant.HasOrganization)" />
+            </div>
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(_clinicCaption) || Permissions.IsClinicAdmin)
+    {
+        <div class="hc-caption" data-testid="operations-health-clinic-caption" style="margin-bottom:1rem;">
+            @OperationsPageCopy.ClinicCaption(Permissions, _clinicCaption)
+        </div>
+    }
+
     @if (!string.IsNullOrWhiteSpace(_error)) { <ErrorState Message="@_error" /> }
     @if (_loading) { <PageLoading /> }
     else if (_health is not null)
     {
+        @if (_health.GeneratedAtUtc != default)
+        {
+            <div class="hc-caption" style="margin-bottom:0.75rem;" data-testid="operations-health-updated">
+                Last updated (UTC): @_health.GeneratedAtUtc.UtcDateTime.ToString("u")
+            </div>
+        }
+
         <AntDesign.Row Gutter="(16, 16)">
+            @if (_health.ClinicId is not null)
+            {
+                <AntDesign.Col Xs="24" Md="8">
+                    <Card Title="Failed reminders" Size="CardSize.Small">
+                        <div style="font-size:1.5rem;font-weight:600;">@(_health.FailedReminderCount ?? 0)</div>
+                        @if (OperationsPermissionRules.CanViewReminders(Permissions))
+                        {
+                            <Button Type="@ButtonType.Link"
+                                    OnClick='() => Navigation.NavigateTo("/operations/reminders")'
+                                    AriaLabel="Open failed reminders">
+                                View reminders
+                            </Button>
+                        }
+                    </Card>
+                </AntDesign.Col>
+                <AntDesign.Col Xs="24" Md="8">
+                    <Card Title="Pending reminders" Size="CardSize.Small">
+                        <div style="font-size:1.5rem;font-weight:600;">@(_health.PendingReminderCount ?? 0)</div>
+                    </Card>
+                </AntDesign.Col>
+                <AntDesign.Col Xs="24" Md="8">
+                    <Card Title="Failed summary runs" Size="CardSize.Small">
+                        <div style="font-size:1.5rem;font-weight:600;">@(_health.FailedSummaryRunCount ?? 0)</div>
+                        @if (OperationsPermissionRules.CanViewSummaries(Permissions))
+                        {
+                            <Button Type="@ButtonType.Link"
+                                    OnClick='() => Navigation.NavigateTo("/operations/clinic-summaries")'
+                                    AriaLabel="Open failed clinic summaries">
+                                View summaries
+                            </Button>
+                        }
+                    </Card>
+                </AntDesign.Col>
+                @if (_health.MissingActiveDoctorAvailability == true)
+                {
+                    <AntDesign.Col Xs="24">
+                        <Alert Type="@AlertType.Warning"
+                               Message="Active doctors are present but no active availability windows are configured for this clinic."
+                               ShowIcon="true" />
+                    </AntDesign.Col>
+                }
+            }
+
             <AntDesign.Col Xs="24" Md="12">
                 <Card Title="Reminder sender" Size="CardSize.Small">
                     <div><strong>Mode:</strong> @_health.ReminderSenderMode</div>
@@ -79,41 +150,45 @@ else
                     </div>
                 </Card>
             </AntDesign.Col>
-            <AntDesign.Col Xs="24" Md="8">
-                <Card Title="Workers" Size="CardSize.Small">
-                    <StatusBadge Text="@(_health.HangfireWorkersEnabled ? "Enabled" : "Disabled")"
-                                 Tone="@(_health.HangfireWorkersEnabled ? StatusTone.Success : StatusTone.Warning)" />
-                </Card>
-            </AntDesign.Col>
-            <AntDesign.Col Xs="24" Md="8">
-                <Card Title="Recurring jobs" Size="CardSize.Small">
-                    <StatusBadge Text="@(_health.HangfireRecurringJobsScheduled ? "Scheduled" : "Not scheduled")"
-                                 Tone="@(_health.HangfireRecurringJobsScheduled ? StatusTone.Success : StatusTone.Warning)" />
-                </Card>
-            </AntDesign.Col>
-            <AntDesign.Col Xs="24" Md="8">
-                <Card Title="Dashboard" Size="CardSize.Small">
-                    <StatusBadge Text="@(_health.HangfireDashboardEnabled ? "Enabled" : "Disabled")"
-                                 Tone="@(_health.HangfireDashboardEnabled ? StatusTone.Info : StatusTone.Default)" />
-                </Card>
-            </AntDesign.Col>
-            <AntDesign.Col Xs="24">
-                <Card Title="Hangfire queues" Size="CardSize.Small">
-                    @if (_health.HangfireQueues.Count == 0)
-                    {
-                        <EmptyState Message="No queue names reported." />
-                    }
-                    else
-                    {
-                        <Space Wrap>
-                            @foreach (var queue in _health.HangfireQueues)
-                            {
-                                <StatusBadge Text="@queue" Tone="StatusTone.Neutral" />
-                            }
-                        </Space>
-                    }
-                </Card>
-            </AntDesign.Col>
+
+            @if (OperationsPermissionRules.ShowHangfireInfrastructure(Permissions))
+            {
+                <AntDesign.Col Xs="24" Md="8">
+                    <Card Title="Workers" Size="CardSize.Small">
+                        <StatusBadge Text="@(_health.HangfireWorkersEnabled ? "Enabled" : "Disabled")"
+                                     Tone="@(_health.HangfireWorkersEnabled ? StatusTone.Success : StatusTone.Warning)" />
+                    </Card>
+                </AntDesign.Col>
+                <AntDesign.Col Xs="24" Md="8">
+                    <Card Title="Recurring jobs" Size="CardSize.Small">
+                        <StatusBadge Text="@(_health.HangfireRecurringJobsScheduled ? "Scheduled" : "Not scheduled")"
+                                     Tone="@(_health.HangfireRecurringJobsScheduled ? StatusTone.Success : StatusTone.Warning)" />
+                    </Card>
+                </AntDesign.Col>
+                <AntDesign.Col Xs="24" Md="8">
+                    <Card Title="Dashboard" Size="CardSize.Small">
+                        <StatusBadge Text="@(_health.HangfireDashboardEnabled ? "Enabled" : "Disabled")"
+                                     Tone="@(_health.HangfireDashboardEnabled ? StatusTone.Info : StatusTone.Default)" />
+                    </Card>
+                </AntDesign.Col>
+                <AntDesign.Col Xs="24">
+                    <Card Title="Hangfire queues" Size="CardSize.Small">
+                        @if (_health.HangfireQueues.Count == 0)
+                        {
+                            <EmptyState Message="No queue names reported." />
+                        }
+                        else
+                        {
+                            <Space Wrap>
+                                @foreach (var queue in _health.HangfireQueues)
+                                {
+                                    <StatusBadge Text="@queue" Tone="StatusTone.Neutral" />
+                                }
+                            </Space>
+                        }
+                    </Card>
+                </AntDesign.Col>
+            }
         </AntDesign.Row>
     }
 }
@@ -122,7 +197,10 @@ else
     private StaffOperationsHealthResponse? _health;
     private bool _loading;
     private string? _error;
+    private Guid? _clinicId;
+    private string? _clinicCaption;
     private bool _subscribedPlatform;
+    private bool _subscribedClinic;
 
     protected override async Task OnInitializedAsync()
     {
@@ -135,6 +213,23 @@ else
         {
             PlatformTenant.Changed += OnPlatformTenantChanged;
             _subscribedPlatform = true;
+            if (PlatformTenant.HasClinic)
+            {
+                _clinicId = PlatformTenant.SelectedClinicId;
+            }
+        }
+        else if (Permissions.IsOrganizationAdmin)
+        {
+            ClinicContext.Changed += OnClinicContextChanged;
+            _subscribedClinic = true;
+            if (ClinicContext.HasClinic)
+            {
+                _clinicId = ClinicContext.SelectedClinicId;
+            }
+        }
+        else if (Permissions.CurrentUser?.ClinicId is Guid membershipClinic)
+        {
+            _clinicId = membershipClinic;
         }
 
         await LoadAsync();
@@ -146,13 +241,60 @@ else
         {
             PlatformTenant.Changed -= OnPlatformTenantChanged;
         }
+
+        if (_subscribedClinic)
+        {
+            ClinicContext.Changed -= OnClinicContextChanged;
+        }
     }
 
     private void OnPlatformTenantChanged() => InvokeAsync(async () =>
     {
+        _clinicId = PlatformTenant.HasClinic ? PlatformTenant.SelectedClinicId : null;
         await LoadAsync();
         StateHasChanged();
     });
+
+    private void OnClinicContextChanged() => InvokeAsync(async () =>
+    {
+        _clinicId = ClinicContext.SelectedClinicId;
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    private async Task OnClinicFilterChanged(Guid? clinicId)
+    {
+        _clinicId = clinicId;
+        if (Permissions.IsPlatformAdmin)
+        {
+            if (clinicId is Guid id && id != Guid.Empty)
+            {
+                if (PlatformTenant.SelectedClinicId != id)
+                {
+                    PlatformTenant.SelectClinic(id);
+                }
+            }
+            else if (PlatformTenant.HasClinic)
+            {
+                PlatformTenant.ClearClinic();
+            }
+        }
+        else if (Permissions.IsOrganizationAdmin)
+        {
+            if (clinicId is Guid id && id != Guid.Empty)
+            {
+                ClinicContext.SelectClinic(id);
+            }
+            else
+            {
+                ClinicContext.ClearClinic();
+            }
+
+            return;
+        }
+
+        await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {
@@ -166,7 +308,10 @@ else
         _error = null;
         try
         {
-            _health = await OperationsApi.GetOperationsHealthAsync(Permissions.IsPlatformAdmin);
+            _health = await OperationsApi.GetOperationsHealthAsync(
+                _clinicId,
+                Permissions.IsPlatformAdmin);
+            _clinicCaption = _health.ClinicName;
         }
         catch (ApiProblemException ex)
         {

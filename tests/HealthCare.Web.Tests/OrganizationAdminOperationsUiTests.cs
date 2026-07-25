@@ -111,8 +111,13 @@ public sealed class OrganizationAdminOperationsUiTests
         summaries.Should().Contain("RetrySummaryAsync");
 
         health.Should().Contain("GetOperationsHealthAsync");
+        health.Should().Contain("ShowHangfireInfrastructure");
         health.Should().Contain("HangfireWorkersEnabled");
-        health.Should().Contain("no secrets");
+        health.Should().Contain("without exposing secrets");
+
+        var presentation = File.ReadAllText(Path.Combine(webRoot, "Operations", "OperationsPresentation.cs"));
+        presentation.Should().Contain("no secrets");
+        presentation.Should().Contain("ShowHangfireInfrastructure");
 
         layout.Should().Contain("Operations");
         layout.Should().Contain("/operations/reminders");

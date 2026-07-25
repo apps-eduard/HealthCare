@@ -39,6 +39,7 @@ public interface IStaffOperationsApiClient
         CancellationToken cancellationToken = default);
 
     Task<StaffOperationsHealthResponse> GetOperationsHealthAsync(
+        Guid? clinicId = null,
         bool platformAdminBypass = false,
         CancellationToken cancellationToken = default);
 }
@@ -138,11 +139,25 @@ public sealed class StaffOperationsApiClient : IStaffOperationsApiClient
     }
 
     public async Task<StaffOperationsHealthResponse> GetOperationsHealthAsync(
+        Guid? clinicId = null,
         bool platformAdminBypass = false,
         CancellationToken cancellationToken = default)
     {
         var client = _httpClientFactory.CreateClient("HealthCareApi");
-        var url = AppendBypass("api/v1/staff/operations/health", platformAdminBypass);
+        var parts = new List<string>();
+        if (clinicId is Guid id && id != Guid.Empty)
+        {
+            parts.Add($"clinicId={id:D}");
+        }
+
+        if (platformAdminBypass)
+        {
+            parts.Add("platformAdminBypass=true");
+        }
+
+        var url = parts.Count == 0
+            ? "api/v1/staff/operations/health"
+            : $"api/v1/staff/operations/health?{string.Join('&', parts)}";
         using var response = await client.GetAsync(url, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
         return (await response.Content.ReadFromJsonAsync<StaffOperationsHealthResponse>(cancellationToken))

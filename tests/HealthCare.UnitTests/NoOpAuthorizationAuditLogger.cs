@@ -73,7 +73,7 @@ internal class NoOpAuthorizationAuditLogger : IAuthorizationAuditLogger
     {
     }
 
-    public void ReminderOperation(
+    public virtual void ReminderOperation(
         string operation,
         string resultCode,
         Guid? organizationId = null,
@@ -82,7 +82,7 @@ internal class NoOpAuthorizationAuditLogger : IAuthorizationAuditLogger
     {
     }
 
-    public void SummaryOperation(
+    public virtual void SummaryOperation(
         string operation,
         string resultCode,
         Guid? organizationId = null,

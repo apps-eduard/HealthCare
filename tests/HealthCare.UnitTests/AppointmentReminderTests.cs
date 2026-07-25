@@ -467,6 +467,194 @@ public sealed class AppointmentReminderTests
             .Should().Equal(typeof(Guid), typeof(Guid), typeof(CancellationToken));
     }
 
+    [Fact]
+    public async Task Clinic_Admin_Searches_Only_Own_Clinic_Reminders()
+    {
+        await using var h = await AppointmentHarness.CreateAsync();
+        var data = await h.SeedAsync();
+        await h.EnrollPatientInClinicBAsync(data);
+
+        var patient = h.CreatePatientService(data.PatientUserId, data.PatientId);
+        var clinicA = await patient.CreateForCurrentPatientAsync(new CreatePatientAppointmentRequest
+        {
+            ClinicCode = data.ClinicASlug,
+            DoctorStaffMemberId = data.DoctorAStaffId,
+            AppointmentDateUtc = h.Now.AddDays(2),
+            DurationMinutes = 30,
+        });
+        var clinicB = await patient.CreateForCurrentPatientAsync(new CreatePatientAppointmentRequest
+        {
+            ClinicCode = data.ClinicBSlug,
+            DoctorStaffMemberId = data.DoctorBStaffId,
+            AppointmentDateUtc = h.Now.AddDays(3),
+            DurationMinutes = 30,
+        });
+
+        var adminUser = Guid.NewGuid();
+        var adminStaff = Guid.NewGuid();
+        h.Db.StaffMembers.Add(new StaffMember
+        {
+            Id = adminStaff,
+            UserId = adminUser,
+            OrganizationId = data.Org1Id,
+            ClinicId = data.ClinicAId,
+            Role = AppRoles.ClinicAdmin,
+            IsActive = true,
+        });
+        await h.Db.SaveChangesAsync();
+
+        var sut = h.CreateReminderService(
+            adminUser, data.Org1Id, data.ClinicAId, adminStaff, AppRoles.ClinicAdmin);
+
+        var result = await sut.SearchForStaffAsync(new StaffReminderSearchQuery { ClinicId = data.ClinicBId });
+        result.Items.Should().NotBeEmpty();
+        result.Items.Should().OnlyContain(r => r.ClinicId == data.ClinicAId);
+        result.Items.Should().Contain(r => r.AppointmentId == clinicA.Id);
+        result.Items.Should().NotContain(r => r.AppointmentId == clinicB.Id);
+        result.Items.Should().OnlyContain(r =>
+            r.ErrorMessage == null
+            || (!r.ErrorMessage.Contains("password", StringComparison.OrdinalIgnoreCase)
+                && !r.ErrorMessage.Contains("secret", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [Fact]
+    public async Task Clinic_Admin_Can_Retry_Own_Clinic_Failed_Reminder_And_Cannot_Retry_Sibling()
+    {
+        await using var h = await AppointmentHarness.CreateAsync();
+        var data = await h.SeedAsync();
+        await h.EnrollPatientInClinicBAsync(data);
+        var patient = h.CreatePatientService(data.PatientUserId, data.PatientId);
+
+        var own = await patient.CreateForCurrentPatientAsync(new CreatePatientAppointmentRequest
+        {
+            ClinicCode = data.ClinicASlug,
+            DoctorStaffMemberId = data.DoctorAStaffId,
+            AppointmentDateUtc = h.Now.AddDays(2),
+            DurationMinutes = 30,
+        });
+        var sibling = await patient.CreateForCurrentPatientAsync(new CreatePatientAppointmentRequest
+        {
+            ClinicCode = data.ClinicBSlug,
+            DoctorStaffMemberId = data.DoctorBStaffId,
+            AppointmentDateUtc = h.Now.AddDays(3),
+            DurationMinutes = 30,
+        });
+
+        var ownReminder = await h.Db.AppointmentReminders.FirstAsync(r => r.AppointmentId == own.Id);
+        ownReminder.Status = AppointmentReminderStatus.Failed;
+        ownReminder.LastError = "simulated_delivery_failure";
+        ownReminder.AttemptCount = 1;
+
+        var siblingReminder = await h.Db.AppointmentReminders.FirstAsync(r => r.AppointmentId == sibling.Id);
+        siblingReminder.Status = AppointmentReminderStatus.Failed;
+        siblingReminder.LastError = "simulated_delivery_failure";
+        siblingReminder.AttemptCount = 1;
+        await h.Db.SaveChangesAsync();
+
+        var adminUser = Guid.NewGuid();
+        var adminStaff = Guid.NewGuid();
+        h.Db.StaffMembers.Add(new StaffMember
+        {
+            Id = adminStaff,
+            UserId = adminUser,
+            OrganizationId = data.Org1Id,
+            ClinicId = data.ClinicAId,
+            Role = AppRoles.ClinicAdmin,
+            IsActive = true,
+        });
+        await h.Db.SaveChangesAsync();
+
+        var audit = new RecordingReminderAuditLogger();
+        var sut = new AppointmentReminderService(
+            h.Db,
+            new FakeCurrentUser { IsAuthenticated = true, UserId = adminUser, Roles = [AppRoles.ClinicAdmin] },
+            new FakeCurrentStaff
+            {
+                HasActiveMembership = true,
+                StaffMemberId = adminStaff,
+                OrganizationId = data.Org1Id,
+                ClinicId = data.ClinicAId,
+                Role = AppRoles.ClinicAdmin,
+            },
+            h.Jobs,
+            audit,
+            h.Time,
+            NullLogger<AppointmentReminderService>.Instance);
+
+        var retried = await sut.RetryAsync(own.Id, ownReminder.Id);
+        retried.Status.Should().Be(nameof(AppointmentReminderStatus.Pending));
+        retried.BackgroundJobId.Should().NotBeNullOrWhiteSpace();
+        audit.ReminderOps.Should().Contain(o =>
+            o.Operation == "reminder_retry"
+            && o.ResultCode == "succeeded"
+            && o.ReminderId == ownReminder.Id
+            && o.ClinicId == data.ClinicAId);
+
+        var denySibling = () => sut.RetryAsync(sibling.Id, siblingReminder.Id);
+        await denySibling.Should().ThrowAsync<AppointmentException>();
+
+        var sent = await h.Db.AppointmentReminders.FirstAsync(r => r.AppointmentId == own.Id && r.Id != ownReminder.Id);
+        sent.Status = AppointmentReminderStatus.Sent;
+        await h.Db.SaveChangesAsync();
+        var denySent = () => sut.RetryAsync(own.Id, sent.Id);
+        await denySent.Should().ThrowAsync<AppointmentReminderException>();
+    }
+
+    [Fact]
+    public async Task Clinic_Admin_Inactive_Membership_Denied_For_Reminders()
+    {
+        await using var h = await AppointmentHarness.CreateAsync();
+        var data = await h.SeedAsync();
+        var patient = h.CreatePatientService(data.PatientUserId, data.PatientId);
+        var created = await patient.CreateForCurrentPatientAsync(new CreatePatientAppointmentRequest
+        {
+            ClinicCode = data.ClinicASlug,
+            DoctorStaffMemberId = data.DoctorAStaffId,
+            AppointmentDateUtc = h.Now.AddDays(2),
+            DurationMinutes = 30,
+        });
+
+        var adminUser = Guid.NewGuid();
+        var adminStaff = Guid.NewGuid();
+        h.Db.StaffMembers.Add(new StaffMember
+        {
+            Id = adminStaff,
+            UserId = adminUser,
+            OrganizationId = data.Org1Id,
+            ClinicId = data.ClinicAId,
+            Role = AppRoles.ClinicAdmin,
+            IsActive = false,
+        });
+        await h.Db.SaveChangesAsync();
+
+        var sut = new AppointmentReminderService(
+            h.Db,
+            new FakeCurrentUser { IsAuthenticated = true, UserId = adminUser, Roles = [AppRoles.ClinicAdmin] },
+            new FakeCurrentStaff(),
+            h.Jobs,
+            new NoOpAuthorizationAuditLogger(),
+            h.Time,
+            NullLogger<AppointmentReminderService>.Instance);
+
+        var act = () => sut.SearchForStaffAsync(new StaffReminderSearchQuery());
+        await act.Should().ThrowAsync<AuthorizationException>();
+        var list = () => sut.ListForAppointmentAsync(created.Id);
+        await list.Should().ThrowAsync<AuthorizationException>();
+    }
+
+    private sealed class RecordingReminderAuditLogger : NoOpAuthorizationAuditLogger
+    {
+        public List<(string Operation, string ResultCode, Guid? OrganizationId, Guid? ClinicId, Guid? ReminderId)> ReminderOps { get; } = [];
+
+        public override void ReminderOperation(
+            string operation,
+            string resultCode,
+            Guid? organizationId = null,
+            Guid? clinicId = null,
+            Guid? reminderId = null) =>
+            ReminderOps.Add((operation, resultCode, organizationId, clinicId, reminderId));
+    }
+
     private sealed class FailingSender : IAppointmentReminderSender
     {
         public Task SendAsync(AppointmentReminderDeliveryRequest request, CancellationToken cancellationToken = default) =>

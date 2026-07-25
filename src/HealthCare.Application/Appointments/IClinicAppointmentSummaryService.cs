@@ -63,7 +63,12 @@ public interface IClinicAppointmentSummaryService
 
 public interface IStaffOperationsHealthService
 {
+    /// <param name="clinicId">
+    /// Optional clinic for scoped operational counts. Required for PLATFORM_ADMIN with explicit bypass
+    /// when clinic metrics are needed. Ignored for clinic-scoped staff (membership clinic is used).
+    /// </param>
     Task<StaffOperationsHealthResponse> GetHealthAsync(
+        Guid? clinicId = null,
         PlatformAdminBypass bypass = PlatformAdminBypass.None,
         CancellationToken cancellationToken = default);
 }

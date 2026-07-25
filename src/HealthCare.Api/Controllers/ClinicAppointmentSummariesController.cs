@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace HealthCare.Api.Controllers;
 
-[Authorize(Policy = AuthorizationPolicies.StaffUser)]
+[Authorize(Policy = AuthorizationPolicies.Authenticated)]
 [Route("api/v1/staff")]
 public sealed class ClinicAppointmentSummariesController : ControllerBase
 {
@@ -79,11 +79,12 @@ public sealed class ClinicAppointmentSummariesController : ControllerBase
     [HttpGet("operations/health")]
     [ProducesResponseType(typeof(StaffOperationsHealthResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<StaffOperationsHealthResponse>> GetOperationsHealth(
+        [FromQuery] Guid? clinicId = null,
         [FromQuery] bool platformAdminBypass = false,
         CancellationToken cancellationToken = default)
     {
         var bypass = platformAdminBypass ? PlatformAdminBypass.Explicit : PlatformAdminBypass.None;
-        var result = await _operationsHealth.GetHealthAsync(bypass, cancellationToken);
+        var result = await _operationsHealth.GetHealthAsync(clinicId, bypass, cancellationToken);
         return Ok(result);
     }
 }

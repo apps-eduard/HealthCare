@@ -26,6 +26,7 @@ Resolution uses server-side Identity roles (DB) + active staff membership + pati
 | `availability.manage_organization` | Org admin availability |
 | `reminders.read` / `reminders.retry` | Staff reminder inspection + `/operations/reminders` |
 | `summaries.read` / `summaries.retry` | Daily clinic summary runs + `/operations/clinic-summaries` |
+| *(ops health)* | `GET /api/v1/staff/operations/health` authorized by either reminders/summaries read; clinic-scoped counts when clinic context resolves; Hangfire flags for org/platform operators |
 | `clinics.read` | Clinic discovery / directory |
 | `clinic_dashboard.read` | Clinic Admin (and PLATFORM_ADMIN with explicit clinic bypass) clinic-scoped operational dashboard |
 | `clinic_profile.read` | Clinic Admin (and PLATFORM_ADMIN with explicit clinic bypass) clinic profile settings read (`/clinic/settings`) |

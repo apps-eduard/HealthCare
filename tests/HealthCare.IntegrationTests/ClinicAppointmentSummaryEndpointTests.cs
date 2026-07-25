@@ -146,10 +146,11 @@ public sealed class ClinicAppointmentSummaryEndpointTests : IAsyncLifetime
 
         var without = await _client!.GetAsync($"/api/v1/staff/clinics/current/appointment-summary?clinicId={clinicAId}");
         without.StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.Unauthorized, HttpStatusCode.NotFound);
-
-        // PLATFORM_ADMIN may lack StaffUser policy — endpoint requires StaffUser.
-        // Explicit bypass still requires StaffUser policy at controller level.
         without.StatusCode.Should().NotBe(HttpStatusCode.OK);
+
+        var withBypass = await _client!.GetAsync(
+            $"/api/v1/staff/clinics/current/appointment-summary?clinicId={clinicAId}&platformAdminBypass=true");
+        withBypass.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]

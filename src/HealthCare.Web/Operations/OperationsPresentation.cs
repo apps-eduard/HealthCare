@@ -82,6 +82,47 @@ public static class OperationsPermissionRules
 
     public static bool CanViewAnyOperations(IPermissionState permissions) =>
         CanViewReminders(permissions) || CanViewSummaries(permissions);
+
+    public static bool ShowClinicPicker(IPermissionState permissions) =>
+        permissions.CanFilterByClinic;
+
+    /// <summary>
+    /// Hangfire worker/dashboard/queue flags are infrastructure posture for org/platform operators.
+    /// Clinic Admin sees clinic-scoped counts instead.
+    /// </summary>
+    public static bool ShowHangfireInfrastructure(IPermissionState permissions) =>
+        permissions.IsOrganizationAdmin || permissions.IsPlatformAdmin;
+}
+
+public static class OperationsPageCopy
+{
+    public static string RemindersSubtitle(IPermissionState permissions) =>
+        permissions.IsClinicAdmin
+            ? "Reminder delivery status for your clinic (safe operational fields only)"
+            : permissions.IsOrganizationAdmin
+                ? "Organization reminder delivery status (safe operational fields only)"
+                : permissions.IsPlatformAdmin
+                    ? "Reminders for the selected organization (safe operational fields only)"
+                    : "Reminder delivery status (safe operational fields only)";
+
+    public static string SummariesSubtitle(IPermissionState permissions) =>
+        permissions.IsClinicAdmin
+            ? "Daily appointment summary runs for your clinic (safe operational fields only)"
+            : permissions.IsOrganizationAdmin
+                ? "Daily clinic appointment summary runs (safe operational fields only)"
+                : permissions.IsPlatformAdmin
+                    ? "Summary runs for the selected organization (safe operational fields only)"
+                    : "Daily clinic appointment summary runs (safe operational fields only)";
+
+    public static string HealthSubtitle(IPermissionState permissions) =>
+        permissions.IsClinicAdmin
+            ? "Clinic-scoped operational warnings — no Hangfire dashboard or secrets"
+            : "Safe sender and Hangfire worker flags — no secrets or job payloads";
+
+    public static string ClinicCaption(IPermissionState permissions, string? clinicName) =>
+        permissions.IsClinicAdmin
+            ? (string.IsNullOrWhiteSpace(clinicName) ? "Your clinic" : clinicName)
+            : (clinicName ?? "Selected clinic");
 }
 
 public static class ReminderProblemMessages
