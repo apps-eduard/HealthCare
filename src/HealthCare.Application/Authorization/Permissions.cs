@@ -60,6 +60,7 @@ public static class Permissions
         public const string ProfileRead = "clinic_profile.read";
         public const string ProfileUpdate = "clinic_profile.update";
         public const string ReportsRead = "clinic_reports.read";
+        public const string AuditLogsRead = "clinic_audit_logs.read";
     }
 
     public static class Organizations
@@ -140,6 +141,7 @@ public static class Permissions
         Clinics.ProfileRead,
         Clinics.ProfileUpdate,
         Clinics.ReportsRead,
+        Clinics.AuditLogsRead,
         Organizations.Read,
         Organizations.Select,
         Organizations.DashboardRead,

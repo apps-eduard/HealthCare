@@ -1,0 +1,449 @@
+@page "/clinic/audit-logs"
+@attribute [Authorize]
+@using HealthCare.Contracts.Clinics
+@using HealthCare.Web.ClinicAudit
+@implements IDisposable
+@inject IClinicAuditLogApiClient AuditApi
+@inject IPermissionState Permissions
+@inject IPlatformTenantContext PlatformTenant
+
+<PageTitle>Clinic Audit Logs</PageTitle>
+
+@if (Permissions.IsPatientOnly)
+{
+    <Alert Type="@AlertType.Error" Message="Patient accounts cannot use staff clinic audit logs." ShowIcon="true" />
+}
+else if (!ClinicAuditPermissionRules.CanView(Permissions))
+{
+    <PermissionDeniedState Message="You do not have permission to view clinic audit logs." />
+}
+else
+{
+    <HcPageHeader Title="Clinic Audit Logs"
+                  Subtitle="@ClinicAuditPageCopy.Subtitle(Permissions)">
+        <Breadcrumb>
+            <Breadcrumb>
+                <BreadcrumbItem Href="/dashboard">Home</BreadcrumbItem>
+                <BreadcrumbItem>Clinic</BreadcrumbItem>
+                <BreadcrumbItem>Audit Logs</BreadcrumbItem>
+            </Breadcrumb>
+        </Breadcrumb>
+        <ChildContent>
+            <Button OnClick="@(() => SearchAsync())" Disabled="@(!CanLoad || _loading)" AriaLabel="Refresh clinic audit logs">
+                <Icon Type="reload" Theme="IconThemeType.Outline" /> Refresh
+            </Button>
+        </ChildContent>
+    </HcPageHeader>
+
+    @if (Permissions.IsPlatformAdmin && !PlatformTenant.HasClinic)
+    {
+        <Alert Type="@AlertType.Info"
+               Message="Select a clinic in the platform banner (with explicit bypass) before loading clinic audit logs."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
+    }
+    else if (Permissions.IsPlatformAdmin && !PlatformTenant.ExplicitBypassEnabled)
+    {
+        <Alert Type="@AlertType.Warning"
+               Message="Enable explicit platform bypass and select a clinic before loading clinic audit logs."
+               ShowIcon="true"
+               Style="margin-bottom:1rem;" />
+    }
+    else
+    {
+        <Collapse Style="margin-bottom:1rem;">
+            <Panel Header="Clinic audit scope" Key="scope">
+                <ul style="margin:0;padding-left:1.25rem;">
+                    <li>Events are limited to this clinic and an explicit operational allowlist.</li>
+                    <li>Organization security, platform, billing, and medical-note events are excluded.</li>
+                    <li>Only safe fields are shown. Passwords, tokens, PHI, request bodies, stack traces, and raw metadata are never returned.</li>
+                    <li>Audit log reads are not themselves written to the audit store (same policy as organization audit).</li>
+                </ul>
+            </Panel>
+        </Collapse>
+
+        <div class="hc-card">
+            <div class="hc-filter-grid">
+                <div>
+                    <div class="hc-filter-label">Clinic</div>
+                    <div class="hc-caption" data-testid="clinic-audit-clinic-caption">
+                        @ClinicAuditPageCopy.ClinicCaption(Permissions, _clinicCaption)
+                    </div>
+                </div>
+                <div>
+                    <label class="hc-filter-label" for="clinic-audit-from">From</label>
+                    <DatePicker Id="clinic-audit-from" TValue="DateTime?" @bind-Value="_fromDate" Style="width:100%;"
+                                AriaLabel="Clinic audit from date" />
+                </div>
+                <div>
+                    <label class="hc-filter-label" for="clinic-audit-to">To</label>
+                    <DatePicker Id="clinic-audit-to" TValue="DateTime?" @bind-Value="_toDate" Style="width:100%;"
+                                AriaLabel="Clinic audit to date" />
+                </div>
+                <div>
+                    <label class="hc-filter-label" for="clinic-audit-category">Category</label>
+                    <Select Id="clinic-audit-category"
+                            TItemValue="string"
+                            TItem="string"
+                            AllowClear
+                            Value="@(_category ?? string.Empty)"
+                            ValueChanged="OnCategoryChanged"
+                            Placeholder="Any"
+                            Style="width:100%;"
+                            AriaLabel="Clinic audit category filter">
+                        <SelectOptions>
+                            @foreach (var category in ClinicAuditPresentation.CommonCategories)
+                            {
+                                <SelectOption TItemValue="string" TItem="string" Value="@category" Label="@category" />
+                            }
+                        </SelectOptions>
+                    </Select>
+                </div>
+                <div>
+                    <label class="hc-filter-label" for="clinic-audit-action">Action</label>
+                    <Select Id="clinic-audit-action"
+                            TItemValue="string"
+                            TItem="string"
+                            AllowClear
+                            Value="@(_action ?? string.Empty)"
+                            ValueChanged="OnActionChanged"
+                            Placeholder="Any allowlisted"
+                            Style="width:100%;"
+                            AriaLabel="Clinic audit action filter">
+                        <SelectOptions>
+                            @foreach (var action in ClinicAuditPresentation.CommonActions)
+                            {
+                                <SelectOption TItemValue="string" TItem="string" Value="@action" Label="@action" />
+                            }
+                        </SelectOptions>
+                    </Select>
+                </div>
+                <div>
+                    <label class="hc-filter-label" for="clinic-audit-result">Result</label>
+                    <Input Id="clinic-audit-result" @bind-Value="_resultCode" Placeholder="e.g. succeeded" AriaLabel="Clinic audit result filter" />
+                </div>
+                <div>
+                    <span class="hc-caption">Max @ClinicAuditPageCopy.MaxInclusiveDays inclusive days · clinic timezone</span>
+                </div>
+                <div>
+                    <Button Type="@ButtonType.Primary" OnClick="@(() => SearchAsync())" Loading="_loading" AriaLabel="Search clinic audit logs">
+                        Search
+                    </Button>
+                </div>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_rangeError))
+        {
+            <ErrorState Message="@_rangeError" />
+        }
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <ErrorState Message="@_error" />
+        }
+
+        @if (_loading && _list is null)
+        {
+            <PageLoading />
+        }
+        else if (_list is null)
+        {
+            <EmptyState Title="Search audit logs"
+                        Message="Choose filters and select Search to load clinic operational events." />
+        }
+        else if (_list.Items.Count == 0)
+        {
+            <EmptyState Title="No audit events"
+                        Message="No allowlisted clinic events match the current filters." />
+        }
+        else
+        {
+            <div class="hc-caption" style="margin-bottom:0.5rem;" data-testid="clinic-audit-context">
+                @_list.ClinicName · timezone @_list.TimeZoneId · @_list.TotalCount event(s)
+                · Retention @_list.RetentionDays day(s)
+            </div>
+            <div class="hc-table-wrap">
+                <table class="hc-table" aria-label="Clinic audit logs">
+                    <thead>
+                        <tr>
+                            <th>Date/time</th>
+                            <th>Action</th>
+                            <th>Result</th>
+                            <th>Actor</th>
+                            <th>Entity</th>
+                            <th>Summary</th>
+                            <th>Correlation</th>
+                            <th class="hc-actions">Detail</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var row in _list.Items)
+                    {
+                        <tr>
+                            <td>
+                                <span class="hc-caption">
+                                    @ClinicAuditPresentation.FormatLocal(row.OccurredAtUtc, _list.TimeZoneId)
+                                </span>
+                            </td>
+                            <td>@row.Action</td>
+                            <td>
+                                <StatusBadge Text="@row.ResultCode"
+                                             Tone="@ClinicAuditPresentation.ResultTone(row.ResultCode)" />
+                            </td>
+                            <td>
+                                @(row.ActorDisplayName ?? ClinicAuditPresentation.TruncateId(row.ActorUserId))
+                                @if (!string.IsNullOrWhiteSpace(row.ActorRole))
+                                {
+                                    <div class="hc-caption">@row.ActorRole</div>
+                                }
+                            </td>
+                            <td>
+                                @(row.ResourceType ?? "—")
+                                @if (row.ResourceId is Guid)
+                                {
+                                    <div class="hc-caption">@ClinicAuditPresentation.TruncateId(row.ResourceId)</div>
+                                }
+                            </td>
+                            <td>@row.Summary</td>
+                            <td>
+                                <span class="hc-caption" title="@(row.CorrelationId ?? "")">
+                                    @ClinicAuditPresentation.TruncateCorrelation(row.CorrelationId)
+                                </span>
+                            </td>
+                            <td class="hc-actions">
+                                <Button Type="@ButtonType.Link"
+                                        OnClick="@(() => OpenDetailAsync(row))"
+                                        AriaLabel="View clinic audit event detail">
+                                    Details
+                                </Button>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;margin-top:0.75rem;flex-wrap:wrap;">
+                <Button Disabled="@(_page <= 1 || _loading)" OnClick="@(() => OnPageChanged(_page - 1))" AriaLabel="Previous clinic audit page">Previous</Button>
+                <span class="hc-caption">Page @_page / @_totalPages</span>
+                <Button Disabled="@(_page >= _totalPages || _loading)" OnClick="@(() => OnPageChanged(_page + 1))" AriaLabel="Next clinic audit page">Next</Button>
+            </div>
+        }
+
+        <Drawer Title="@("Clinic audit event")"
+                Visible="_detailVisible"
+                OnClose="CloseDetail"
+                Width="440">
+            @if (_detailLoading)
+            {
+                <PageLoading />
+            }
+            else if (_detail?.Event is null)
+            {
+                <Empty Description="@("No event selected")" />
+            }
+            else
+            {
+                var ev = _detail.Event;
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                    <div><strong>Occurred:</strong> @ClinicAuditPresentation.FormatLocal(ev.OccurredAtUtc, _detail.TimeZoneId)</div>
+                    <div><strong>UTC:</strong> <span class="hc-caption">@ev.OccurredAtUtc.UtcDateTime.ToString("u")</span></div>
+                    <div><strong>Action:</strong> @ev.Action</div>
+                    <div><strong>Category:</strong> @ev.Category</div>
+                    <div>
+                        <strong>Result:</strong>
+                        <StatusBadge Text="@ev.ResultCode" Tone="@ClinicAuditPresentation.ResultTone(ev.ResultCode)" />
+                    </div>
+                    <div><strong>Summary:</strong> @ev.Summary</div>
+                    <div><strong>Actor:</strong> @(ev.ActorDisplayName ?? ClinicAuditPresentation.TruncateId(ev.ActorUserId))</div>
+                    <div><strong>Actor role:</strong> @(ev.ActorRole ?? "—")</div>
+                    <div><strong>Clinic:</strong> @ev.ClinicName</div>
+                    <div><strong>Entity:</strong> @(ev.ResourceType ?? "—") @ClinicAuditPresentation.TruncateId(ev.ResourceId)</div>
+                    <div><strong>Correlation:</strong> @(ev.CorrelationId ?? "—")</div>
+                    <div class="hc-caption">Raw metadata, passwords, tokens, and clinical content are not available.</div>
+                </div>
+            }
+        </Drawer>
+    }
+}
+
+@code {
+    private bool _loading;
+    private bool _detailLoading;
+    private bool _detailVisible;
+    private string? _error;
+    private string? _rangeError;
+    private string? _clinicCaption;
+    private string? _category;
+    private string? _action;
+    private string? _resultCode;
+    private DateTime? _fromDate = DateTime.UtcNow.Date.AddDays(-6);
+    private DateTime? _toDate = DateTime.UtcNow.Date;
+    private int _page = 1;
+    private ClinicAuditLogListResponse? _list;
+    private ClinicAuditLogDetailResponse? _detail;
+    private bool _subscribedPlatform;
+
+    private int _totalPages =>
+        _list is null || _list.PageSize <= 0
+            ? 1
+            : Math.Max(1, (int)Math.Ceiling(_list.TotalCount / (double)_list.PageSize));
+
+    private bool CanLoad =>
+        !Permissions.IsPlatformAdmin
+        || (PlatformTenant.HasClinic && PlatformTenant.ExplicitBypassEnabled);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Permissions.IsPatientOnly || !ClinicAuditPermissionRules.CanView(Permissions))
+        {
+            return;
+        }
+
+        if (Permissions.IsPlatformAdmin)
+        {
+            PlatformTenant.Changed += OnPlatformTenantChanged;
+            _subscribedPlatform = true;
+        }
+
+        if (CanLoad)
+        {
+            await SearchAsync();
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_subscribedPlatform)
+        {
+            PlatformTenant.Changed -= OnPlatformTenantChanged;
+        }
+    }
+
+    private void OnPlatformTenantChanged() => InvokeAsync(async () =>
+    {
+        _list = null;
+        _detail = null;
+        _error = null;
+        if (CanLoad)
+        {
+            await SearchAsync();
+        }
+
+        StateHasChanged();
+    });
+
+    private Task OnCategoryChanged(string value)
+    {
+        _category = string.IsNullOrWhiteSpace(value) ? null : value;
+        return Task.CompletedTask;
+    }
+
+    private Task OnActionChanged(string value)
+    {
+        _action = string.IsNullOrWhiteSpace(value) ? null : value;
+        return Task.CompletedTask;
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        _page = Math.Max(1, page);
+        await SearchAsync(resetPage: false);
+    }
+
+    private async Task SearchAsync(bool resetPage = true)
+    {
+        _rangeError = ValidateRange();
+        if (_rangeError is not null || !CanLoad)
+        {
+            return;
+        }
+
+        if (resetPage)
+        {
+            _page = 1;
+        }
+
+        _loading = true;
+        _error = null;
+        try
+        {
+            var query = BuildQuery();
+            _list = await AuditApi.SearchAsync(query, Permissions.IsPlatformAdmin);
+            _clinicCaption = _list.ClinicName;
+        }
+        catch (ApiProblemException ex)
+        {
+            _list = null;
+            _error = ClinicAuditProblemMessages.ToUserMessage(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenDetailAsync(ClinicAuditLogItem row)
+    {
+        _detailVisible = true;
+        _detailLoading = true;
+        _detail = null;
+        try
+        {
+            _detail = await AuditApi.GetByIdAsync(row.AuditLogId, BuildQuery(), Permissions.IsPlatformAdmin);
+        }
+        catch (ApiProblemException ex)
+        {
+            _error = ClinicAuditProblemMessages.ToUserMessage(ex);
+            _detailVisible = false;
+        }
+        finally
+        {
+            _detailLoading = false;
+        }
+    }
+
+    private void CloseDetail()
+    {
+        _detailVisible = false;
+        _detail = null;
+    }
+
+    private string? ValidateRange()
+    {
+        if (_fromDate is not DateTime from || _toDate is not DateTime to)
+        {
+            return "Choose both From and To dates.";
+        }
+
+        var fromDay = DateOnly.FromDateTime(from);
+        var toDay = DateOnly.FromDateTime(to);
+        if (fromDay > toDay)
+        {
+            return "From date must be on or before To date.";
+        }
+
+        if (toDay.DayNumber - fromDay.DayNumber + 1 > ClinicAuditPageCopy.MaxInclusiveDays)
+        {
+            return $"Date range cannot exceed {ClinicAuditPageCopy.MaxInclusiveDays} inclusive days.";
+        }
+
+        return null;
+    }
+
+    private ClinicAuditLogQuery BuildQuery()
+    {
+        var from = DateOnly.FromDateTime(_fromDate!.Value).ToString("yyyy-MM-dd");
+        var to = DateOnly.FromDateTime(_toDate!.Value).ToString("yyyy-MM-dd");
+        return new ClinicAuditLogQuery
+        {
+            ClinicId = Permissions.IsPlatformAdmin ? PlatformTenant.SelectedClinicId : null,
+            Category = _category,
+            Action = _action,
+            ResultCode = string.IsNullOrWhiteSpace(_resultCode) ? null : _resultCode.Trim(),
+            FromDate = from,
+            ToDate = to,
+            Page = _page,
+            PageSize = 50,
+        };
+    }
+}

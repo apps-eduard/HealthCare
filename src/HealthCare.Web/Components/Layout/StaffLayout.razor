@@ -146,7 +146,8 @@
                 </SubMenu>
             }
             @if (ClinicSettingsPermissionRules.CanView(Permissions)
-                 || ClinicReportsPermissionRules.CanView(Permissions))
+                 || ClinicReportsPermissionRules.CanView(Permissions)
+                 || ClinicAuditPermissionRules.CanView(Permissions))
             {
                 <SubMenu Key="clinic">
                     <TitleTemplate>
@@ -164,6 +165,12 @@
                         {
                             <MenuItem Key="clinic-reports" RouterLink="/clinic/reports" RouterMatch="NavLinkMatch.Prefix">
                                 <span>Reports</span>
+                            </MenuItem>
+                        }
+                        @if (ClinicAuditPermissionRules.CanView(Permissions))
+                        {
+                            <MenuItem Key="clinic-audit" RouterLink="/clinic/audit-logs" RouterMatch="NavLinkMatch.Prefix">
+                                <span>Audit Logs</span>
                             </MenuItem>
                         }
                     </ChildContent>
@@ -313,6 +320,7 @@
                 var p when p.StartsWith("/audit-logs", StringComparison.Ordinal) => "audit-logs",
                 var p when p.StartsWith("/usage", StringComparison.Ordinal) => "usage",
                 var p when p.StartsWith("/organization/settings", StringComparison.Ordinal) => "org-settings",
+                var p when p.StartsWith("/clinic/audit-logs", StringComparison.Ordinal) => "clinic-audit",
                 var p when p.StartsWith("/clinic/reports", StringComparison.Ordinal) => "clinic-reports",
                 var p when p.StartsWith("/clinic/settings", StringComparison.Ordinal) => "clinic-settings",
                 var p when p.StartsWith("/clinics", StringComparison.Ordinal) => "clinics",

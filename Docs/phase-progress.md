@@ -19,7 +19,7 @@
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Clinic Admin Web MVP CA-9 (clinic-filtered audit) — CA-1–CA-8 delivered
+**Current focus:** Clinic Admin Web MVP CA-10 (hardening + Playwright E2E) — CA-1–CA-9 delivered
 
 ### All phases at a glance
 
@@ -1036,6 +1036,7 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 | 2026-07-25 | 8 | Clinic Admin CA-6 — appointment queue actor polish + Complete/no-show + E2E smoke |
 | 2026-07-25 | 8 | Clinic Admin CA-7 — operations reminders/summaries/health actor polish + clinic-scoped health counts + E2E smoke |
 | 2026-07-25 | 8 | Clinic Admin CA-8 — clinic operational reports API/UI + `clinic_reports.read` + E2E smoke |
+| 2026-07-25 | 8 | Clinic Admin CA-9 — clinic-filtered audit API/UI + `clinic_audit_logs.read` + allowlist + E2E smoke |
 
 ### Clinic Admin Web MVP (approved scope)
 
@@ -1051,10 +1052,10 @@ Authoritative scope: **`Docs/mvp-clinic-admin-scope.md`** (product-owner approve
 | CA-6 | Appointments verify (Complete for CA) | Small | **Delivered** (2026-07-25) |
 | CA-7 | Operations verify | Small | **Delivered** (2026-07-25) |
 | CA-8 | Clinic reports (JSON; no CSV) | Large | **Delivered** (2026-07-25) |
-| CA-9 | Clinic-filtered audit | Medium | Approved |
+| CA-9 | Clinic-filtered audit | Medium | **Delivered** (2026-07-25) |
 | CA-10 | Hardening + Playwright E2E | Medium | Not started |
 
-Existing backend covers clinic-scoped staff/patients/appointments/availability/operations/reports for `CLINIC_ADMIN`. Remaining gap: clinic-filtered audit.
+Existing backend covers clinic-scoped staff/patients/appointments/availability/operations/reports/audit for `CLINIC_ADMIN`. Remaining gap: CA-10 hardening + full Playwright smoke.
 
 ---
 

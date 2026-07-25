@@ -505,6 +505,62 @@ internal sealed class ClinicDashHarness : IAsyncDisposable
             NullLogger<ClinicReportsService>.Instance);
     }
 
+    public ClinicAuditLogService CreateAuditService((ApplicationUser User, Domain.Staff.StaffMember Staff) actor)
+    {
+        var currentUser = new FakeCurrentUser
+        {
+            IsAuthenticated = true,
+            UserId = actor.User.Id,
+            Email = actor.User.Email,
+            Roles = [actor.Staff.Role],
+            OrganizationId = actor.Staff.OrganizationId,
+            ClinicId = actor.Staff.ClinicId,
+            StaffMemberId = actor.Staff.Id,
+        };
+        var currentStaff = new FakeCurrentStaff
+        {
+            HasActiveMembership = true,
+            StaffMemberId = actor.Staff.Id,
+            OrganizationId = actor.Staff.OrganizationId,
+            ClinicId = actor.Staff.ClinicId,
+            Role = actor.Staff.Role,
+        };
+        return BuildAuditService(currentUser, currentStaff);
+    }
+
+    public ClinicAuditLogService CreatePlatformAuditService(ApplicationUser platformUser)
+    {
+        var currentUser = new FakeCurrentUser
+        {
+            IsAuthenticated = true,
+            UserId = platformUser.Id,
+            Email = platformUser.Email,
+            Roles = [AppRoles.PlatformAdmin],
+        };
+        var currentStaff = new FakeCurrentStaff { HasActiveMembership = false };
+        return BuildAuditService(currentUser, currentStaff);
+    }
+
+    public ClinicAuditLogService BuildAuditService(FakeCurrentUser currentUser, FakeCurrentStaff currentStaff)
+    {
+        var audit = new NoOpAuthorizationAuditLogger();
+        var permissions = new PermissionService(
+            currentUser,
+            currentStaff,
+            new FakeCurrentPatient(),
+            audit);
+
+        return new ClinicAuditLogService(
+            Db,
+            currentUser,
+            currentStaff,
+            permissions,
+            audit,
+            new ClinicTimeZoneConverter(NullLogger<ClinicTimeZoneConverter>.Instance),
+            Microsoft.Extensions.Options.Options.Create(
+                new HealthCare.Application.Organizations.AuditRetentionOptions { RetentionDays = 365 }));
+    }
+
     public async Task SeedAppointmentOnLocalDateAsync(
         Guid clinicId,
         AppointmentStatus status,

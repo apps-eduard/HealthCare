@@ -238,6 +238,18 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
                 cancellationToken);
         }
 
+        if (exception is ClinicAuditLogException clinicAuditLogException)
+        {
+            return await WriteAuthProblemAsync(
+                httpContext,
+                clinicAuditLogException.StatusCode,
+                clinicAuditLogException.Title,
+                clinicAuditLogException.ErrorCode,
+                correlationId,
+                "Clinic audit logs denied",
+                cancellationToken);
+        }
+
         if (exception is OrganizationAuditLogException organizationAuditLogException)
         {
             return await WriteAuthProblemAsync(

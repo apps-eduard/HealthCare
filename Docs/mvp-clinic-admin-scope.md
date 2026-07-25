@@ -459,20 +459,25 @@ Web: `/clinic/reports` (CA-8).
 
 ---
 
-## 17. Clinic audit (Decision C — **approved**)
+## 17. Clinic audit (Decision C — **approved** / **delivered** CA-9)
 
 ### Permission
 
 `clinic_audit_logs.read`
 
-### Visible (clinic-filtered)
+### Visible (clinic-filtered allowlist)
+
+Explicit allowlist (`ClinicAuditActions` / `ClinicAuditActionAllowlist`), including:
 
 - Staff creation and status changes  
 - Patient enrollment and status changes  
 - Appointment actions  
 - Availability changes  
-- Reminder retries  
+- Reminder / summary retries and operations health  
 - Clinic profile updates  
+- Clinic report view events  
+
+Unknown / future actions are excluded by default (allowlist, not blacklist).
 
 ### Must exclude
 
@@ -486,7 +491,8 @@ Web: `/clinic/reports` (CA-8).
 
 ### Features
 
-Read-only list/detail/correlation. **No** edit, delete, export, or SIEM.
+Read-only list/detail/correlation. **No** edit, delete, export, or SIEM.  
+**Read-audit policy:** successful clinic audit log reads are **not** written back to the audit store (same policy as organization audit-log reads).
 
 ### Suggested routes
 
@@ -496,7 +502,7 @@ GET /api/v1/clinic/audit-logs/{eventId}
 GET /api/v1/clinic/audit-logs/by-correlation/{correlationId}
 ```
 
-Web: `/clinic/audit-logs` (CA-9). May filter existing `OrganizationAuditEvents` by clinic.
+Web: `/clinic/audit-logs` (CA-9 **delivered**). Filters existing `OrganizationAuditEvents` by membership clinic + allowlist. No Metadata column is stored or returned.
 
 ---
 
@@ -584,7 +590,7 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 | CA-6 | Appointments verify (Complete for CA) | Small | **Delivered** (2026-07-25) |
 | CA-7 | Operations verify | Small | **Delivered** |
 | CA-8 | Clinic reports (JSON) | Large | **Delivered** (2026-07-25) |
-| CA-9 | Clinic-filtered audit | Medium | Approved |
+| CA-9 | Clinic-filtered audit | Medium | **Delivered** (2026-07-25) |
 | CA-10 | Hardening + Playwright E2E | Medium | After prior phases |
 
 ### Phase DoD summaries
@@ -593,7 +599,7 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 **CA-2:** settings GET/PATCH; field allow-list; concurrency; `clinic_profile_update` audit; shared logic with org clinic update where practical.  
 **CA-3–7:** Actor-aware UI on existing pages; no privilege leakage; Complete visible for CA.  
 **CA-8:** Four report routes (or consolidated); 93-day cap; privacy rules; no CSV.  
-**CA-9:** Clinic-filtered audit read APIs + UI; exclusions enforced.  
+**CA-9:** Clinic-filtered audit read APIs + UI; allowlist exclusions enforced; successful reads not audited.  
 **CA-10:** Full smoke E2E on docsvr; DoD checklist complete.
 
 ---
@@ -610,7 +616,7 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 | Appointments | Matrix | appointments.* | Done | **Done** (CA-6 actor-aware + Complete) | — | CA-6 |
 | Ops | Matrix | reminders/summaries | Done | Done | **Delivered** | CA-7 |
 | Clinic reports | Approved | `clinic_reports.read` | **Done** | **Done** (`/clinic/reports`) | — | CA-8 |
-| Clinic audit | Approved | `clinic_audit_logs.read` | Missing | Missing | New | CA-9 |
+| Clinic audit | Approved | `clinic_audit_logs.read` | **Done** | **Done** (`/clinic/audit-logs`) | — | CA-9 |
 | Org limits /usage | Denied | — | CA denied | Gated | Intentional | — |
 | Cross-clinic denial | Required | tenant | Done (existing) | Mostly | Keep for new APIs | all |
 | Patient / anonymous denial | Required | auth | Done | Done | Keep | all |
@@ -630,3 +636,4 @@ Custom DB roles; multi-clinic Clinic Admin membership; billing; telemedicine; me
 | 2026-07-25 | **CA-4 delivered:** `/doctors` directory + availability deep-link/actor polish; doctor DisplayName fix; Clinic Admin E2E doctors smoke |
 | 2026-07-25 | **CA-5 delivered:** `/patients` actor-aware directory; hide cross-clinic enroll; status ExpectedVersion; Platform Admin Authenticated+bypass; E2E patients smoke |
 | 2026-07-25 | **CA-8 delivered:** `clinic_reports.read`, clinic report APIs + `/clinic/reports` UI (JSON only, no CSV), E2E smoke |
+| 2026-07-25 | **CA-9 delivered:** `clinic_audit_logs.read`, clinic audit APIs + `/clinic/audit-logs` UI (allowlist; reads not audited), E2E smoke |

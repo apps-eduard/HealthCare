@@ -16,15 +16,14 @@ public sealed class ClinicAdminReportsUiTests
         ClinicReportsPermissionRules.CanView(state).Should().BeTrue();
         state.Has(WebPermissions.ClinicReportsRead).Should().BeTrue();
         state.Has(WebPermissions.OrganizationReportsRead).Should().BeFalse();
-        state.Has("clinic_audit_logs.read").Should().BeFalse();
 
         var webRoot = WebRoot();
         var layout = File.ReadAllText(Path.Combine(webRoot, "Components", "Layout", "StaffLayout.razor"));
         layout.Should().Contain("/clinic/reports");
         layout.Should().Contain("ClinicReportsPermissionRules.CanView");
         layout.Should().Contain("clinic-reports");
-        layout.Should().NotContain("/clinic/audit");
-        layout.Should().NotContain("clinic_audit_logs");
+        layout.Should().Contain("/clinic/audit-logs");
+        layout.Should().Contain("ClinicAuditPermissionRules.CanView");
     }
 
     [Fact]
