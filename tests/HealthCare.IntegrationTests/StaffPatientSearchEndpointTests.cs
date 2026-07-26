@@ -642,6 +642,53 @@ public sealed class StaffPatientSearchEndpointTests : IAsyncLifetime
         body.ToLowerInvariant().Should().NotContain("password");
     }
 
+    [Fact]
+    public async Task Platform_Admin_Staff_Directory_Requires_Bypass_And_Clinic_And_Excludes_Note_Content()
+    {
+        await AuthenticateAsync("admin@healthcare.local", "ChangeMe_Admin_1!");
+        using var scope = _factory!.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<HealthCareDbContext>();
+        var clinicAId = await db.Clinics.Where(c => c.Slug == "dev-clinic-a").Select(c => c.Id).SingleAsync();
+        var patientId = await db.ClinicPatients
+            .Where(cp => cp.ClinicId == clinicAId && cp.LocalPatientNumber == "DEV-P-0001")
+            .Select(cp => cp.PatientId)
+            .SingleAsync();
+
+        var missingClinic = await _client!.GetAsync("/api/v1/staff/patients?platformAdminBypass=true");
+        missingClinic.StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.Unauthorized);
+
+        using var search = await _client!.GetAsync(
+            $"/api/v1/staff/patients?clinicId={clinicAId:D}&platformAdminBypass=true");
+        search.StatusCode.Should().Be(HttpStatusCode.OK);
+        var rawSearch = await search.Content.ReadAsStringAsync();
+        var searchBody = System.Text.Json.JsonSerializer.Deserialize<PagedResponse<StaffPatientSummaryResponse>>(
+            rawSearch,
+            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        searchBody!.Items.Should().Contain(i => i.PatientId == patientId);
+
+        using var detailResponse = await _client!.GetAsync(
+            $"/api/v1/staff/patients/{patientId:D}?clinicId={clinicAId:D}&platformAdminBypass=true");
+        detailResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var rawDetail = await detailResponse.Content.ReadAsStringAsync();
+        var detail = System.Text.Json.JsonSerializer.Deserialize<StaffPatientDetailResponse>(
+            rawDetail,
+            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        detail!.PatientId.Should().Be(patientId);
+        detail.Enrollments.Should().NotBeEmpty();
+
+        foreach (var raw in new[] { rawSearch, rawDetail })
+        {
+            var lower = raw.ToLowerInvariant();
+            lower.Should().NotContain("medical_note");
+            lower.Should().NotContain("\"subjective\"");
+            lower.Should().NotContain("\"objective\"");
+            lower.Should().NotContain("\"assessment\"");
+            lower.Should().NotContain("\"plan\"");
+            lower.Should().NotContain("notebody");
+            lower.Should().NotContain("amendment");
+        }
+    }
+
     private async Task AuthenticateAsync(string email, string password)
     {
         var login = await _client!.PostAsJsonAsync("/api/v1/auth/login", new LoginRequest

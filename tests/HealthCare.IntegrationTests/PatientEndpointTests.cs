@@ -117,6 +117,22 @@ public sealed class PatientEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Platform_Admin_Without_Linked_Patient_Cannot_Call_Patients_Me()
+    {
+        // Documented PM-7 / DR-9 semantics: authenticated wrong role → 403 (not Patient self-scope).
+        // Staff patients.search / patients.read do not grant /patients/me.
+        await AuthenticateAsync(AdminEmail, AdminPassword);
+        var response = await _client!.GetAsync("/api/v1/patients/me");
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var body = await response.Content.ReadAsStringAsync();
+        body.Should().NotContain("Linked");
+        body.Should().NotContain(_linkedPatientId.ToString("D"));
+        body.ToLowerInvariant().Should().NotContain("firstname");
+        body.ToLowerInvariant().Should().NotContain("medical_note");
+    }
+
+    [Fact]
     public async Task Linked_Patient_Receives_Own_Profile()
     {
         await AuthenticateAsync(PatientEmail, PatientPassword);

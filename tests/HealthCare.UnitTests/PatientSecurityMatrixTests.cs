@@ -83,6 +83,8 @@ public sealed class PatientSecurityMatrixTests
     public void Clinic_Scoped_Staff_Do_Not_Receive_Patient_UpdateOwnProfile()
     {
         // Patient self-service also requires PatientSelfScope + PATIENT linkage at the endpoint.
+        // PLATFORM_ADMIN retains the catalog grant but cannot satisfy PatientSelfScope without PATIENT linkage
+        // (covered by PlatformAdminPatientDirectorySecurityTests).
         foreach (var role in new[]
                  {
                      AppRoles.Doctor,

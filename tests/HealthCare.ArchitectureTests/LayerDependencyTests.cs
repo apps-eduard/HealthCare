@@ -9,6 +9,7 @@ using HealthCare.Application.Organizations;
 using HealthCare.Application.Patients;
 using HealthCare.Application.Staff;
 using HealthCare.Contracts;
+using HealthCare.Contracts.Patients;
 using HealthCare.Domain;
 using NetArchTest.Rules;
 
@@ -368,6 +369,26 @@ public sealed class LayerDependencyTests
 
         // Hangfire dashboard filter may still check PLATFORM_ADMIN + hangfire.dashboard permission in Infrastructure.
         typeof(IPermissionService).Namespace.Should().StartWith("HealthCare.Application");
+    }
+
+    [Fact]
+    public void Staff_Patient_Directory_Contracts_Must_Not_Expose_Clinical_Note_Members()
+    {
+        foreach (var type in new[]
+                 {
+                     typeof(StaffPatientSummaryResponse),
+                     typeof(StaffPatientDetailResponse),
+                     typeof(StaffPatientLookupItemResponse),
+                 })
+        {
+            var names = type.GetProperties().Select(p => p.Name).ToArray();
+            names.Should().NotContain(n =>
+                n.Contains("Note", StringComparison.OrdinalIgnoreCase)
+                || n.Contains("Subjective", StringComparison.OrdinalIgnoreCase)
+                || n.Contains("Objective", StringComparison.OrdinalIgnoreCase)
+                || n.Contains("Assessment", StringComparison.OrdinalIgnoreCase)
+                || n.Equals("Plan", StringComparison.OrdinalIgnoreCase));
+        }
     }
 
     private static string Because(TestResult result)

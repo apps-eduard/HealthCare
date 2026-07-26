@@ -752,6 +752,14 @@ DTO notes: shared `AppointmentResponse` may still carry navigation IDs (`Organiz
 
 No production defects required fixes in PM-7.
 
+### 16.8.0a Platform Admin Patient Directory regression (post-PM-8)
+
+Focused regression (tests + docs only; production auth unchanged):
+
+- Web: `PlatformAdminPatientsNavUiTests` — `patients.search` shows `/patients` admin directory link; without it the link is hidden; `StaffLayout` stays permission-driven (not `/patients/me`)
+- Unit: `PlatformAdminPatientDirectorySecurityTests` — staff directory permissions + bypass/clinic requirements; DTO shape excludes clinical note fields; `patients.update_own_profile` catalog grant does not satisfy `PatientSelfScope`
+- Integration: `StaffPatientSearchEndpointTests` Platform Admin bypass/clinic search+detail + note-field scrub; `PatientEndpointTests` Platform Admin `/patients/me` → `403` without linked Patient
+
 ### 16.8.1 Patient Mobile E2E pack (PM-8)
 
 Two-layer verification (native Appium/MAUI UITest not packaged in-repo):
