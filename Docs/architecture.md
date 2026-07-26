@@ -650,9 +650,9 @@ Authoritative scope: **`Docs/mvp-patient-scope.md`**.
 
 **PM-7 (delivered):** Patient security negative matrix — unit permission catalog denials; HTTP matrix for anonymous/`401`, wrong-role/unlinked/inactive/`403`, cross-patient/foreign-org/`404`, authz-before-conflict (no `409` existence disclosure), Patient-safe JSON scrub; mobile route guards + logout state clearing. Complements DR-9; representative (not every staff route).
 
-**PM-8 Layer A (delivered):** Patient API journey pack (`PatientMobileMvpE2eTests` / `PatientE2eApi`) on docsvr against real API host — same contract as the MAUI client. Not Playwright Web; not mocked handlers.
+**PM-8 Layer A (delivered):** Patient API journey pack (`PatientMobileMvpE2eTests` / `PatientE2eApi`) on docsvr against real API host — same contract as the MAUI client. Not Playwright Web; not mocked handlers. **12/12**.
 
-**PM-8 Layer B (pending):** Android emulator/device runtime acceptance (`PatientAndroidRuntimeChecklist.md`). Native Appium/MAUI UITest not packaged in-repo. Patient MVP remains incomplete until Layer B succeeds (or approved exception). App Links remain deferred.
+**PM-8 Layer B (delivered):** Android emulator runtime acceptance on `HealthCare_Pixel_API34` (API 34, Pixel 6 / 1080×2400). Checklist: `tests/HealthCare.EndToEndTests/PatientAndroidRuntimeChecklist.md`. App Links remain deferred.
 
 Patient-visible clinical records grouped by clinic are **deferred**. Medical-note bodies remain staff-only.
 

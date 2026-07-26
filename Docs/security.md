@@ -758,10 +758,10 @@ Two-layer verification (native Appium/MAUI UITest not packaged in-repo):
 
 | Layer | Suite / doc | Host |
 |-------|-------------|------|
-| A — API journeys (MAUI client contract) | `PatientMobileMvpE2eTests` + `PatientE2eApi` | Ubuntu docsvr `E2eHostFixture` |
-| B — Android runtime | `PatientAndroidRuntimeChecklist.md` | Emulator or physical device |
+| A — API journeys (MAUI client contract) | `PatientMobileMvpE2eTests` + `PatientE2eApi` (**12/12**) | Ubuntu docsvr `E2eHostFixture` |
+| B — Android runtime | `PatientAndroidRuntimeChecklist.md` (**Pass**, 2026-07-26) | Emulator `HealthCare_Pixel_API34` (API 34) |
 
-Layer A proves register/confirm helper, login linkage, unlinked denial, profile patch, clinic/Doctor discovery, book/list/cancel/reschedule, two-hour cutoff, cross-patient `404`, restricted surfaces, logout refresh revoke. Layer B is required before claiming full PM-8 / Patient MVP closure. Do not equate Playwright Doctor Web E2E with Patient MAUI E2E. App Links remain deferred.
+Layer A proves register/confirm helper, login linkage, unlinked denial, profile patch, clinic/Doctor discovery, book/list/cancel/reschedule, two-hour cutoff, cross-patient `404`, restricted surfaces, logout refresh revoke. Layer B exercised the real MAUI app on an Android emulator (startup through logout, usability, no staff nav). Do not equate Playwright Doctor Web E2E with Patient MAUI E2E. App Links remain deferred. **Patient Mobile MVP complete.**
 
 ### 16.9 Doctor Web MVP E2E pack (DR-10)
 

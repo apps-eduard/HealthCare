@@ -561,7 +561,7 @@ Authoritative product contract: **`Docs/mvp-patient-scope.md`** (PM-0 approved 2
 
 Deliver Patient Mobile via milestones **PM-1…PM-8** (do not treat Phase 11 as a single unstructured drop).
 
-**Progress:** PM-1…**PM-7** delivered; **PM-8 Layer A** (API journey pack) delivered. **Layer B** (Android runtime checklist) pending — do not start a post-PM-8 milestone.
+**Progress:** PM-1…**PM-8** delivered. Patient Mobile MVP complete (Layer A API pack + Layer B Android runtime). Do not start a post-PM-8 milestone until scheduled.
 
 ### Objectives
 
@@ -575,7 +575,7 @@ Build the Android-first patient experience on existing Patient APIs; close Patie
 - PM-5: book appointment (`Requested`) (**delivered**)
 - PM-6: my appointments / cancel / reschedule (2-hour cutoff) (**delivered**)
 - PM-7: Patient security negative matrix (**delivered**)
-- PM-8: Patient E2E — Layer A API pack (**delivered**); Layer B Android runtime (**pending**)
+- PM-8: Patient E2E — Layer A API pack (**delivered**, 12/12) + Layer B Android runtime (**delivered**)
 
 ### Security requirements
 
@@ -587,7 +587,7 @@ Build the Android-first patient experience on existing Patient APIs; close Patie
 
 ### Acceptance criteria
 
-- Android app supports the full Patient Mobile MVP flow per `mvp-patient-scope.md` (requires Layer B runtime).
+- Android app supports the full Patient Mobile MVP flow per `mvp-patient-scope.md` (**met** — Layer B runtime).
 - A patient can use one account across multiple clinics.
 - Clinical note bodies remain inaccessible to patients.
 - Google / OTP / push inbox remain deferred.

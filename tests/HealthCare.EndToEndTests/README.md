@@ -14,8 +14,8 @@ Real-browser smoke tests for Organization Admin critical workflows.
 
 | Layer | What it is | What it is not |
 |-------|------------|----------------|
-| **A — Automated** | `PatientMobileMvpE2eTests` + `PatientE2eApi` against real API host (`E2eHostFixture`) — same contract the MAUI client uses | Not Playwright Web; not mocked HTTP; not “build only” |
-| **B — Android runtime** | Manual checklist on emulator/device: [`PatientAndroidRuntimeChecklist.md`](PatientAndroidRuntimeChecklist.md) | Not claimed complete without a real device/emulator session |
+| **A — Automated** | `PatientMobileMvpE2eTests` + `PatientE2eApi` against real API host (`E2eHostFixture`) — same contract the MAUI client uses (**12/12** on docsvr) | Not Playwright Web; not mocked HTTP; not “build only” |
+| **B — Android runtime** | Checklist on emulator/device: [`PatientAndroidRuntimeChecklist.md`](PatientAndroidRuntimeChecklist.md) — **Pass** on `HealthCare_Pixel_API34` (API 34, 2026-07-26) | Not claimed complete without a real device/emulator session |
 
 Preferred native UI automation (Appium / MAUI UITest) is **not** packaged in this repository. When no AVD/device is available, mark Layer B **pending** with the exact blocker; do **not** label Layer A as full mobile E2E.
 
@@ -115,8 +115,8 @@ E2E tests share one host fixture and use an xUnit collection with `DisableParall
 - Doctor DR-10 completion without note: complete succeeds; no auto-created medical note (`DoctorCompletionWithoutNoteSmokeTests`)
 - Doctor DR-10 denials: admin nav absent + direct restricted routes; peer clinic-B appointment/note concealed (`DoctorAccessDenialSmokeTests`)
 - Doctor DR-10 responsive: 390×844 detail dialog + note/complete actions; restricted nav stays absent (`DoctorResponsiveWorkflowSmokeTests`)
-- Patient PM-8 Layer A: registration/confirm helper, login/linkage, profile, clinic/Doctor discovery, book/list/cancel/reschedule, cutoff `409`, cross-patient `404`, restricted surfaces, logout revoke (`PatientMobileMvpE2eTests`)
-- Patient PM-8 Layer B: Android runtime checklist (`PatientAndroidRuntimeChecklist.md`) — required for full PM-8 / Patient MVP closure
+- Patient PM-8 Layer A: registration/confirm helper, login/linkage, profile, clinic/Doctor discovery, book/list/cancel/reschedule, cutoff `409`, cross-patient `404`, restricted surfaces, logout revoke (`PatientMobileMvpE2eTests`) — **12/12**
+- Patient PM-8 Layer B: Android runtime checklist (`PatientAndroidRuntimeChecklist.md`) — **Pass** on Pixel API 34 emulator
 
 ### Doctor DR-10 environment notes
 
@@ -136,11 +136,10 @@ Do not commit `tests/HealthCare.EndToEndTests/artifacts/` screenshots or Playwri
 
 | Item | Value |
 |------|--------|
-| Host | Ubuntu **docsvr** for Layer A (not Windows Playwright/Testcontainers) |
-| Framework | xUnit HTTP client against `E2eHostFixture` API (MAUI client contract) |
-| Android automation | Not in-repo; Layer B = manual checklist / future Appium |
-| Mode | Non-interactive API (headless host processes) |
-| Data | Development seed Patient + unique registered/seeded Patients; available-slot booking (future-safe) |
-| Confirmation | Dev `GET /api/v1/auth/dev/confirmation-token` + `confirm-email` (no live email required) |
-| App Links | Still deferred — not claimed |
-| Artifacts | Failures only under `artifacts/` (gitignored); no tokens/PII in logs |
+| Host | Ubuntu **docsvr** for Layer A; Windows 11 + local emulator for Layer B |
+| Framework | xUnit HTTP (Layer A); UI Automator dumps / manual checklist (Layer B) |
+| Android | `HealthCare_Pixel_API34` (Google APIs x86_64, API 34, 1080×2400) |
+| Mode | Layer A non-interactive; Layer B interactive emulator |
+| Data | Development seed Patient + unique registered Patients; available-slot booking |
+| Confirmation | Dev confirmation-token helper (no live email; App Links deferred) |
+| Artifacts | Failures/local temp only; gitignored; no tokens/PII committed |

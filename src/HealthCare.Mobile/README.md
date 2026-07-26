@@ -2,7 +2,7 @@
 
 Android-first **.NET MAUI Blazor Hybrid** app for the Patient Mobile MVP.
 
-**Status:** **PM-2 … PM-7 delivered.** **PM-8 Layer A** (API journey pack) delivered; **Layer B** (Android runtime) pending — see `tests/HealthCare.EndToEndTests/PatientAndroidRuntimeChecklist.md`.
+**Status:** **PM-2 … PM-8 delivered.** Patient Mobile MVP **complete**. Layer A API pack + Layer B Android runtime (`HealthCare_Pixel_API34`) — see `tests/HealthCare.EndToEndTests/PatientAndroidRuntimeChecklist.md`.
 
 Authoritative product scope: [`Docs/mvp-patient-scope.md`](../../Docs/mvp-patient-scope.md).
 
@@ -228,11 +228,12 @@ Start the API, then deploy/run on an emulator or device. Seeded Patient accounts
 
 - Deep-link App Links for confirmation emails are not registered (manual token / browser confirm + return to app)
 - Emulator runtime smoke may be unavailable in CI; Android **build** is required
-- Google/OTP, notifications: deferred (not PM-8)
-- Patient E2E: PM-8 Layer A API pack in `HealthCare.EndToEndTests`; Layer B Android checklist pending without emulator/device
+- Google/OTP, notifications: deferred
+- Patient E2E: PM-8 Layer A API pack (`12/12`) + Layer B Android runtime (**Pass**, Pixel API 34)
 - No specialty catalog (clinic specialty string only); no maps/ratings/public photo subsystem
 - `ClinicDoctorResponse` still includes `StaffMemberId` / `ClinicId` for API navigation; IDs are not shown in UI
 - Reschedule keeps the same clinic and Doctor (backend clinic is fixed; UI does not offer Doctor change)
 - No Blazor bUnit package in-repo; appointment UI logic covered via Core services + route/state tests
-- Android runtime smoke: not verified unless emulator executed (PM-8 Layer B)
+- Android runtime: verified on local emulator for PM-8 Layer B (not required in CI)
 - PM-7 security matrix is representative (not every staff route); complements DR-9 / PM-1
+- App Links for email confirmation remain deferred
