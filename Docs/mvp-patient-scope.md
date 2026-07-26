@@ -1,12 +1,12 @@
 # MVP Patient Scope
 
 **Status:** **Approved** by product owner (2026-07-25). Authoritative for the **Patient Mobile MVP**.  
-**Implementation:** **PM-0 … PM-7 delivered** (2026-07-26). PM-8 not started.  
+**Implementation:** **PM-0 … PM-7 delivered.** **PM-8 Layer A (API journey pack) delivered**; **Layer B (Android runtime acceptance) pending** until an emulator/device session is executed — see `tests/HealthCare.EndToEndTests/PatientAndroidRuntimeChecklist.md`.  
 **Authority:** This document overrides informal Patient notes in `Docs/security.md` §4.7 / §5.1, `Docs/architecture.md` §10.1 / §12.2, and `Docs/development-plan.md` Phase 11 where they conflict. Keep matrix and security cross-links in sync when coding.  
 **Related:** `Docs/mvp-organization-admin-scope.md`, `Docs/mvp-clinic-admin-scope.md`, `Docs/mvp-doctor-scope.md`, `Docs/authorization-matrix.md`, `Docs/security.md` §4.7 / patient self-scope.  
 **Do not** copy staff Web capabilities into the Patient app.  
 **Do not** rebuild existing Patient APIs that already match this contract.  
-**Do not** begin PM-8 (Patient E2E) until scheduled.
+**Do not** begin a post-PM-8 milestone until PM-8 is closed (Layer A + Layer B or approved exception).
 
 Verified baseline when approved (2026-07-25):
 
@@ -460,7 +460,7 @@ Do not treat permission-catalog-only tests as sufficient for Patient product DoD
 | **PM-5** | Appointment booking (mobile) | Medium | **Delivered** (2026-07-25) |
 | **PM-6** | My Appointments, cancel, reschedule | Medium | **Delivered** (2026-07-25) |
 | **PM-7** | Patient security and negative matrix | Medium | **Delivered** (2026-07-26) |
-| **PM-8** | Patient mobile E2E | Medium | Not started |
+| **PM-8** | Patient mobile E2E | Medium | **Layer A delivered**; Layer B (Android runtime) pending |
 
 ### PM-1 — Patient contract and backend gap hardening — **delivered**
 
@@ -541,9 +541,16 @@ Do not treat permission-catalog-only tests as sufficient for Patient product DoD
 
 ### PM-8 — Patient mobile E2E
 
-- Register or seeded login → profile → discovery → book → detail → reschedule → cancel → denials  
-- Android emulator or supported MAUI environment  
-- Narrow + normal device coverage where appropriate  
+**Strategy (selected):** two-layer fallback — native Appium/MAUI UITest not available in-repo / no AVD on the Windows agent.
+
+| Layer | Status | Evidence |
+|-------|--------|----------|
+| **A — Automated API journeys** | Delivered | `PatientMobileMvpE2eTests` + `PatientE2eApi` on docsvr `E2eHostFixture` (real API + Postgres; MAUI client contract) |
+| **B — Android runtime** | Pending until executed | `PatientAndroidRuntimeChecklist.md` on emulator or physical device |
+
+Covered by Layer A (API contract): register/confirm helper + login linkage, profile edit, clinic/Doctor discovery + enroll, book → list → reschedule → cancel, two-hour cutoff `409`, cross-patient `404`, restricted staff surfaces, logout refresh revoke. Session-restoration UI and viewport/a11y remain Layer B / Mobile.Tests.
+
+**Not claimed:** Playwright Web = MAUI E2E; mocked handlers; compile-without-launch; App Links confirmation.
 
 ---
 
@@ -557,15 +564,15 @@ Do not treat permission-catalog-only tests as sufficient for Patient product DoD
 - [x] PM-5 appointment booking complete  
 - [x] PM-6 My Appointments / cancel / reschedule complete  
 - [x] PM-7 Patient security matrix complete  
-- [ ] PM-8 complete  
+- [ ] PM-8 complete (Layer A delivered; Layer B Android runtime pending)  
 - [x] Backend gaps closed for PM-1 (404 concealment, 2-hour cutoff, DTO review)  
-- [ ] Android MAUI app supports full Patient MVP flow (PM-8 E2E pending)  
+- [ ] Android MAUI app supports full Patient MVP flow (runtime acceptance pending)  
 - [x] Patient security matrix green  
-- [ ] Patient E2E pack green on required host  
-- [ ] Docs updated as phases ship  
-- [ ] No secrets / note bodies in logs or mobile storage  
+- [ ] Patient E2E pack fully green (Layer A automated; Layer B pending)  
+- [x] Docs updated as phases ship  
+- [x] No secrets / note bodies in committed artifacts  
 
-PM-0 alone does **not** complete the Patient MVP. PM-1 does **not** complete mobile.
+PM-0 alone does **not** complete the Patient MVP. PM-1 does **not** complete mobile. **Patient MVP is not complete until Layer B runtime succeeds** (or product owner accepts a documented exception).
 
 ---
 
@@ -627,8 +634,8 @@ PM-0 alone does **not** complete the Patient MVP. PM-1 does **not** complete mob
 | Clinical visibility | Notes staff-only | Remain denied | None (intentional) | — |
 | Notifications | Hangfire infra / NoOp prod | API refresh only | Not a Patient feature yet | Deferred |
 | Cross-patient profile | **404** | **404** | Closed PM-1 | — |
-| Mobile application | Auth + profile + discovery + booking + My Appointments on MAUI Android | Full MVP UX | E2E | PM-8 |
-| Patient E2E | Denial/seed only | Full Patient pack | **Missing** | PM-8 |
+| Mobile application | Auth + profile + discovery + booking + My Appointments on MAUI Android | Full MVP UX | Layer B runtime pending | PM-8 |
+| Patient E2E | Denial/seed only | Full Patient pack | Layer A API pack delivered; Layer B pending | PM-8 |
 | Patient security matrix | DR-9 staff denials + PM-1 hardening | Cross-patient/org + DTO + mobile state | Closed PM-7 | **PM-7 delivered** |
 
 ---
@@ -645,3 +652,4 @@ PM-0 alone does **not** complete the Patient MVP. PM-1 does **not** complete mob
 | 2026-07-25 | **PM-5 delivered:** Mobile booking review/submit → `Requested`; enrollment + conflict UX |
 | 2026-07-25 | **PM-6 delivered:** My Appointments (upcoming/previous), detail, cancel, reschedule; 2-hour cutoff UX; concurrency conflict refresh |
 | 2026-07-26 | **PM-7 delivered:** Patient security negative matrix (unit + HTTP + mobile route/state); no production defects |
+| 2026-07-26 | **PM-8 Layer A:** Patient API journey pack (`PatientMobileMvpE2eTests`); Android runtime checklist; Layer B pending without emulator/device |

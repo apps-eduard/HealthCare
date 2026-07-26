@@ -24,6 +24,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="..\..\src\HealthCare.Infrastructure\HealthCare.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\HealthCare.Contracts\HealthCare.Contracts.csproj" />
   </ItemGroup>

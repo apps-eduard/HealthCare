@@ -19,7 +19,7 @@
 
 **Scoring rule:** Complete = 100% of phase · Partial = 50% (or noted fraction) · In progress = 25% · Not started / Blocked = 0%
 
-**Current focus:** Patient Mobile MVP **PM-7 complete** (Patient security matrix). Next: **PM-8** (Patient E2E) when scheduled. Do not start PM-8 until explicitly scheduled.
+**Current focus:** Patient Mobile MVP **PM-8 Layer A delivered** (API journey pack). **Layer B (Android runtime) pending** — do not start a post-PM-8 milestone.
 
 ### All phases at a glance
 
@@ -947,10 +947,10 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 
 ## Phase 11 — Patient mobile application
 
-**Status:** Partial — **PM-0…PM-7 delivered**; PM-8 not started  
+**Status:** Partial — **PM-0…PM-7 delivered**; **PM-8 Layer A delivered**; Layer B Android runtime pending  
 **Authoritative scope:** `Docs/mvp-patient-scope.md`
 
-### Delivered (PM-1…PM-7)
+### Delivered (PM-1…PM-8 Layer A)
 
 - Foreign patient profile concealment → `404`
 - Patient cancel/reschedule **2-hour** cutoff (`appointment.patient_mutation_cutoff`)
@@ -960,13 +960,16 @@ Availability: added staff `GET .../availability-exceptions` (no schema change). 
 - Mobile appointment booking → `Requested` (PM-5)
 - My Appointments upcoming/previous, detail, cancel, reschedule UX (PM-6)
 - Patient security negative matrix — unit + HTTP + mobile route/state (PM-7)
+- Patient API journey E2E pack on docsvr (`PatientMobileMvpE2eTests`) — PM-8 Layer A
 - Focused unit + HTTP integration coverage
 
-### Remaining (PM-8)
+### Remaining (PM-8 Layer B)
 
-- PM-8: Patient E2E
+- Android emulator/device runtime acceptance (`PatientAndroidRuntimeChecklist.md`)
+- Mark Patient MVP complete only after Layer B (or approved exception)
 
-Do not mark Phase 11 complete until PM-8 DoD is met.
+Do not mark Phase 11 complete until PM-8 DoD is met (Layer A + Layer B).
+Do not start a post-PM-8 milestone.
 
 ---
 
@@ -1127,12 +1130,13 @@ Authoritative scope: **`Docs/mvp-doctor-scope.md`** (**approved** 2026-07-25). *
 | 2026-07-25 | — | **PM-5:** Patient mobile appointment booking — review/submit → Requested |
 | 2026-07-25 | — | **PM-6:** Patient My Appointments — list/detail/cancel/reschedule + 2h cutoff UX |
 | 2026-07-26 | — | **PM-7:** Patient security negative matrix — unit/HTTP/mobile; no production fixes |
+| 2026-07-26 | — | **PM-8 Layer A:** Patient API journey pack + Android checklist; Layer B runtime pending |
 
 ### Patient Mobile MVP (approved scope)
 
-Authoritative scope: **`Docs/mvp-patient-scope.md`** (**approved** 2026-07-25). **Status: PM-0…PM-7 complete; PM-8 not started.**
+Authoritative scope: **`Docs/mvp-patient-scope.md`** (**approved** 2026-07-25). **Status: PM-0…PM-7 complete; PM-8 Layer A delivered; Layer B (Android runtime) pending.**
 
-Patient-facing app: **.NET MAUI Blazor Hybrid** (Android first). No separate Patient Web app in the initial MVP. Existing Patient APIs retained; PM-1 closed 404 concealment + 2-hour cancel/reschedule cutoff + DTO review. PM-2–PM-6 delivered shell through My Appointments. PM-7 delivered the Patient security negative matrix (complements DR-9; representative staff-surface coverage).
+Patient-facing app: **.NET MAUI Blazor Hybrid** (Android first). No separate Patient Web app in the initial MVP. Existing Patient APIs retained; PM-1 closed 404 concealment + 2-hour cancel/reschedule cutoff + DTO review. PM-2–PM-6 delivered shell through My Appointments. PM-7 delivered the Patient security negative matrix (complements DR-9; representative staff-surface coverage). PM-8 Layer A delivers real-API Patient journey verification on docsvr; Layer B is the Android runtime checklist (native UI automation not in-repo).
 
 | Phase | Theme | Complexity | Status |
 |-------|--------|------------|--------|
@@ -1144,11 +1148,11 @@ Patient-facing app: **.NET MAUI Blazor Hybrid** (Android first). No separate Pat
 | PM-5 | Appointment booking (mobile) | Medium | **Delivered** (2026-07-25) |
 | PM-6 | My Appointments / cancel / reschedule | Medium | **Delivered** (2026-07-25) |
 | PM-7 | Patient security negative matrix | Medium | **Delivered** (2026-07-26) |
-| PM-8 | Patient mobile E2E | Medium | Not started |
+| PM-8 | Patient mobile E2E | Medium | **Layer A delivered**; Layer B pending |
 
-**Remaining gaps after PM-7:** Patient E2E (PM-8). Confirmation App Links remain a documented PM-3 limitation.
+**Remaining gaps after PM-8 Layer A:** Android runtime acceptance (Layer B). Confirmation App Links remain a documented PM-3 limitation.
 
-**Do not** start PM-8 until scheduled.
+**Do not** start a post-PM-8 milestone until Layer B closes PM-8.
 
 ---
 

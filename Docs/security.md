@@ -752,6 +752,17 @@ DTO notes: shared `AppointmentResponse` may still carry navigation IDs (`Organiz
 
 No production defects required fixes in PM-7.
 
+### 16.8.1 Patient Mobile E2E pack (PM-8)
+
+Two-layer verification (native Appium/MAUI UITest not packaged in-repo):
+
+| Layer | Suite / doc | Host |
+|-------|-------------|------|
+| A — API journeys (MAUI client contract) | `PatientMobileMvpE2eTests` + `PatientE2eApi` | Ubuntu docsvr `E2eHostFixture` |
+| B — Android runtime | `PatientAndroidRuntimeChecklist.md` | Emulator or physical device |
+
+Layer A proves register/confirm helper, login linkage, unlinked denial, profile patch, clinic/Doctor discovery, book/list/cancel/reschedule, two-hour cutoff, cross-patient `404`, restricted surfaces, logout refresh revoke. Layer B is required before claiming full PM-8 / Patient MVP closure. Do not equate Playwright Doctor Web E2E with Patient MAUI E2E. App Links remain deferred.
+
 ### 16.9 Doctor Web MVP E2E pack (DR-10)
 
 Playwright Chromium (headless) on Ubuntu **docsvr** via `tests/HealthCare.EndToEndTests` (temporary Postgres + separate Web/API processes). Seeded Development users; appointments/notes created via API helpers (`DoctorE2eApi`) then exercised in the browser.
