@@ -2,7 +2,7 @@
 
 Android-first **.NET MAUI Blazor Hybrid** app for the Patient Mobile MVP.
 
-**Status:** **PM-2 + PM-3 + PM-4 + PM-5 + PM-6 delivered.** PM-7 (security matrix) and PM-8 (Patient E2E) are **not** started.
+**Status:** **PM-2 … PM-7 delivered.** PM-8 (Patient E2E) is **not** started.
 
 Authoritative product scope: [`Docs/mvp-patient-scope.md`](../../Docs/mvp-patient-scope.md).
 
@@ -180,6 +180,15 @@ Patient confirm, check-in, complete, no-show, and staff cancel are never exposed
 
 PM-6 Android emulator/device smoke was **not** executed in this delivery. Android **build** + mobile automated tests are required.
 
+## PM-7 Patient security matrix
+
+Automated coverage (representative):
+
+- Protected Patient routes require authentication; guest-only routes isolated
+- Logout clears tokens, current user, discovery selection, and booking receipt
+- Unlinked Patient session cannot enter Patient-ready state
+- Backend HTTP/unit matrices live in `PatientSecurityEndpointMatrixTests` / `PatientSecurityMatrixTests` (see `Docs/security.md` §16.8)
+
 ## Configuration
 
 Section: `Mobile` (`MobileAppOptions`).
@@ -219,9 +228,10 @@ Start the API, then deploy/run on an emulator or device. Seeded Patient accounts
 
 - Deep-link App Links for confirmation emails are not registered (manual token / browser confirm + return to app)
 - Emulator runtime smoke may be unavailable in CI; Android **build** is required
-- Google/OTP, notifications, Patient security matrix, Patient E2E: PM-7…PM-8
+- Google/OTP, notifications, Patient E2E: PM-8
 - No specialty catalog (clinic specialty string only); no maps/ratings/public photo subsystem
 - `ClinicDoctorResponse` still includes `StaffMemberId` / `ClinicId` for API navigation; IDs are not shown in UI
 - Reschedule keeps the same clinic and Doctor (backend clinic is fixed; UI does not offer Doctor change)
 - No Blazor bUnit package in-repo; appointment UI logic covered via Core services + route/state tests
 - Android runtime smoke: not verified unless emulator executed
+- PM-7 security matrix is representative (not every staff route); complements DR-9 / PM-1

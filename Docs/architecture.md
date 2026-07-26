@@ -648,9 +648,10 @@ Authoritative scope: **`Docs/mvp-patient-scope.md`**.
 
 **PM-6 (delivered):** My Appointments (Upcoming/Previous), detail, Patient cancel → `CancelledByPatient`, reschedule (same clinic/Doctor via discovery slots), 2-hour cutoff UX, `ExpectedVersion` concurrency reload without auto-resubmit. Shared `AppointmentResponse` retained with Patient display scrub (PM-1).
 
-Remaining Patient Mobile work (PM-7 / PM-8):
+**PM-7 (delivered):** Patient security negative matrix — unit permission catalog denials; HTTP matrix for anonymous/`401`, wrong-role/unlinked/inactive/`403`, cross-patient/foreign-org/`404`, authz-before-conflict (no `409` existence disclosure), Patient-safe JSON scrub; mobile route guards + logout state clearing. Complements DR-9; representative (not every staff route).
 
-- Full Patient security negative matrix
+Remaining Patient Mobile work (PM-8):
+
 - Patient mobile E2E pack
 
 Patient-visible clinical records grouped by clinic are **deferred**. Medical-note bodies remain staff-only.

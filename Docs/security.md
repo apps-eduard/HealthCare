@@ -571,6 +571,7 @@ When added, require:
 - PM-4: Patient clinic directory uses dedicated Patient DTOs (not staff directory); inactive/unknown clinic details → 404; do not log clinic codes unnecessarily; slot selection is not a reservation.
 - PM-5: do not log reason-for-visit text; no application-level booking POST retry after timeout; booking creates `Requested` only.
 - PM-6: cancel/reschedule use `ExpectedVersion`; no auto-retry after uncertain timeout; cutoff messaging does not leak internal codes; foreign appointments stay `404`.
+- PM-7: Patient security matrix proves authz-before-conflict; foreign/unknown profile and appointment concealment remain equivalent `404`; staff/clinical surfaces stay `403` for Patient actors.
 
 ---
 
@@ -730,7 +731,28 @@ Response semantics under test:
 | 404 | Concealed out-of-scope (peer/cross-clinic Doctor appointment or note; Patient foreign appointment; **Patient foreign/unknown profile by ID — PM-1**) |
 | 409 | In-scope workflow/concurrency conflict only (DR-7); never used to leak out-of-scope existence |
 
-### 16.8 Doctor Web MVP E2E pack (DR-10)
+### 16.8 Patient Mobile MVP negative matrix (PM-7)
+
+Implemented suites (representative Patient MVP surfaces; complements DR-9 / PM-1; not every staff route):
+
+- Unit: `PatientSecurityMatrixTests` — Patient forbidden staff/clinical permissions; retained self-service catalog; clinic-scoped staff lack `patients.update_own_profile`
+- Integration: `PatientSecurityEndpointMatrixTests` — HTTP matrix across anonymous, Patient A/B, unlinked, inactive, Doctor, Nurse, Receptionist, Clinic Admin, Org Admin, Platform Admin for profile, clinics, booking, appointments, staff/clinical denials; foreign detail/cancel/reschedule authz-before-conflict; raw JSON scrub (no staff display helpers / clinical fields on Patient responses)
+- Mobile: `PatientMobileSecurityTests` — protected route requirements; logout clears tokens/user/discovery/receipt; unlinked cannot enter Patient-ready state
+
+Response semantics under test (same model as DR-9):
+
+| Code | When |
+|------|------|
+| 401 | Anonymous on Patient self-service and staff/clinical surfaces |
+| 403 | Wrong role (staff/admin on `/patients/me`), unlinked/inactive Patient, Patient→staff/clinical/admin surfaces |
+| 404 | Cross-patient appointment detail/cancel/reschedule; foreign/unknown patient profile (equivalent concealment) |
+| 409 | Only for authenticated, authorized, in-scope Patient mutations (proven elsewhere in PM-1); foreign actors must not receive conflict codes |
+
+DTO notes: shared `AppointmentResponse` may still carry navigation IDs (`OrganizationId` / `ClinicId` / `PatientId`); Patient actors scrub `PatientDisplayName` / `LocalPatientNumber`. Clinic browse DTOs omit org/clinic GUIDs. `ClinicDoctorResponse` retains `StaffMemberId` / `ClinicId` for navigation (not shown in mobile UI).
+
+No production defects required fixes in PM-7.
+
+### 16.9 Doctor Web MVP E2E pack (DR-10)
 
 Playwright Chromium (headless) on Ubuntu **docsvr** via `tests/HealthCare.EndToEndTests` (temporary Postgres + separate Web/API processes). Seeded Development users; appointments/notes created via API helpers (`DoctorE2eApi`) then exercised in the browser.
 

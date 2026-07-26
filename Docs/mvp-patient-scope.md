@@ -1,12 +1,12 @@
 # MVP Patient Scope
 
 **Status:** **Approved** by product owner (2026-07-25). Authoritative for the **Patient Mobile MVP**.  
-**Implementation:** **PM-0 + PM-1 + PM-2 + PM-3 + PM-4 + PM-5 + PM-6 delivered** (2026-07-25). PM-7…PM-8 not started.  
+**Implementation:** **PM-0 … PM-7 delivered** (2026-07-26). PM-8 not started.  
 **Authority:** This document overrides informal Patient notes in `Docs/security.md` §4.7 / §5.1, `Docs/architecture.md` §10.1 / §12.2, and `Docs/development-plan.md` Phase 11 where they conflict. Keep matrix and security cross-links in sync when coding.  
 **Related:** `Docs/mvp-organization-admin-scope.md`, `Docs/mvp-clinic-admin-scope.md`, `Docs/mvp-doctor-scope.md`, `Docs/authorization-matrix.md`, `Docs/security.md` §4.7 / patient self-scope.  
 **Do not** copy staff Web capabilities into the Patient app.  
 **Do not** rebuild existing Patient APIs that already match this contract.  
-**Do not** begin PM-7 (Patient security matrix) or PM-8 (Patient E2E) until scheduled.
+**Do not** begin PM-8 (Patient E2E) until scheduled.
 
 Verified baseline when approved (2026-07-25):
 
@@ -459,7 +459,7 @@ Do not treat permission-catalog-only tests as sufficient for Patient product DoD
 | **PM-4** | Clinic and Doctor discovery | Medium | **Delivered** (2026-07-25) |
 | **PM-5** | Appointment booking (mobile) | Medium | **Delivered** (2026-07-25) |
 | **PM-6** | My Appointments, cancel, reschedule | Medium | **Delivered** (2026-07-25) |
-| **PM-7** | Patient security and negative matrix | Medium | Not started |
+| **PM-7** | Patient security and negative matrix | Medium | **Delivered** (2026-07-26) |
 | **PM-8** | Patient mobile E2E | Medium | Not started |
 
 ### PM-1 — Patient contract and backend gap hardening — **delivered**
@@ -527,13 +527,17 @@ Do not treat permission-catalog-only tests as sufficient for Patient product DoD
 - Booking success links to My Appointments
 - **Android runtime smoke:** not verified in this delivery (build + automated tests only)
 
-### PM-7 — Patient security and negative matrix
+### PM-7 — Patient security and negative matrix — **delivered**
 
-- Cross-patient / org / clinic  
-- Staff/admin denial  
-- Medical-note denial  
-- Authz before concurrency/workflow disclosure  
-- Patient-safe DTO checks  
+**Delivered (2026-07-26).** Complements DR-9 (Doctor-focused) without replacing it.
+
+- Unit catalog matrix: Patient denied staff/clinical permissions; retains self-service only (`PatientSecurityMatrixTests`)
+- HTTP matrix: anonymous `401`, wrong-role/unlinked/inactive `403`, cross-patient/foreign-org `404`, authz-before-conflict (no `409` disclosure), Patient-safe JSON scrub (`PatientSecurityEndpointMatrixTests`)
+- Actors covered: Patient A/B, unlinked, inactive, Doctor, Nurse, Receptionist, Clinic Admin, Org Admin, Platform Admin, anonymous
+- Mobile: protected route requirements + logout clears tokens/user/discovery/receipt; unlinked cannot enter Patient-ready state (`PatientMobileSecurityTests`)
+- **Representative**, not exhaustive of every staff route (DR-9 + PM-1 remain authoritative for Doctor peer / cutoff math)
+- No production defects found requiring code changes
+- Android runtime smoke: not required for PM-7
 
 ### PM-8 — Patient mobile E2E
 
@@ -552,10 +556,11 @@ Do not treat permission-catalog-only tests as sufficient for Patient product DoD
 - [x] PM-4 clinic and Doctor discovery complete  
 - [x] PM-5 appointment booking complete  
 - [x] PM-6 My Appointments / cancel / reschedule complete  
-- [ ] PM-7 … PM-8 complete  
+- [x] PM-7 Patient security matrix complete  
+- [ ] PM-8 complete  
 - [x] Backend gaps closed for PM-1 (404 concealment, 2-hour cutoff, DTO review)  
 - [ ] Android MAUI app supports full Patient MVP flow (PM-8 E2E pending)  
-- [ ] Patient security matrix green  
+- [x] Patient security matrix green  
 - [ ] Patient E2E pack green on required host  
 - [ ] Docs updated as phases ship  
 - [ ] No secrets / note bodies in logs or mobile storage  
@@ -622,8 +627,9 @@ PM-0 alone does **not** complete the Patient MVP. PM-1 does **not** complete mob
 | Clinical visibility | Notes staff-only | Remain denied | None (intentional) | — |
 | Notifications | Hangfire infra / NoOp prod | API refresh only | Not a Patient feature yet | Deferred |
 | Cross-patient profile | **404** | **404** | Closed PM-1 | — |
-| Mobile application | Auth + profile + discovery + booking + My Appointments on MAUI Android | Full MVP UX | Security matrix + E2E | PM-7 / PM-8 |
+| Mobile application | Auth + profile + discovery + booking + My Appointments on MAUI Android | Full MVP UX | E2E | PM-8 |
 | Patient E2E | Denial/seed only | Full Patient pack | **Missing** | PM-8 |
+| Patient security matrix | DR-9 staff denials + PM-1 hardening | Cross-patient/org + DTO + mobile state | Closed PM-7 | **PM-7 delivered** |
 
 ---
 
@@ -638,3 +644,4 @@ PM-0 alone does **not** complete the Patient MVP. PM-1 does **not** complete mob
 | 2026-07-25 | **PM-4 delivered:** Authenticated clinic browse/search, clinic-code enrollment UI, Doctor list, availability selection |
 | 2026-07-25 | **PM-5 delivered:** Mobile booking review/submit → `Requested`; enrollment + conflict UX |
 | 2026-07-25 | **PM-6 delivered:** My Appointments (upcoming/previous), detail, cancel, reschedule; 2-hour cutoff UX; concurrency conflict refresh |
+| 2026-07-26 | **PM-7 delivered:** Patient security negative matrix (unit + HTTP + mobile route/state); no production defects |
