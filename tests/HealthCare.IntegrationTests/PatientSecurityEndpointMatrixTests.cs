@@ -338,16 +338,16 @@ public sealed class PatientSecurityEndpointMatrixTests : IAsyncLifetime
         await SeedExtraActorsAsync();
 
         await AuthenticateAsync(PatientAEmail, PatientAPassword);
-        var patientAAppt = await CreatePatientAppointmentAsync("dev-clinic-a", _doctorAStaffId, daysAhead: 40);
+        var patientAAppt = await CreatePatientAppointmentAsync("dev-clinic-a", _doctorAStaffId);
         _patientAAppointmentId = patientAAppt.Id;
         _patientAAppointmentVersion = patientAAppt.Version;
 
         await AuthenticateAsync(PatientBEmail, PatientBPassword);
-        var patientBAppt = await CreatePatientAppointmentAsync("dev-clinic-a", _doctorAStaffId, daysAhead: 41);
+        var patientBAppt = await CreatePatientAppointmentAsync("dev-clinic-a", _doctorAStaffId);
         _patientBAppointmentId = patientBAppt.Id;
 
         // Clinical note on a CheckedIn appointment owned via Patient A booking path (Doctor creates note).
-        var checkedIn = await CreateCheckedInAppointmentAsync(daysAhead: 42);
+        var checkedIn = await CreateCheckedInAppointmentAsync();
         await AuthenticateAsync(DoctorAEmail, DoctorAPassword);
         var noteCreate = await _client!.PostAsJsonAsync(
             $"/api/v1/appointments/{checkedIn.Id}/medical-notes",
@@ -550,10 +550,10 @@ public sealed class PatientSecurityEndpointMatrixTests : IAsyncLifetime
         return patientId;
     }
 
-    private async Task<AppointmentResponse> CreateCheckedInAppointmentAsync(int daysAhead)
+    private async Task<AppointmentResponse> CreateCheckedInAppointmentAsync()
     {
         await AuthenticateAsync(PatientAEmail, PatientAPassword);
-        var created = await CreatePatientAppointmentAsync("dev-clinic-a", _doctorAStaffId, daysAhead);
+        var created = await CreatePatientAppointmentAsync("dev-clinic-a", _doctorAStaffId);
         await AuthenticateAsync(DoctorAEmail, DoctorAPassword);
         var confirm = await _client!.PostAsJsonAsync(
             $"/api/v1/staff/appointments/{created.Id}/confirm",
@@ -569,14 +569,33 @@ public sealed class PatientSecurityEndpointMatrixTests : IAsyncLifetime
 
     private async Task<AppointmentResponse> CreatePatientAppointmentAsync(
         string clinicCode,
-        Guid doctorId,
-        int daysAhead)
+        Guid doctorId)
     {
+        DateTimeOffset? slotStart = null;
+        for (var day = 35; day <= 90 && slotStart is null; day++)
+        {
+            var localDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(day));
+            if (localDate.DayOfWeek is DayOfWeek.Friday or DayOfWeek.Saturday)
+            {
+                continue;
+            }
+
+            var slots = await _client!.GetFromJsonAsync<IReadOnlyList<AvailableSlotResponse>>(
+                $"/api/v1/clinics/{clinicCode}/doctors/{doctorId:D}/available-slots?date={localDate:yyyy-MM-dd}");
+            var free = slots?.FirstOrDefault();
+            if (free is not null)
+            {
+                slotStart = free.StartUtc;
+            }
+        }
+
+        slotStart.Should().NotBeNull("an available future slot is required to seed PM-7 fixtures");
+
         var response = await _client!.PostAsJsonAsync("/api/v1/patients/me/appointments", new
         {
             clinicCode,
             doctorStaffMemberId = doctorId,
-            appointmentDateUtc = AlignedFutureSlotUtc(daysAhead),
+            appointmentDateUtc = slotStart,
             durationMinutes = 30,
             reason = "PM-7",
         });
