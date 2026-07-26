@@ -223,10 +223,14 @@ public sealed class PatientSecurityEndpointMatrixTests : IAsyncLifetime
         foreign.StatusCode.Should().Be(HttpStatusCode.NotFound);
         unknown.StatusCode.Should().Be(HttpStatusCode.NotFound);
 
-        var foreignBody = await foreign.Content.ReadAsStringAsync();
-        var unknownBody = await unknown.Content.ReadAsStringAsync();
-        foreignBody.Should().NotContain(_foreignOrgPatientId.ToString());
-        unknownBody.Should().NotContain(_unknownPatientId.ToString());
+        using var foreignDoc = JsonDocument.Parse(await foreign.Content.ReadAsStringAsync());
+        using var unknownDoc = JsonDocument.Parse(await unknown.Content.ReadAsStringAsync());
+        foreignDoc.RootElement.GetProperty("errorCode").GetString()
+            .Should().Be(unknownDoc.RootElement.GetProperty("errorCode").GetString());
+        foreignDoc.RootElement.GetProperty("errorCode").GetString()
+            .Should().Be("authz.patient_not_found_or_denied");
+        foreignDoc.RootElement.TryGetProperty("patientDisplayName", out _).Should().BeFalse();
+        unknownDoc.RootElement.TryGetProperty("firstName", out _).Should().BeFalse();
     }
 
     private IReadOnlyList<MatrixCase> BuildCases()
