@@ -1,0 +1,49 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: healthcare-db-prepare-e2e
+  namespace: doc-app
+  labels:
+    app.kubernetes.io/name: healthcare-db-migration
+    app.kubernetes.io/instance: healthcare-db-prepare-e2e
+    app.kubernetes.io/part-of: healthcare
+    app.kubernetes.io/environment: e2e
+    app.kubernetes.io/component: prepare
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: healthcare-db-migration
+        app.kubernetes.io/instance: healthcare-db-prepare-e2e
+        app.kubernetes.io/part-of: healthcare
+        app.kubernetes.io/environment: e2e
+        app.kubernetes.io/component: prepare
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: prepare
+          image: healthcare-db-migrate:e2e-local
+          imagePullPolicy: IfNotPresent
+          args: ["--seed"]
+          envFrom:
+            - configMapRef:
+                name: healthcare-e2e-config
+            - secretRef:
+                name: healthcare-e2e-secrets
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi

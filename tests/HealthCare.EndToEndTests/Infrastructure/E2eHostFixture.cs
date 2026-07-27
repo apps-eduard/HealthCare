@@ -48,6 +48,14 @@ public sealed class E2eHostFixture : IAsyncLifetime
             Environment.SetEnvironmentVariable("HEADED", "1");
         }
 
+        var externalApi = Environment.GetEnvironmentVariable("HEALTHCARE_E2E_API_BASE_URL");
+        var externalWeb = Environment.GetEnvironmentVariable("HEALTHCARE_E2E_WEB_BASE_URL");
+        if (!string.IsNullOrWhiteSpace(externalApi) && !string.IsNullOrWhiteSpace(externalWeb))
+        {
+            await InitializeExternalAsync(externalApi.TrimEnd('/'), externalWeb.TrimEnd('/'));
+            return;
+        }
+
         _postgres = new PostgreSqlBuilder()
             .WithImage("postgres:16-alpine")
             .WithDatabase("healthcare_e2e")
@@ -111,6 +119,54 @@ public sealed class E2eHostFixture : IAsyncLifetime
             },
             readyPath: "/login",
             readyTimeout: TimeSpan.FromMinutes(2));
+    }
+
+    private async Task InitializeExternalAsync(string apiBaseUrl, string webBaseUrl)
+    {
+        ApiBaseUrl = apiBaseUrl;
+        WebBaseUrl = webBaseUrl;
+        ConnectionString = Environment.GetEnvironmentVariable("HEALTHCARE_E2E_CONNECTION_STRING")
+            ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
+            ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(ConnectionString))
+        {
+            throw new InvalidOperationException(
+                "External E2E mode requires HEALTHCARE_E2E_CONNECTION_STRING (or ConnectionStrings__DefaultConnection) for helpers that talk to PostgreSQL directly.");
+        }
+
+        if (!ConnectionString.Contains("Database=health_care_e2e", StringComparison.OrdinalIgnoreCase)
+            && !ConnectionString.Contains("Database=healthcare_e2e", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "External E2E mode refuses connection strings that are not the E2E database (expected Database=health_care_e2e).");
+        }
+
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromMinutes(3);
+        Exception? last = null;
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            try
+            {
+                using var health = await client.GetAsync(ApiBaseUrl + "/health");
+                using var login = await client.GetAsync(WebBaseUrl + "/login");
+                if ((int)health.StatusCode is >= 200 and < 500
+                    && (int)login.StatusCode is >= 200 and < 500)
+                {
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                last = ex;
+            }
+
+            await Task.Delay(1000);
+        }
+
+        throw new TimeoutException(
+            $"Timed out waiting for external E2E hosts {ApiBaseUrl}/health and {WebBaseUrl}/login. Last error: {last}");
     }
 
     public async Task DisposeAsync()

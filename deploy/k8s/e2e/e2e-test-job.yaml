@@ -1,0 +1,58 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: healthcare-e2e-tests
+  namespace: doc-app
+  labels:
+    app.kubernetes.io/name: healthcare-e2e-tests
+    app.kubernetes.io/instance: healthcare-e2e-tests
+    app.kubernetes.io/part-of: healthcare
+    app.kubernetes.io/environment: e2e
+    app.kubernetes.io/component: tests
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 3600
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: healthcare-e2e-tests
+        app.kubernetes.io/instance: healthcare-e2e-tests
+        app.kubernetes.io/part-of: healthcare
+        app.kubernetes.io/environment: e2e
+        app.kubernetes.io/component: tests
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: e2e
+          image: healthcare-e2e-tests:e2e-local
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: healthcare-e2e-config
+          env:
+            - name: HEALTHCARE_E2E_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: healthcare-e2e-secrets
+                  key: ConnectionStrings__DefaultConnection
+            - name: ConnectionStrings__DefaultConnection
+              valueFrom:
+                secretKeyRef:
+                  name: healthcare-e2e-secrets
+                  key: ConnectionStrings__DefaultConnection
+            - name: HEALTHCARE_E2E_RESULTS_DIR
+              value: /artifacts/TestResults
+          volumeMounts:
+            - name: artifacts
+              mountPath: /artifacts
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+      volumes:
+        - name: artifacts
+          emptyDir: {}

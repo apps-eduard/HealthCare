@@ -36,7 +36,9 @@ public sealed class DevelopmentAdminSeeder : IDevelopmentAdminSeeder
 
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
-        if (!_environment.IsDevelopment())
+        // Development seeders also run for the dedicated lab environment name "E2E"
+        // (k3s E2E overlay). Never enable for Production/Staging.
+        if (!_environment.IsDevelopment() && !_environment.IsEnvironment("E2E"))
         {
             return;
         }

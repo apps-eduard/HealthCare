@@ -1,0 +1,29 @@
+# syntax=docker/dockerfile:1.7
+
+ARG DOTNET_VERSION=10.0
+
+FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS build
+WORKDIR /src
+ARG GIT_SHA=unknown
+COPY Directory.Build.props ./
+COPY HealthCare.sln ./
+COPY src/HealthCare.Contracts/HealthCare.Contracts.csproj src/HealthCare.Contracts/
+COPY src/HealthCare.Web/HealthCare.Web.csproj src/HealthCare.Web/
+RUN dotnet restore src/HealthCare.Web/HealthCare.Web.csproj
+COPY src/HealthCare.Contracts/ src/HealthCare.Contracts/
+COPY src/HealthCare.Web/ src/HealthCare.Web/
+RUN dotnet publish src/HealthCare.Web/HealthCare.Web.csproj -c Release -o /app/publish /p:UseAppHost=false
+
+FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS final
+WORKDIR /app
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.title="healthcare-web" \
+      org.opencontainers.image.description="HealthCare Staff Web (Blazor Interactive Server)" \
+      org.opencontainers.image.revision="${GIT_SHA}" \
+      org.opencontainers.image.source="https://github.com/local/HealthCare"
+ENV ASPNETCORE_URLS=http://+:8080 \
+    DOTNET_EnableDiagnostics=0
+USER app
+COPY --from=build --chown=app:app /app/publish .
+EXPOSE 8080
+ENTRYPOINT ["dotnet", "HealthCare.Web.dll"]

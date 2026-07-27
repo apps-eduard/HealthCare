@@ -29,7 +29,9 @@ builder.Services.AddDataProtection()
 builder.Services.AddDistributedMemoryCache();
 
 var cookieName = ResolveAuthCookieName(builder.Environment, bffOptions);
-var requireSecureCookie = !builder.Environment.IsDevelopment() || bffOptions.RequireHttps;
+// E2E lab (HTTP over Tailscale/ClusterIP) may set Bff:RequireHttps=false with a non-__Host- cookie.
+var requireSecureCookie = (!builder.Environment.IsDevelopment() && !builder.Environment.IsEnvironment("E2E"))
+    || bffOptions.RequireHttps;
 
 builder.Services
     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -203,7 +205,8 @@ static string ResolveAuthCookieName(IHostEnvironment env, BffOptions options)
         return options.CookieName;
     }
 
-    return env.IsDevelopment() && !options.RequireHttps
+    var allowInsecureLabCookie = (env.IsDevelopment() || env.IsEnvironment("E2E")) && !options.RequireHttps;
+    return allowInsecureLabCookie
         ? BffCookieNames.AuthDevelopment
         : BffCookieNames.AuthProduction;
 }
@@ -211,11 +214,11 @@ static string ResolveAuthCookieName(IHostEnvironment env, BffOptions options)
 static void ValidateBffCookieConfiguration(IHostEnvironment env, BffOptions options)
 {
     var name = ResolveAuthCookieName(env, options);
-    var requireSecure = !env.IsDevelopment() || options.RequireHttps;
+    var requireSecure = (!env.IsDevelopment() && !env.IsEnvironment("E2E")) || options.RequireHttps;
     if (name.StartsWith("__Host-", StringComparison.Ordinal) && !requireSecure)
     {
         throw new InvalidOperationException(
-            "Bff cookie name uses the __Host- prefix, which requires Secure cookies. Set Bff:RequireHttps=true or use HealthCare.Staff.Auth in Development.");
+            "Bff cookie name uses the __Host- prefix, which requires Secure cookies. Set Bff:RequireHttps=true or use HealthCare.Staff.Auth in Development/E2E.");
     }
 }
 

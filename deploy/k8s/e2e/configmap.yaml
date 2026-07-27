@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: healthcare-e2e-config
+  namespace: doc-app
+  labels:
+    app.kubernetes.io/part-of: healthcare
+    app.kubernetes.io/environment: e2e
+data:
+  ASPNETCORE_ENVIRONMENT: "E2E"
+  ASPNETCORE_URLS: "http://+:8080"
+  HEALTHCARE_END_TO_END_TEST_HOST: "true"
+  HEALTHCARE_SKIP_STATIC_LOGGER_FLUSH: "true"
+  Hangfire__Enabled: "false"
+  Hangfire__ScheduleRecurringJobs: "false"
+  Hangfire__Dashboard__Enabled: "false"
+  Hangfire__ServerName: "healthcare-api-e2e"
+  Jwt__Issuer: "HealthCare"
+  Jwt__Audience: "HealthCare"
+  Jwt__AccessTokenLifetimeMinutes: "15"
+  Jwt__RefreshTokenLifetimeDays: "7"
+  Api__BaseUrl: "http://healthcare-api-e2e:8080/"
+  Bff__RequireHttps: "false"
+  Bff__CookieName: "HealthCare.Staff.Auth"
+  Bff__SessionIdleMinutes: "30"
+  Bff__AbsoluteSessionHours: "8"
+  Serilog__MinimumLevel__Default: "Information"
+  HEALTHCARE_E2E_API_BASE_URL: "http://healthcare-api-e2e:8080"
+  HEALTHCARE_E2E_WEB_BASE_URL: "http://healthcare-web-e2e:8080"
+  HEALTHCARE_E2E_ENVIRONMENT: "E2E"
+  # PostgreSQL host verified from Windows Tailscale probe (NodePort 30432).
+  # Application credentials live only in Secret healthcare-e2e-secrets.
+  HEALTHCARE_E2E_POSTGRES_HOST: "100.98.174.13"
+  HEALTHCARE_E2E_POSTGRES_PORT: "30432"
+  HEALTHCARE_E2E_POSTGRES_DATABASE: "health_care_e2e"

@@ -46,10 +46,14 @@ Separate processes are used so Blazor Server SignalR and BFF cookie auth behave 
 | `HEALTHCARE_SKIP_STATIC_LOGGER_FLUSH=true` | Avoids Serilog static logger dispose races |
 | `HEALTHCARE_E2E_HEADED=true` | Sets Playwright `HEADED=1` for troubleshooting (default is headless) |
 | `DOCKER_PROBE=1` | Preferred on docsvr with local Docker socket |
+| `HEALTHCARE_E2E_API_BASE_URL` + `HEALTHCARE_E2E_WEB_BASE_URL` | **External mode:** use deployed API/Web (k3s). Skips Testcontainers and local `dotnet run`. Requires `HEALTHCARE_E2E_CONNECTION_STRING` with `Database=health_care_e2e`. |
+| `HEALTHCARE_E2E_CONNECTION_STRING` | PostgreSQL for helpers in external mode |
 
-Never point E2E at `app-postgres`. The fixture always creates a disposable PostgreSQL container.
+Default (unset external URLs): fixture always creates a disposable PostgreSQL container. Never point E2E at `app-postgres` or `health_care_dev` / `health_care_staging`.
 
-`E2eHostFixture` starts API/Web via `dotnet run` **without** `--no-build` so Web/API binaries match the checked-out source (medical-note UI and workflow actions). Prefer a full `dotnet build` before the first E2E run on a machine.
+k3s lab deploy docs: `deploy/k8s/e2e/README.md`.
+
+`E2eHostFixture` starts API/Web via `dotnet run` **without** `--no-build` in local mode so Web/API binaries match the checked-out source. Prefer a full `dotnet build` before the first E2E run on a machine.
 
 ## Windows
 

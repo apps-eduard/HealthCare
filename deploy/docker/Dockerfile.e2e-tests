@@ -1,0 +1,43 @@
+# syntax=docker/dockerfile:1.7
+
+ARG DOTNET_VERSION=10.0
+
+FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS build
+WORKDIR /src
+ARG GIT_SHA=unknown
+COPY Directory.Build.props ./
+COPY HealthCare.sln ./
+COPY src/HealthCare.Contracts/HealthCare.Contracts.csproj src/HealthCare.Contracts/
+COPY src/HealthCare.Domain/HealthCare.Domain.csproj src/HealthCare.Domain/
+COPY src/HealthCare.Application/HealthCare.Application.csproj src/HealthCare.Application/
+COPY src/HealthCare.Infrastructure/HealthCare.Infrastructure.csproj src/HealthCare.Infrastructure/
+COPY src/HealthCare.Api/HealthCare.Api.csproj src/HealthCare.Api/
+COPY src/HealthCare.Web/HealthCare.Web.csproj src/HealthCare.Web/
+COPY tests/HealthCare.EndToEndTests/HealthCare.EndToEndTests.csproj tests/HealthCare.EndToEndTests/
+RUN dotnet restore tests/HealthCare.EndToEndTests/HealthCare.EndToEndTests.csproj
+COPY src/ src/
+COPY tests/HealthCare.EndToEndTests/ tests/HealthCare.EndToEndTests/
+RUN dotnet build tests/HealthCare.EndToEndTests/HealthCare.EndToEndTests.csproj -c Release --no-restore \
+ && cd tests/HealthCare.EndToEndTests/bin/Release/net10.0 \
+ && ./.playwright/node/linux-x64/node .playwright/package/cli.js install chromium || true
+
+FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS final
+WORKDIR /src
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.title="healthcare-e2e-tests" \
+      org.opencontainers.image.revision="${GIT_SHA}"
+ENV DOTNET_EnableDiagnostics=0 \
+    HEALTHCARE_END_TO_END_TEST_HOST=true \
+    HEALTHCARE_SKIP_STATIC_LOGGER_FLUSH=true
+# Playwright system deps (best-effort; extra packages may be needed on minimal hosts)
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libgbm1 libasound2t64 \
+      libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libpango-1.0-0 libcairo2 \
+      fonts-liberation ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=build /src /src
+WORKDIR /src
+COPY deploy/docker/e2e-test-entrypoint.sh /usr/local/bin/e2e-test-entrypoint.sh
+RUN chmod +x /usr/local/bin/e2e-test-entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/e2e-test-entrypoint.sh"]

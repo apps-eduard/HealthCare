@@ -1,0 +1,19 @@
+-- Operator-only template. Do NOT put real passwords in this file or commit them.
+-- Connect as PostgreSQL admin to 100.98.174.13:30432, then:
+--
+--   psql -h 100.98.174.13 -p 30432 -U admin -d postgres
+--
+-- Replace <SUPPLIED_SECURELY> at runtime only.
+
+-- CREATE ROLE healthcare_e2e_user LOGIN PASSWORD '<SUPPLIED_SECURELY>';
+-- GRANT CONNECT ON DATABASE health_care_e2e TO healthcare_e2e_user;
+
+-- \c health_care_e2e
+-- GRANT USAGE, CREATE ON SCHEMA public TO healthcare_e2e_user;
+-- GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO healthcare_e2e_user;
+-- GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO healthcare_e2e_user;
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO healthcare_e2e_user;
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO healthcare_e2e_user;
+
+-- Do NOT grant privileges on health_care_dev or health_care_staging.
+-- Do NOT GRANT SUPERUSER / CREATEDB / CREATEROLE.

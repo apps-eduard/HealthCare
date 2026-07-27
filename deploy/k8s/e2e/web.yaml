@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: healthcare-web-e2e
+  namespace: doc-app
+  labels:
+    app.kubernetes.io/name: healthcare-web
+    app.kubernetes.io/instance: healthcare-web-e2e
+    app.kubernetes.io/part-of: healthcare
+    app.kubernetes.io/environment: e2e
+    app.kubernetes.io/component: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: healthcare-web-e2e
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: healthcare-web
+        app.kubernetes.io/instance: healthcare-web-e2e
+        app.kubernetes.io/part-of: healthcare
+        app.kubernetes.io/environment: e2e
+        app.kubernetes.io/component: web
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: web
+          image: healthcare-web:e2e-local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: healthcare-e2e-config
+          env:
+            # Web must not receive DB / JWT secrets from the shared secret by default.
+            - name: Api__BaseUrl
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-e2e-config
+                  key: Api__BaseUrl
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /login
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /login
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: healthcare-web-e2e
+  namespace: doc-app
+  labels:
+    app.kubernetes.io/name: healthcare-web
+    app.kubernetes.io/instance: healthcare-web-e2e
+    app.kubernetes.io/part-of: healthcare
+    app.kubernetes.io/environment: e2e
+spec:
+  selector:
+    app.kubernetes.io/instance: healthcare-web-e2e
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

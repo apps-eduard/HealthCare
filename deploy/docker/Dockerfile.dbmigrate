@@ -1,0 +1,31 @@
+# syntax=docker/dockerfile:1.7
+
+ARG DOTNET_VERSION=10.0
+
+FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS build
+WORKDIR /src
+ARG GIT_SHA=unknown
+COPY Directory.Build.props ./
+COPY HealthCare.sln ./
+COPY src/HealthCare.Contracts/HealthCare.Contracts.csproj src/HealthCare.Contracts/
+COPY src/HealthCare.Domain/HealthCare.Domain.csproj src/HealthCare.Domain/
+COPY src/HealthCare.Application/HealthCare.Application.csproj src/HealthCare.Application/
+COPY src/HealthCare.Infrastructure/HealthCare.Infrastructure.csproj src/HealthCare.Infrastructure/
+COPY tools/HealthCare.DbMigrate/HealthCare.DbMigrate.csproj tools/HealthCare.DbMigrate/
+RUN dotnet restore tools/HealthCare.DbMigrate/HealthCare.DbMigrate.csproj
+COPY src/HealthCare.Contracts/ src/HealthCare.Contracts/
+COPY src/HealthCare.Domain/ src/HealthCare.Domain/
+COPY src/HealthCare.Application/ src/HealthCare.Application/
+COPY src/HealthCare.Infrastructure/ src/HealthCare.Infrastructure/
+COPY tools/HealthCare.DbMigrate/ tools/HealthCare.DbMigrate/
+RUN dotnet publish tools/HealthCare.DbMigrate/HealthCare.DbMigrate.csproj -c Release -o /app/publish /p:UseAppHost=false
+
+FROM mcr.microsoft.com/dotnet/runtime:${DOTNET_VERSION} AS final
+WORKDIR /app
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.title="healthcare-db-migrate" \
+      org.opencontainers.image.revision="${GIT_SHA}"
+ENV DOTNET_EnableDiagnostics=0
+USER app
+COPY --from=build --chown=app:app /app/publish .
+ENTRYPOINT ["dotnet", "HealthCare.DbMigrate.dll"]
