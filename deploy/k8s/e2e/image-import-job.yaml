@@ -1,0 +1,54 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: healthcare-image-import-e2e
+  namespace: doc-app
+  labels:
+    app.kubernetes.io/part-of: healthcare
+    app.kubernetes.io/environment: e2e
+    app.kubernetes.io/component: image-import
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: healthcare
+        app.kubernetes.io/environment: e2e
+        app.kubernetes.io/component: image-import
+    spec:
+      restartPolicy: Never
+      hostNetwork: true
+      containers:
+        - name: import
+          image: rancher/k3s:v1.35.6-k3s1
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              ctr -a /run/k3s/containerd/containerd.sock -n k8s.io images import /images/healthcare-e2e-5cc7b598b42e.tar
+              ctr -a /run/k3s/containerd/containerd.sock -n k8s.io images ls | grep healthcare || true
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: containerd
+              mountPath: /run/k3s/containerd
+            - name: images
+              mountPath: /images
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+      volumes:
+        - name: containerd
+          hostPath:
+            path: /run/k3s/containerd
+            type: Directory
+        - name: images
+          hostPath:
+            path: /home/speed/healthcare-images
+            type: Directory
