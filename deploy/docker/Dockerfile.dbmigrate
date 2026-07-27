@@ -20,7 +20,7 @@ COPY src/HealthCare.Infrastructure/ src/HealthCare.Infrastructure/
 COPY tools/HealthCare.DbMigrate/ tools/HealthCare.DbMigrate/
 RUN dotnet publish tools/HealthCare.DbMigrate/HealthCare.DbMigrate.csproj -c Release -o /app/publish /p:UseAppHost=false
 
-FROM mcr.microsoft.com/dotnet/runtime:${DOTNET_VERSION} AS final
+FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS final
 WORKDIR /app
 ARG GIT_SHA=unknown
 LABEL org.opencontainers.image.title="healthcare-db-migrate" \
